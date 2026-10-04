@@ -127,12 +127,38 @@ var Native = (function () {
     });
   }
 
+  // YouTube sign-in, so Premium applies to the player: a sheet in the Shelf shell that shares the web view's
+  // cookies (ios/App/App/ShelfSignIn.swift). Older shells don't have it, and the bridge never answers a call to
+  // a plugin it doesn't know, so the shell's plugin list is checked first.
+  // state: web (a browser), old (shell without the plugin), wait, in, out, unknown (the shell didn't answer)
+  function hasPlugin(name) {
+    try { return (Cap.PluginHeaders || []).some(function (h) { return h.name === name; }) || !!(Cap.Plugins && Cap.Plugins[name]); } catch (e) { return false; }
+  }
+  var ytAccount = { state: !inApp ? 'web' : hasPlugin('ShelfSignIn') ? 'wait' : 'old' };
+  function setYT(r) { ytAccount = { state: r && r.signedIn ? 'in' : 'out' }; return ytAccount; }
+  function checkYT() {
+    if (ytAccount.state === 'web' || ytAccount.state === 'old') return Promise.resolve(ytAccount);
+    var done = false;
+    return new Promise(function (res) {
+      setTimeout(function () { if (!done) { done = true; ytAccount = { state: 'unknown' }; res(ytAccount); } }, 5000);
+      call('ShelfSignIn', 'status').then(function (r) { if (!done) { done = true; res(setYT(r)); } }, function () { if (!done) { done = true; ytAccount = { state: 'unknown' }; res(ytAccount); } });
+    });
+  }
+  // Opens the sign-in sheet; settles when it closes, saying whether an account is signed in now
+  function signInYT() { return call('ShelfSignIn', 'signIn').then(setYT); }
+  function signOutYT() { return call('ShelfSignIn', 'signOut').then(function () { return setYT(null); }); }
+  // Settings > Shelf, where "Allow Cross-Website Tracking" lets the player see the sign-in
+  function openSettings() { return call('ShelfSignIn', 'openSettings'); }
+
   if (inApp) {
     document.documentElement.classList.add('in-app');
     try { consentCookies(); } catch (e) {}
     setTimeout(testFeed, 1500);
+    checkYT();
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkYT(); });
   }
   return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
-    get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
+    get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
+    get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings };
 })();

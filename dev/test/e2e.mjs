@@ -20,10 +20,10 @@ const errors = [];
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
 const phone = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
 
-async function appPage({ prefs = {}, clip = '', fakes = {}, ctxOpts = {} } = {}) {
+async function appPage({ prefs = {}, clip = '', fakes = {}, ctxOpts = {}, shell = {} } = {}) {
   const ctx = await browser.newContext({ ...phone, ...ctxOpts });
   await installFakes(ctx, fakes);
-  await ctx.addInitScript(CAP(prefs, clip));
+  await ctx.addInitScript(CAP(prefs, clip, shell));
   const p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push(m.text()); });
@@ -159,9 +159,43 @@ await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 const txt = await p.locator('#checkList').textContent();
 ok(await p.locator('#checkList li.ok').count() >= 6 && txt.includes('Running inside the Shelf app'), '8 green ticks in the app');
 ok(await p.locator('#toneBtn').isVisible(), '8 lock-screen sound test is offered in the app');
+ok(txt.includes('Signed in to YouTube') && (await p.locator('#ytBtn').textContent()) === 'Sign out of YouTube', '8 says it is signed in to YouTube, with a way out');
 await p.screenshot({ path: SHOTS + '/e2e-check.png' });
 await p.keyboard.press('Escape');
 ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'phone: no sideways scroll');
+await ctx.close();
+
+console.log('\n== YouTube sign-in (Premium without ads)');
+({ ctx, p } = await appPage({ shell: { ytSignedIn: false } }));
+await settle(p);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(/Not signed in to YouTube, so videos play with ads/.test(await p.locator('#checkList').textContent()) && await p.locator('#statusDot.bad').count() === 1, 'YT signed out is explained and the corner needs a look');
+ok(await p.locator('#ytBtn').isVisible() && (await p.locator('#ytBtn').textContent()) === 'Sign in to YouTube', 'YT offers Sign in to YouTube');
+const reloaded = p.waitForEvent('load', { timeout: 5000 }).then(() => true, () => false);
+await p.locator('#ytBtn').click();
+ok(await reloaded, 'YT after the sheet closes signed in, the page reloads so the player sees the account');
+await settle(p);
+await p.waitForFunction(() => document.querySelector('#statusDot').classList.contains('good'), null, { timeout: 6000 }).catch(() => {});
+ok(await shelf(p, () => window.__ytCalls.length) === 0 && await p.locator('#statusDot.good').count() === 1, 'YT fresh page is all good');
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(/Signed in to YouTube.*Allow Cross-Website Tracking/.test(await p.locator('#checkList').textContent()), 'YT signed in, and says what else Premium needs');
+await p.locator('#trackBtn').click(); await p.waitForTimeout(100);
+ok(await shelf(p, () => window.__ytCalls.includes('openSettings')), 'YT the settings button opens Shelf\'s iPhone settings');
+await p.locator('#ytBtn').click(); await p.waitForTimeout(200);
+ok(/Not signed in to YouTube/.test(await p.locator('#checkList').textContent()) && (await p.locator('#ytBtn').textContent()) === 'Sign in to YouTube', 'YT sign out forgets the account');
+await ctx.close();
+// Google refuses to finish: explained, with the YouTube app as the way to Premium
+({ ctx, p } = await appPage({ shell: { ytSignedIn: false, ytRefuse: true } }));
+await settle(p);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+await p.locator('#ytBtn').click(); await p.waitForTimeout(300);
+ok(/Google didn't finish signing you in.*YouTube app/.test(await p.locator('#toast').textContent()) && await shelf(p, () => window.__ytCalls.includes('signIn')), 'YT a refused sign-in is explained, no reload');
+await ctx.close();
+// A shell built before the sign-in plugin
+({ ctx, p } = await appPage({ shell: { oldShell: true } }));
+await settle(p);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(/older than the website.*run the installer again/.test(await p.locator('#checkList').textContent()) && !(await p.locator('#ytBtn').isVisible()), 'YT an old shell is told to re-run the installer, no dead button');
 await ctx.close();
 
 // Problems are explained in plain words
@@ -291,7 +325,7 @@ ok(await m.evaluate(() => window.__shelf.current) === '9bZkp7q19f0' && await m.e
 await m.keyboard.press('Escape');
 ok(await m.locator('.band.c0').count() === 1, 'mac: pasted video shows under Pasted');
 await m.locator('#statusBtn').click();
-ok(!(await m.locator('#toneBtn').isVisible()) && await m.locator('#statusDot.good').count() === 1, 'mac: all good, no app-only buttons');
+ok(!(await m.locator('#toneBtn').isVisible()) && !(await m.locator('#ytBtn').isVisible()) && await m.locator('#statusDot.good').count() === 1, 'mac: all good, no app-only buttons');
 await m.locator('#sendBtn').click(); await m.waitForTimeout(200);
 const link = await m.evaluate(() => navigator.clipboard.readText());
 ok(/#shelf=/.test(link), 'mac: shelf link copied');

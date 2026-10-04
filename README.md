@@ -21,9 +21,19 @@ It downloads Shelf, builds it with Xcode and installs it on the phone, and says 
 
 Updates arrive by themselves: the app loads this website, so there's nothing to reinstall. With a free Apple ID, repeat step 2 every 7 days; with a paid developer account, once a year.
 
+## YouTube Premium without ads (once)
+
+The player only skips ads when it can see your Premium account. Two switches, both in plain sight:
+
+1. On the iPhone: **Settings > Shelf > Allow Cross-Website Tracking** on. (Shelf tracks nothing; this lets the YouTube player inside Shelf see YouTube's own sign-in cookie, which iOS otherwise hides from it.) Then close Shelf and open it again.
+2. In Shelf, tap the self-check corner and **Sign in to YouTube**. Google's sign-in opens in a sheet; when it reaches YouTube's home page it closes by itself and the self-check says "Signed in to YouTube".
+
+If Google refuses to sign in inside an app ("this browser or app may not be secure"), the player still works with ads; for Premium, tap **YouTube ↗** in the player to open the video in the YouTube app at your spot.
+
 ## For Claude
 
 - `index.html` and `icon.png` are the web app (built). Source and tests are in `dev/`: `node dev/build.mjs`, `npm test` (node unit tests + Playwright e2e of the done test with a faked iPhone shell and internet in `dev/test/fakenet.mjs`). `node dev/test/preview.mjs <outdir>` saves phone screenshots.
 - Look: "Day Sheet" (Archivo + Azeret Mono, flat yellow/cobalt/black bands, thick rules). Dark mode is the same sheet with the lights down; podcasts always use the night player.
 - GitHub Pages serves the `gh-pages` branch: after pushing `main`, also `git push origin main:gh-pages`.
 - `ios/` is the Capacitor shell (loads the Pages site via `server.url`). Plugins are vendored in `ios/vendor` so Xcode needs no npm; after `npx cap sync ios` run `node dev/vendor-ios.mjs`.
+- `ios/App/App/ShelfSignIn.swift` is Shelf's one native plugin (`ShelfSignIn`: status, signIn, signOut, openSettings): a sheet with Google's sign-in that shares the web view's cookie store, so the embedded player sees Mo's YouTube Premium. It is listed in `packageClassList` (vendor-ios.mjs keeps it there) and in the Xcode project. `NSCrossWebsiteTrackingUsageDescription` in Info.plist gives the app the Settings switch that turns WebKit's third-party-cookie blocking off for the player. `dev/src/native.js` reads its state (`Native.ytAccount`); the fake shell in `dev/test/fakenet.mjs` has `shell` options for it.

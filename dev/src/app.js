@@ -1078,6 +1078,8 @@
       case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
       case 'key-remove': delete prefs.apiKey; savePrefs(); $('#keyInput').value = ''; $('#keyMsg').textContent = 'Removed. Search reads YouTube\'s results page.'; $('#keyMsg').className = 'msgline ok'; break;
       case 'send': copyShelf(b); break;
+      case 'yt-sign': signInYT(b); break;
+      case 'yt-settings': Native.openSettings().catch(function () { toast("Open the iPhone's Settings app, scroll down to Shelf, and turn on Allow Cross-Website Tracking.", 'warn'); }); break;
       case 'tone':
         if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
         if (engine.state().playing) engine.pause();
@@ -1165,6 +1167,12 @@
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
+      var ya = Native.ytAccount.state;
+      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. Premium plays without ads once "Allow Cross-Website Tracking" is on for Shelf in the iPhone\'s Settings (button below).' }
+        : ya === 'out' ? { ok: 0, text: 'Not signed in to YouTube, so videos play with ads even with Premium. Tap "Sign in to YouTube" below.' }
+        : ya === 'old' ? { ok: 0, text: "This copy of the Shelf app is older than the website, so it can't sign in to YouTube yet. On your Mac, run the installer again." }
+        : ya === 'wait' ? { ok: 2, text: 'Checking your YouTube sign-in…' }
+        : { ok: 0, text: "Couldn't check your YouTube sign-in. Close and reopen Shelf." });
       if (!restored) out.push({ ok: 0, text: "The phone's storage was slow to answer at start, so your channels and course ticks aren't being saved to it yet. Close and reopen Shelf." });
       if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
       var fs = Native.feedStatus;
@@ -1196,6 +1204,24 @@
     $('#checkList').innerHTML = checks().map(function (x) {
       return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + '</span></li>';
     }).join('');
+    var ya = Native.ytAccount.state, canSign = Native.inApp && ya !== 'old';
+    $('#ytBtn').hidden = !canSign; $('#trackBtn').hidden = !canSign;
+    if (!signingIn) $('#ytBtn').textContent = ya === 'in' ? 'Sign out of YouTube' : 'Sign in to YouTube';
+  }
+  var signingIn = false;
+  function signInYT(b) {
+    if (signingIn) return;
+    if (Native.ytAccount.state === 'in') {
+      Native.signOutYT().then(function () { fillCheck(); updateDot(); toast('Signed out of YouTube.'); }, function () { toast("Couldn't sign out. Close and reopen Shelf.", 'warn'); });
+      return;
+    }
+    signingIn = true; b.textContent = 'Signing in…';
+    Native.signInYT().then(function (a) {
+      signingIn = false; fillCheck(); updateDot();
+      // The player was made before the sign-in: a fresh page gives YouTube a player that knows the account
+      if (a.state === 'in') { toast('Signed in to YouTube. Reloading so the player notices…'); setTimeout(function () { location.reload(); }, 900); }
+      else toast("Google didn't finish signing you in. Videos still play; for Premium without ads, open them in the YouTube app (YouTube ↗ in the player).", 'warn');
+    }, function () { signingIn = false; fillCheck(); toast("Couldn't open the sign-in page. Close and reopen Shelf.", 'warn'); });
   }
   function openCheck() { updateDot(); fillCheck(); openDlg($('#checkDlg')); }
 
@@ -1260,6 +1286,7 @@
     renderHome(); renderAudio();
     loadYT();
     updateDot();
+    if (Native.inApp) Native.checkYT().then(updateDot); // the corner turns green as soon as the sign-in is known
     setInterval(updateDot, 5000);
     setInterval(function () { if (!stack.length && document.visibilityState === 'visible') keepTyping(renderHome); }, 60000);
     window.addEventListener('online', updateDot); window.addEventListener('offline', updateDot);

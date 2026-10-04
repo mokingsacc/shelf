@@ -55,6 +55,8 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>NSCrossWebsiteTrackingUsageDescription</key>
+	<string>Lets the YouTube player see that you are signed in, so YouTube Premium plays without ads. Shelf tracks nothing.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

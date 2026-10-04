@@ -16,4 +16,8 @@ const pkg = `${root}ios/App/CapApp-SPM/Package.swift`;
 let s = fs.readFileSync(pkg, 'utf8').replace(/path: "\.\.\/\.\.\/\.\.\/node_modules\/@capacitor\/([a-z]+)"/g, 'path: "../../vendor/$1"')
   .replace('// DO NOT MODIFY THIS FILE - managed by Capacitor CLI commands', '// Plugins are vendored in ios/vendor so Xcode builds without npm. Regenerate with: node dev/vendor-ios.mjs (after npx cap sync)');
 fs.writeFileSync(pkg, s);
-console.log('vendored', plugins.join(', '));
+// Shelf's own plugin (ios/App/App/ShelfSignIn.swift) isn't an npm package, so cap sync drops it from the class list
+const cfg = `${root}ios/App/App/capacitor.config.json`, c = JSON.parse(fs.readFileSync(cfg, 'utf8'));
+c.packageClassList = c.packageClassList || [];
+if (!c.packageClassList.includes('ShelfSignInPlugin')) { c.packageClassList.push('ShelfSignInPlugin'); fs.writeFileSync(cfg, JSON.stringify(c, null, '\t') + '\n'); }
+console.log('vendored', plugins.join(', '), '+ ShelfSignInPlugin registered');

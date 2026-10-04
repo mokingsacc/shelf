@@ -90,11 +90,20 @@ YT.Player = function (el, opts) {
 setTimeout(function(){ window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(); }, 20);
 `;
 
-// The iPhone shell, faked: phone storage, clipboard and native HTTP plugins.
+// The iPhone shell, faked: phone storage, clipboard, native HTTP and the YouTube sign-in sheet.
 // Like the real shell, a plain cross-site fetch() from the page fails (the bridge routes it through
 // capacitor://localhost, which the github.io page can't read), so the app must use CapacitorHttp.
-export const CAP = (seed, clip) => `window.__prefs = ${JSON.stringify(seed || {})}; window.__clip = ${JSON.stringify(clip || '')}; window.__httpCalls = [];
+// shell.ytSignedIn: YouTube cookies already there (default yes); shell.ytRefuse: Google won't finish the
+// sign-in; shell.oldShell: a shell built before the ShelfSignIn plugin (its plugin list lacks it).
+export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: true }, shell); return `window.__prefs = ${JSON.stringify(seed || {})}; window.__clip = ${JSON.stringify(clip || '')}; window.__httpCalls = []; window.__ytCalls = [];
   (function () {
+    // The sheet's cookie jar outlives a page reload, like the real one
+    var yt = { get signedIn() { var v = localStorage.getItem('fake.yt'); return v == null ? ${!!shell.ytSignedIn} : v === '1'; }, set signedIn(b) { localStorage.setItem('fake.yt', b ? '1' : '0'); } };
+    var signIn = ${shell.oldShell ? '{}' : `{ PluginHeaders: [{ name: 'ShelfSignIn', methods: [] }], plugin: {
+      status: async () => ({ signedIn: yt.signedIn }),
+      signIn: async () => { window.__ytCalls.push('signIn'); if (!${!!shell.ytRefuse}) yt.signedIn = true; return { signedIn: yt.signedIn }; },
+      signOut: async () => { window.__ytCalls.push('signOut'); yt.signedIn = false; return { signedIn: false }; },
+      openSettings: async () => { window.__ytCalls.push('openSettings'); } } }`};
     var webFetch = window.fetch.bind(window);
     window.fetch = function (res, opts) {
       var u = typeof res === 'string' ? res : res.url;
@@ -110,7 +119,8 @@ export const CAP = (seed, clip) => `window.__prefs = ${JSON.stringify(seed || {}
         var t = await r.text(), ct = r.headers.get('content-type') || '';
         return { status: r.status, url: url, headers: { 'content-type': ct }, data: /json/.test(ct) ? JSON.parse(t) : t };
       } } } };
-  })();`;
+    if (signIn.plugin) { window.Capacitor.PluginHeaders = signIn.PluginHeaders; window.Capacitor.Plugins.ShelfSignIn = signIn.plugin; }
+  })();`; };
 
 // opts.fresh: hide the newest item on the first fetch of each feed, so a later refresh shows "new"
 export async function installFakes(ctx, opts = {}) {

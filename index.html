@@ -446,6 +446,8 @@ body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,
   <div class="db">
     <ul class="checks" id="checkList"></ul>
     <div class="row2">
+      <button type="button" class="btn" id="ytBtn" data-act="yt-sign" hidden>Sign in to YouTube</button>
+      <button type="button" class="btn" id="trackBtn" data-act="yt-settings" hidden>iPhone Settings for Shelf</button>
       <button type="button" class="btn" id="toneBtn" data-act="tone" hidden>Test lock-screen sound</button>
       <button type="button" class="btn" data-act="settings">Search key</button>
       <button type="button" class="btn" data-act="send" id="sendBtn">Copy shelf link</button>
@@ -758,14 +760,40 @@ var Native = (function () {
     });
   }
 
+  // YouTube sign-in, so Premium applies to the player: a sheet in the Shelf shell that shares the web view's
+  // cookies (ios/App/App/ShelfSignIn.swift). Older shells don't have it, and the bridge never answers a call to
+  // a plugin it doesn't know, so the shell's plugin list is checked first.
+  // state: web (a browser), old (shell without the plugin), wait, in, out, unknown (the shell didn't answer)
+  function hasPlugin(name) {
+    try { return (Cap.PluginHeaders || []).some(function (h) { return h.name === name; }) || !!(Cap.Plugins && Cap.Plugins[name]); } catch (e) { return false; }
+  }
+  var ytAccount = { state: !inApp ? 'web' : hasPlugin('ShelfSignIn') ? 'wait' : 'old' };
+  function setYT(r) { ytAccount = { state: r && r.signedIn ? 'in' : 'out' }; return ytAccount; }
+  function checkYT() {
+    if (ytAccount.state === 'web' || ytAccount.state === 'old') return Promise.resolve(ytAccount);
+    var done = false;
+    return new Promise(function (res) {
+      setTimeout(function () { if (!done) { done = true; ytAccount = { state: 'unknown' }; res(ytAccount); } }, 5000);
+      call('ShelfSignIn', 'status').then(function (r) { if (!done) { done = true; res(setYT(r)); } }, function () { if (!done) { done = true; ytAccount = { state: 'unknown' }; res(ytAccount); } });
+    });
+  }
+  // Opens the sign-in sheet; settles when it closes, saying whether an account is signed in now
+  function signInYT() { return call('ShelfSignIn', 'signIn').then(setYT); }
+  function signOutYT() { return call('ShelfSignIn', 'signOut').then(function () { return setYT(null); }); }
+  // Settings > Shelf, where "Allow Cross-Website Tracking" lets the player see the sign-in
+  function openSettings() { return call('ShelfSignIn', 'openSettings'); }
+
   if (inApp) {
     document.documentElement.classList.add('in-app');
     try { consentCookies(); } catch (e) {}
     setTimeout(testFeed, 1500);
+    checkYT();
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkYT(); });
   }
   return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
-    get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
+    get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
+    get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings };
 })();
 </script>
 <script>// Feeds: YouTube channel Atom feeds, podcast RSS, channel pages. Pure parsing (no DOM), tested in test/feeds.test.cjs.
@@ -2908,6 +2936,8 @@ if (typeof module !== 'undefined') module.exports = Courses;
       case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
       case 'key-remove': delete prefs.apiKey; savePrefs(); $('#keyInput').value = ''; $('#keyMsg').textContent = 'Removed. Search reads YouTube\'s results page.'; $('#keyMsg').className = 'msgline ok'; break;
       case 'send': copyShelf(b); break;
+      case 'yt-sign': signInYT(b); break;
+      case 'yt-settings': Native.openSettings().catch(function () { toast("Open the iPhone's Settings app, scroll down to Shelf, and turn on Allow Cross-Website Tracking.", 'warn'); }); break;
       case 'tone':
         if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
         if (engine.state().playing) engine.pause();
@@ -2995,6 +3025,12 @@ if (typeof module !== 'undefined') module.exports = Courses;
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
+      var ya = Native.ytAccount.state;
+      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. Premium plays without ads once "Allow Cross-Website Tracking" is on for Shelf in the iPhone\'s Settings (button below).' }
+        : ya === 'out' ? { ok: 0, text: 'Not signed in to YouTube, so videos play with ads even with Premium. Tap "Sign in to YouTube" below.' }
+        : ya === 'old' ? { ok: 0, text: "This copy of the Shelf app is older than the website, so it can't sign in to YouTube yet. On your Mac, run the installer again." }
+        : ya === 'wait' ? { ok: 2, text: 'Checking your YouTube sign-in…' }
+        : { ok: 0, text: "Couldn't check your YouTube sign-in. Close and reopen Shelf." });
       if (!restored) out.push({ ok: 0, text: "The phone's storage was slow to answer at start, so your channels and course ticks aren't being saved to it yet. Close and reopen Shelf." });
       if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
       var fs = Native.feedStatus;
@@ -3026,6 +3062,24 @@ if (typeof module !== 'undefined') module.exports = Courses;
     $('#checkList').innerHTML = checks().map(function (x) {
       return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + '</span></li>';
     }).join('');
+    var ya = Native.ytAccount.state, canSign = Native.inApp && ya !== 'old';
+    $('#ytBtn').hidden = !canSign; $('#trackBtn').hidden = !canSign;
+    if (!signingIn) $('#ytBtn').textContent = ya === 'in' ? 'Sign out of YouTube' : 'Sign in to YouTube';
+  }
+  var signingIn = false;
+  function signInYT(b) {
+    if (signingIn) return;
+    if (Native.ytAccount.state === 'in') {
+      Native.signOutYT().then(function () { fillCheck(); updateDot(); toast('Signed out of YouTube.'); }, function () { toast("Couldn't sign out. Close and reopen Shelf.", 'warn'); });
+      return;
+    }
+    signingIn = true; b.textContent = 'Signing in…';
+    Native.signInYT().then(function (a) {
+      signingIn = false; fillCheck(); updateDot();
+      // The player was made before the sign-in: a fresh page gives YouTube a player that knows the account
+      if (a.state === 'in') { toast('Signed in to YouTube. Reloading so the player notices…'); setTimeout(function () { location.reload(); }, 900); }
+      else toast("Google didn't finish signing you in. Videos still play; for Premium without ads, open them in the YouTube app (YouTube ↗ in the player).", 'warn');
+    }, function () { signingIn = false; fillCheck(); toast("Couldn't open the sign-in page. Close and reopen Shelf.", 'warn'); });
   }
   function openCheck() { updateDot(); fillCheck(); openDlg($('#checkDlg')); }
 
@@ -3090,6 +3144,7 @@ if (typeof module !== 'undefined') module.exports = Courses;
     renderHome(); renderAudio();
     loadYT();
     updateDot();
+    if (Native.inApp) Native.checkYT().then(updateDot); // the corner turns green as soon as the sign-in is known
     setInterval(updateDot, 5000);
     setInterval(function () { if (!stack.length && document.visibilityState === 'visible') keepTyping(renderHome); }, 60000);
     window.addEventListener('online', updateDot); window.addEventListener('offline', updateDot);
