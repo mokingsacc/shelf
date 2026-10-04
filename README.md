@@ -6,6 +6,15 @@ Open it in a browser: https://mokingsacc.github.io/shelf/
 
 ## Put Shelf on your iPhone (once)
 
+**Quickest:** plug your iPhone into your Mac, open Terminal and paste:
+
+```
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/mokingsacc/shelf/main/install-iphone.sh)"
+```
+
+It downloads Shelf, builds it with Xcode and installs it on the phone, and says in plain words what to do if anything stops it. Or do it by hand:
+
+
 1. On your Mac, install **Xcode** from the App Store and open it once so it finishes installing. Then on this page press the green **Code** button, **Download ZIP**, and unzip it.
 2. Double-click `ios/App/App.xcodeproj`. Plug in your iPhone, unlock it and tap **Trust**. At the top of Xcode pick your iPhone, then press **▶ Run**. If Xcode asks you to sign in or pick a team: click the blue **App** icon on the left, open **Signing & Capabilities**, tick **Automatically manage signing** and choose your name under **Team**, then press Run again.
 3. On the iPhone: if it asks for **Developer Mode**, turn it on in Settings > Privacy & Security and restart. If it says **Untrusted Developer**, go to Settings > General > VPN & Device Management, tap your Apple ID, tap **Trust**. Open **Shelf**.
