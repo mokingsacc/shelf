@@ -200,17 +200,17 @@ body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-
 .cbtn{min-height:40px;padding:0 12px;border:2px solid currentColor;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .cbtn.solid{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .eps{list-style:none;margin:0;padding:0}
-.ep{display:grid;grid-template-columns:44px auto minmax(0,1fr) auto;gap:8px;align-items:center;border-top:1px solid color-mix(in srgb,currentColor 35%,transparent);min-height:50px}
-.ep .tk{width:44px;height:44px;display:flex;align-items:center;justify-content:center}
-.ep .tk span{width:26px;height:26px;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font:700 14px var(--mono)}
-.ep.d .tk span{background:var(--fg);color:var(--bg)}
-.ep .no{font:600 12px var(--mono);white-space:nowrap}
-.ep .et{font-size:14px;font-weight:700;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding:7px 0;min-height:44px;overflow-wrap:anywhere}
-.ep .du{font:400 11px var(--mono);opacity:.8;white-space:nowrap}
-.ep.d .no,.ep.d .et,.ep.d .du{opacity:.5}
-.ep.n{border-top:3px solid currentColor}
-.ep.n .et{font-weight:900}
-.ep.n .no::before{content:"▸ "}
+.epr{display:grid;grid-template-columns:44px auto minmax(0,1fr) auto;gap:8px;align-items:center;border-top:1px solid color-mix(in srgb,currentColor 35%,transparent);min-height:50px}
+.epr .tk{width:44px;height:44px;display:flex;align-items:center;justify-content:center}
+.epr .tk span{width:26px;height:26px;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font:700 14px var(--mono)}
+.epr.d .tk span{background:var(--fg);color:var(--bg)}
+.epr .no{font:600 12px var(--mono);white-space:nowrap}
+.epr .et{font-size:14px;font-weight:700;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding:7px 0;min-height:44px;overflow-wrap:anywhere}
+.epr .du{font:400 11px var(--mono);opacity:.8;white-space:nowrap}
+.epr.d .no,.epr.d .et,.epr.d .du{opacity:.5}
+.epr.n{border-top:3px solid currentColor}
+.epr.n .et{font-weight:900}
+.epr.n .no::before{content:"▸ "}
 [data-hold]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .cmore{display:block;width:100%;min-height:40px;font:600 12px var(--mono);border-top:1px solid color-mix(in srgb,currentColor 35%,transparent)}
 .epgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin:6px 0}
@@ -671,8 +671,10 @@ var Native = (function () {
   // Web reads from the app go straight to iOS networking. (Plain fetch() GETs get routed through
   // capacitor://localhost, which a page served from github.io can't read, and browsers drop Cookie headers.)
   var SAFARI_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  // YouTube sends phones a different page (m.youtube.com, data hidden in an escaped string); the desktop one is what Shelf reads
+  var DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
   function httpGet(url, headers) {
-    var h = { 'User-Agent': SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9' };
+    var h = { 'User-Agent': /^https:\/\/(www\.|m\.)?youtube\.com\/(?!feeds\/)/.test(url) ? DESKTOP_UA : SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9' };
     for (var k in headers || {}) h[k] = headers[k];
     return call('CapacitorHttp', 'request', { url: url, method: 'GET', headers: h, responseType: 'text' }).then(function (r) {
       var d = r && r.data;
@@ -1406,11 +1408,18 @@ var Search = (function () {
     while ((m = cre.exec(html)) && chans.length < 3) chans.push({ kind: 'channel', id: m[1], title: unjson(m[2]), thumb: '' });
     return chans.concat(out);
   }
+  // The phone page keeps ytInitialData in a '\x7b\x22…' string: turn it back into plain JSON text
+  function unescapePage(html) {
+    var m = String(html).match(/ytInitialData\s*=\s*'([\s\S]*?)';/);
+    if (!m) return '';
+    return m[1].replace(/\\x([0-9a-f]{2})/gi, function (x, h) { return String.fromCharCode(parseInt(h, 16)); }).replace(/\\\\/g, '\\');
+  }
   function unjson(s) { try { return JSON.parse('"' + s + '"'); } catch (e) { return s; } }
   function withoutKey(io, q) {
     return io.fetchText('https://www.youtube.com/results?search_query=' + encodeURIComponent(q), CONSENT).then(function (html) {
       if (Feeds.isConsentPage(html)) throw new Error('YouTube showed its cookie page instead of results. Try again in a minute.');
       var r = fromPage(html);
+      if (!r.length) { var plain = unescapePage(html); if (plain) r = fromPage(plain); }
       if (!r.length && !/ytInitialData/.test(html)) throw new Error("YouTube's results page has changed and basic search can't read it. Adding a Google key in Settings fixes this.");
       return r;
     });
@@ -1420,7 +1429,7 @@ var Search = (function () {
     if (!q) return Promise.resolve([]);
     return key ? withKey(io, key, q) : withoutKey(io, q);
   }
-  return { run: run, isoDuration: isoDuration, fromPage: fromPage };
+  return { run: run, isoDuration: isoDuration, fromPage: fromPage, unescapePage: unescapePage };
 })();
 if (typeof module !== 'undefined') module.exports = Search;
 </script>
@@ -2422,7 +2431,8 @@ if (typeof module !== 'undefined') module.exports = Courses;
     if (!nightOpen) return;
     var r = arec[ep.guid] || {}, m = aMeta[ep.guid] || {};
     var src = lib.source(r.source || m.source);
-    $('#nCh').textContent = 'Sleep · ' + (ep.podcast || '') + (src && src.private ? ' · Private' : '');
+    var nsec = src && lib.section(src.section);
+    $('#nCh').textContent = (nsec ? nsec.name + ' · ' : '') + (ep.podcast || '') + (src && src.private ? ' · Private' : '');
     $('#nTitle').textContent = ep.title;
     $('#nEp').textContent = Core.fmt(st.t) + (st.dur ? ' / ' + Core.fmt(st.dur) : '') + (Native.inApp ? '' : ' · keep this tab open');
     var art = $('#nArt'); if (ep.image) { if (art.getAttribute('src') !== ep.image) art.src = ep.image; art.hidden = false; } else art.hidden = true;
@@ -2627,7 +2637,7 @@ if (typeof module !== 'undefined') module.exports = Courses;
     h += '<ul class="eps">';
     for (var i = from; i <= to; i++) {
       var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
-      h += '<li class="ep' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
+      h += '<li class="epr' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
         '<button type="button" class="tk" data-act="ep-tick" data-hold="upto"' + da + ' aria-pressed="' + d + '" aria-label="' + esc((d ? 'Untick ' : 'Tick ') + lab + '. Hold to tick everything up to here.') + '"><span>' + (d ? '✓' : '') + '</span></button>' +
         '<span class="no mono">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</span>' +
         '<button type="button" class="et" data-act="ep-play" data-hold="pin"' + da + '>' + esc(titleFor(c, x)) + '</button>' +

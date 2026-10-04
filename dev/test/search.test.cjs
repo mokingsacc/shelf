@@ -52,5 +52,12 @@ const page = 'var ytInitialData = {"contents":[{"channelRenderer":{"channelId":"
   await assert.rejects(Search.run({ fetchText: () => Promise.resolve('<a href="https://consent.youtube.com/">') }, 'x', ''), /cookie page/);
   await assert.rejects(Search.run({ fetchText: () => Promise.resolve('<html>new layout</html>') }, 'x', ''), /Google key/);
 
-  console.log('search: all checks passed');
+    // The phone-shaped page hides ytInitialData in an escaped string; still readable
+  {
+    const data = { contents: [{ videoRenderer: { videoId: 'abcdefghijk', title: { runs: [{ text: 'Fin vs History: Emu War' }] }, lengthText: { simpleText: '1:02:03' }, ownerText: { runs: [{ text: 'Fin vs History', navigationEndpoint: { browseEndpoint: { browseId: 'UCaaaaaaaaaaaaaaaaaaaaaa' } } }] } } }] };
+    const html = "<script>var ytInitialData = '" + JSON.stringify(data).replace(/[{}"\[\]:]/g, (c) => '\\x' + c.charCodeAt(0).toString(16)) + "';</script>";
+    const r = await Search.run({ fetchText: async () => html }, 'fin vs history', '');
+    assert.strictEqual(r.length, 1); assert.strictEqual(r[0].dur, 3723);
+  }
+console.log('search: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

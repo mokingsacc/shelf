@@ -43,7 +43,7 @@ await p.waitForFunction(() => document.querySelector('#statusDot').classList.con
 ok(await p.locator('#statusDot.good').count() === 1 && (await p.locator('#statusText').textContent()) === 'All good', '1 corner says All good');
 ok(await p.locator('.band .nw').count() === 0, '1 nothing marked new on the very first run');
 const calls = await shelf(p, () => window.__httpCalls);
-ok(calls.some((c) => /youtube\.com\/@/.test(c.url) && /SOCS=/.test(c.headers.Cookie) && /Safari/.test(c.headers['User-Agent'])), '1 channel pages are read natively, with the consent cookie and a Safari identity');
+ok(calls.some((c) => /youtube\.com\/@/.test(c.url) && /SOCS=/.test(c.headers.Cookie) && /Macintosh/.test(c.headers['User-Agent'])), '1 channel pages are read natively, with the consent cookie and a desktop identity (the phone page is shaped differently)');
 
 console.log('\n== 2 New uploads');
 await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
@@ -209,13 +209,13 @@ ok(await shelf(p, () => { const c = window.__shelf.courses, ob = c.list()[1], pi
 ok(await p.locator('.band.c1 .courses .course').count() === 1 && /1 on the go/.test(await p.locator('.band.c1 .chd').textContent()), 'C Medicine band shows only the course on the go');
 ok(/91\/130/.test(await p.locator('.band.c1 .course .cn').textContent()) && /Next · 1115/.test(await p.locator('.band.c1 .course .cx').textContent()), 'C Paeds row: 91/130, next is 1115');
 await p.locator('.band.c1 .course .cr').click(); await p.waitForTimeout(150);
-ok(await p.locator('.course.open .ep').count() === 6 && (await p.locator('.course.open .ep.n .no').textContent()).includes('1115'), 'C expands to a short window around where you are (' + await p.locator('.course.open .ep').count() + ' rows)');
-await p.locator('.course.open .ep.n .tk').click(); await p.waitForTimeout(150);
+ok(await p.locator('.course.open .epr').count() === 6 && (await p.locator('.course.open .epr.n .no').textContent()).includes('1115'), 'C expands to a short window around where you are (' + await p.locator('.course.open .epr').count() + ' rows)');
+await p.locator('.course.open .epr.n .tk').click(); await p.waitForTimeout(150);
 ok(/92\/130/.test(await p.locator('.band.c1 .course .cn').textContent()), 'C tapping a tick ticks it');
 await p.locator('.course.open [data-act="course-later"]').click(); await p.waitForTimeout(100);
-ok(await p.locator('.course.open .ep').count() === 16, 'C "more" reveals 10 more, not the whole list');
+ok(await p.locator('.course.open .epr').count() === 16, 'C "more" reveals 10 more, not the whole list');
 // hold a later tick: everything above it is ticked, with Undo
-const tk = p.locator('.course.open .ep .tk').nth(10); await tk.evaluate((e) => e.scrollIntoView({ block: 'center' })); const tb = await tk.boundingBox();
+const tk = p.locator('.course.open .epr .tk').nth(10); await tk.evaluate((e) => e.scrollIntoView({ block: 'center' })); const tb = await tk.boundingBox();
 await p.mouse.move(tb.x + 10, tb.y + 10); await p.mouse.down(); await p.waitForTimeout(700); await p.mouse.up(); await p.waitForTimeout(200);
 const afterHold = await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done);
 ok(afterHold === 101 && /Ticked everything up to/.test(await p.locator('#toast').textContent()), 'C hold ticks everything up to it (' + afterHold + ')');

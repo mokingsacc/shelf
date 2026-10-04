@@ -40,8 +40,10 @@ var Native = (function () {
   // Web reads from the app go straight to iOS networking. (Plain fetch() GETs get routed through
   // capacitor://localhost, which a page served from github.io can't read, and browsers drop Cookie headers.)
   var SAFARI_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  // YouTube sends phones a different page (m.youtube.com, data hidden in an escaped string); the desktop one is what Shelf reads
+  var DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
   function httpGet(url, headers) {
-    var h = { 'User-Agent': SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9' };
+    var h = { 'User-Agent': /^https:\/\/(www\.|m\.)?youtube\.com\/(?!feeds\/)/.test(url) ? DESKTOP_UA : SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9' };
     for (var k in headers || {}) h[k] = headers[k];
     return call('CapacitorHttp', 'request', { url: url, method: 'GET', headers: h, responseType: 'text' }).then(function (r) {
       var d = r && r.data;

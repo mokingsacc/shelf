@@ -58,11 +58,18 @@ var Search = (function () {
     while ((m = cre.exec(html)) && chans.length < 3) chans.push({ kind: 'channel', id: m[1], title: unjson(m[2]), thumb: '' });
     return chans.concat(out);
   }
+  // The phone page keeps ytInitialData in a '\x7b\x22…' string: turn it back into plain JSON text
+  function unescapePage(html) {
+    var m = String(html).match(/ytInitialData\s*=\s*'([\s\S]*?)';/);
+    if (!m) return '';
+    return m[1].replace(/\\x([0-9a-f]{2})/gi, function (x, h) { return String.fromCharCode(parseInt(h, 16)); }).replace(/\\\\/g, '\\');
+  }
   function unjson(s) { try { return JSON.parse('"' + s + '"'); } catch (e) { return s; } }
   function withoutKey(io, q) {
     return io.fetchText('https://www.youtube.com/results?search_query=' + encodeURIComponent(q), CONSENT).then(function (html) {
       if (Feeds.isConsentPage(html)) throw new Error('YouTube showed its cookie page instead of results. Try again in a minute.');
       var r = fromPage(html);
+      if (!r.length) { var plain = unescapePage(html); if (plain) r = fromPage(plain); }
       if (!r.length && !/ytInitialData/.test(html)) throw new Error("YouTube's results page has changed and basic search can't read it. Adding a Google key in Settings fixes this.");
       return r;
     });
@@ -72,6 +79,6 @@ var Search = (function () {
     if (!q) return Promise.resolve([]);
     return key ? withKey(io, key, q) : withoutKey(io, q);
   }
-  return { run: run, isoDuration: isoDuration, fromPage: fromPage };
+  return { run: run, isoDuration: isoDuration, fromPage: fromPage, unescapePage: unescapePage };
 })();
 if (typeof module !== 'undefined') module.exports = Search;

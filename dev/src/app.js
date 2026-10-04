@@ -601,7 +601,8 @@
     if (!nightOpen) return;
     var r = arec[ep.guid] || {}, m = aMeta[ep.guid] || {};
     var src = lib.source(r.source || m.source);
-    $('#nCh').textContent = 'Sleep · ' + (ep.podcast || '') + (src && src.private ? ' · Private' : '');
+    var nsec = src && lib.section(src.section);
+    $('#nCh').textContent = (nsec ? nsec.name + ' · ' : '') + (ep.podcast || '') + (src && src.private ? ' · Private' : '');
     $('#nTitle').textContent = ep.title;
     $('#nEp').textContent = Core.fmt(st.t) + (st.dur ? ' / ' + Core.fmt(st.dur) : '') + (Native.inApp ? '' : ' · keep this tab open');
     var art = $('#nArt'); if (ep.image) { if (art.getAttribute('src') !== ep.image) art.src = ep.image; art.hidden = false; } else art.hidden = true;
@@ -806,7 +807,7 @@
     h += '<ul class="eps">';
     for (var i = from; i <= to; i++) {
       var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
-      h += '<li class="ep' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
+      h += '<li class="epr' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
         '<button type="button" class="tk" data-act="ep-tick" data-hold="upto"' + da + ' aria-pressed="' + d + '" aria-label="' + esc((d ? 'Untick ' : 'Tick ') + lab + '. Hold to tick everything up to here.') + '"><span>' + (d ? '✓' : '') + '</span></button>' +
         '<span class="no mono">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</span>' +
         '<button type="button" class="et" data-act="ep-play" data-hold="pin"' + da + '>' + esc(titleFor(c, x)) + '</button>' +
