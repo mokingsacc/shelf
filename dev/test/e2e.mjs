@@ -166,6 +166,30 @@ await p.keyboard.press('Escape');
 ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'phone: no sideways scroll');
 await ctx.close();
 
+console.log('\n== Player for keyboards and VoiceOver');
+({ ctx, p } = await appPage());
+await settle(p);
+await p.focus('#statusBtn');
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(600);
+ok(await p.evaluate(() => ['#home', 'nav.foot'].every((q) => document.querySelector(q).inert) && !document.querySelector('#vsheet').inert), 'a11y: the page behind the player is inert');
+let escaped = 0;
+for (let i = 0; i < 14; i++) { await p.keyboard.press('Tab'); if (await p.evaluate(() => { const a = document.activeElement; return a && a !== document.body && !document.querySelector('#vsheet').contains(a); })) escaped++; }
+ok(escaped === 0, 'a11y: Tab stays inside the player (' + escaped + ' escapes)');
+await p.evaluate(() => window.__fake.advance(100)); await p.waitForTimeout(1300);
+await p.focus('#vScrub'); await p.keyboard.press('Space'); await p.waitForTimeout(200);
+let pos = await shelf(p, () => window.__fake.getCurrentTime());
+ok(pos > 90, 'a11y: Space on the position line doesn\'t jump to the start (' + Math.round(pos) + ')');
+await p.keyboard.press('ArrowRight'); await p.waitForTimeout(200);
+const pos2 = await shelf(p, () => window.__fake.getCurrentTime());
+ok(pos2 - pos > 25 && pos2 - pos < 35, 'a11y: arrow keys step through the video (+' + Math.round(pos2 - pos) + ' s)');
+ok(Number(await p.getAttribute('#vScrub', 'aria-valuenow')) > 90 && /of/.test(await p.getAttribute('#vScrub', 'aria-valuetext')), 'a11y: the position line reads as a slider with its time');
+const yt = await p.evaluate(() => { const a = document.querySelector('#ytLink'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
+const at = +(yt.match(/[?&]t=(\d+)s/) || [])[1];
+ok(at > 100, 'YouTube ↗ opens at the spot playing now (t=' + at + ')');
+await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+ok(await p.evaluate(() => !document.querySelector('#home').inert && document.activeElement && document.activeElement.id === 'statusBtn'), 'a11y: closing hands focus back to what opened it');
+await ctx.close();
+
 console.log('\n== YouTube sign-in (Premium without ads)');
 ({ ctx, p } = await appPage({ shell: { ytSignedIn: false } }));
 await settle(p);

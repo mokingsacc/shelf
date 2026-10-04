@@ -365,11 +365,29 @@
     if (o.t) { v.t = o.t; v.done = false; }
     return v;
   }
+  // The players are modal: while one is open the page behind it is inert (no focus, no taps, hidden from VoiceOver),
+  // and closing hands focus back to whatever opened it
+  var sheetOpener = {};
+  function behindSheets(on) { ['#home', '#page', '#mini', 'nav.foot', '#vsheet', '#nsheet'].forEach(function (q) { var e = $(q); if (e && !e.classList.contains('open')) e.inert = on; }); }
   function openSheet(id) {
-    var el = $(id); el.classList.add('open'); el.setAttribute('aria-hidden', 'false');
+    var el = $(id), a = document.activeElement;
+    if (!el.classList.contains('open')) sheetOpener[id] = a && a !== document.body && !el.contains(a) ? a : null;
+    el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); el.inert = false;
+    behindSheets(true);
     var b = el.querySelector('[data-act^="close"]'); if (b) setTimeout(function () { try { b.focus({ preventScroll: true }); } catch (e) {} }, 300);
   }
-  function closeSheet(id) { var el = $(id); el.classList.remove('open'); el.setAttribute('aria-hidden', 'true'); }
+  function closeSheet(id) {
+    var el = $(id), wasOpen = el.classList.contains('open');
+    el.classList.remove('open'); el.setAttribute('aria-hidden', 'true');
+    var still = document.querySelector('.sheet.open');
+    behindSheets(false); if (still) behindSheets(true);
+    el.inert = !!still;
+    if (!wasOpen) return;
+    var o = sheetOpener[id]; sheetOpener[id] = null;
+    if (el.contains(document.activeElement) || document.activeElement === document.body) {
+      try { if (o && o.isConnected && !o.closest('[hidden],[inert]') && o.getClientRects().length) o.focus({ preventScroll: true }); else if (document.activeElement && el.contains(document.activeElement)) document.activeElement.blur(); } catch (e) {}
+    }
+  }
   function openVideo(o) {
     if (engine && engine.state().playing) engine.pause();
     var v = ensureVideo(o);
@@ -491,7 +509,7 @@
     var t = 0, d = 0, st = -1;
     try { t = player.getCurrentTime() || 0; d = player.getDuration() || 0; st = player.getPlayerState(); } catch (e) {}
     $('#vLine').style.width = d ? Math.min(100, t / d * 100).toFixed(2) + '%' : '0';
-    $('#vT').textContent = Core.fmt(t);
+    $('#vT').textContent = Core.fmt(t); scrubAria($('#vScrub'), t, d);
     $('#vLeft').textContent = d ? '−' + Core.fmt(Math.max(0, d - t)) : '';
     if (vTimer && SleepTimer.tick(vTimer, Date.now(), false) === 'stop') {
       vTimer = null; capture(true);
@@ -610,7 +628,7 @@
     var art = $('#nArt'); if (ep.image) { if (art.getAttribute('src') !== ep.image) art.src = ep.image; art.hidden = false; } else art.hidden = true;
     $('#nMsg').hidden = !st.message; $('#nMsg').textContent = st.message || '';
     $('#nLine').style.width = st.dur ? Math.min(100, st.t / st.dur * 100).toFixed(2) + '%' : '0';
-    $('#nT').textContent = Core.fmt(st.t);
+    $('#nT').textContent = Core.fmt(st.t); scrubAria($('#nScrub'), st.t, st.dur);
     $('#nLeft').textContent = st.dur ? '−' + Core.fmt(left) : '';
     $('#nPlay').textContent = st.playing ? '❚❚' : '▶';
     $('#nPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
@@ -1093,7 +1111,20 @@
     }
   });
   // Tap on a scrub line seeks
-  function scrubAt(el, ev, dur, fn) { var r = el.getBoundingClientRect(); if (!dur || !r.width) return; fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * dur); }
+  // A tap seeks to that point. A keyboard "click" (Space/Enter, detail 0) has no position, so it doesn't jump to the
+  // start; the arrow keys step back and forward instead (the line is a slider for VoiceOver and keyboards).
+  function scrubAt(el, ev, dur, fn) { var r = el.getBoundingClientRect(); if (!dur || !r.width || ev.detail === 0) return; fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * dur); }
+  function scrubKeys(el, step) {
+    el.addEventListener('keydown', function (ev) {
+      var d = { ArrowLeft: -15, ArrowDown: -15, ArrowRight: 30, ArrowUp: 30 }[ev.key];
+      if (d != null) { ev.preventDefault(); step(d); }
+    });
+  }
+  function scrubAria(el, t, d) { el.setAttribute('aria-valuemin', '0'); el.setAttribute('aria-valuemax', String(Math.round(d || 0))); el.setAttribute('aria-valuenow', String(Math.round(t || 0))); el.setAttribute('aria-valuetext', Core.fmt(t || 0) + (d ? ' of ' + Core.fmt(d) : '')); }
+  // YouTube ↗ opens at the spot playing now, not where the video was when the player opened
+  $('#ytLink').addEventListener('click', function () { capture(true); var v = current && videos[current]; if (v) this.href = ytLink(v); });
+  scrubKeys($('#vScrub'), function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
+  scrubKeys($('#nScrub'), function (s) { engine.seekBy(s); });
   $('#vScrub').addEventListener('click', function (ev) { try { var d = player.getDuration(); scrubAt(this, ev, d, function (t) { player.seekTo(t, true); videoTick(); }); } catch (e) {} });
   $('#nScrub').addEventListener('click', function (ev) { var st = engine.state(); scrubAt(this, ev, st.dur, function (t) { engine.seek(t); }); });
   $('#keyForm').addEventListener('submit', function (e) {

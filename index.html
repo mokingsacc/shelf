@@ -39,7 +39,7 @@
   --b3-bg:#101016; --b3-fg:#b9b9c6; --b3-tag-bg:#b9b9c6; --b3-tag-fg:#101016;
   --b0-bg:#111118; --b0-fg:#b9b9c6; --b0-tag-bg:#b9b9c6; --b0-tag-fg:#111118;
   --duo1:#3a3510; --duo2:#1a2a80; --duo-op:.85;
-  --pl-bg:#06060a; --pl-fg:#c9c9d6; --pl-dim:#1b1b24; --pl-mute:#5c5c6b; --pl-hi:#c9c9d6;
+  --pl-bg:#06060a; --pl-fg:#c9c9d6; --pl-dim:#1b1b24; --pl-mute:#8d8d99; --pl-hi:#c9c9d6;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --paper:#08080c; --ink:#c9c9d6; --grey:#6a6a7a; --rule:#2a2a36; --soft:#111118; --line2:#22222c; --pin:#ff6a52;
@@ -48,7 +48,7 @@
   --b3-bg:#101016; --b3-fg:#b9b9c6; --b3-tag-bg:#b9b9c6; --b3-tag-fg:#101016;
   --b0-bg:#111118; --b0-fg:#b9b9c6; --b0-tag-bg:#b9b9c6; --b0-tag-fg:#111118;
   --duo1:#3a3510; --duo2:#1a2a80; --duo-op:.85;
-  --pl-bg:#06060a; --pl-fg:#c9c9d6; --pl-dim:#1b1b24; --pl-mute:#5c5c6b; --pl-hi:#c9c9d6;
+  --pl-bg:#06060a; --pl-fg:#c9c9d6; --pl-dim:#1b1b24; --pl-mute:#8d8d99; --pl-hi:#c9c9d6;
   color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;background:var(--paper)}
@@ -276,13 +276,13 @@ body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-
 .spacer{height:22px;flex:none}
 
 /* ---------- Night player (podcasts): lights down, no yellow ---------- */
-.night{--n-bg:#06060a;--n-fg:#8d8d99;--n-hi:#c9c9d6;--n-dim:#4d4d5e;--n-rule:#22222c;background:var(--n-bg);color:var(--n-fg)}
+.night{--n-bg:#06060a;--n-fg:#a3a3b0;--n-hi:#c9c9d6;--n-dim:#8a8a98;--n-rule:#22222c;background:var(--n-bg);color:var(--n-fg)}
 .night .sh-top{color:var(--n-dim)}
 .night .nb{display:flex;flex-direction:column;padding:28px var(--g) 0;flex:1}
 .night .art{width:96px;height:96px;object-fit:cover;filter:grayscale(1) brightness(.6);margin-bottom:16px;background:var(--n-rule)}
 .night .ch{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--n-dim)}
 .night h2{margin:10px 0 0;font-size:40px;line-height:.92;font-weight:900;letter-spacing:-.04em;font-stretch:118%;color:#b9b9c6;overflow-wrap:anywhere}
-.night .ep{font-size:13px;margin-top:10px;color:#5c5c6b}
+.night .ep{font-size:13px;margin-top:10px;color:var(--n-dim)}
 .night .msg{font-size:14px;margin-top:10px;color:#c9a0a0}
 .night .ncd{font-size:112px;line-height:.9;letter-spacing:-.04em;color:var(--n-hi);margin-top:28px}
 .night .ncd small{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--font);font-weight:700;color:var(--n-dim);margin-bottom:10px}
@@ -362,11 +362,11 @@ body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,
 </nav>
 
 <!-- Video player -->
-<section class="sheet" id="vsheet" aria-label="Video player" aria-hidden="true">
+<section class="sheet" id="vsheet" role="dialog" aria-modal="true" aria-label="Video player" aria-hidden="true">
   <div class="sh-top"><button type="button" data-act="close-video" aria-label="Close player">↓ Close</button><a id="ytLink" href="#" target="_blank" rel="noopener">YouTube ↗</a></div>
   <div class="vid"><div id="player"></div><div class="perr" id="perr" hidden></div></div>
   <div class="info"><div class="ch" id="vCh"></div><h2 id="vTitle"></h2></div>
-  <button type="button" class="scrub" id="vScrub" aria-label="Seek"><span class="line"><i id="vLine"></i></span><span class="nums mono"><span id="vT">0:00</span><span id="vLeft"></span></span></button>
+  <button type="button" class="scrub" id="vScrub" role="slider" aria-label="Position in the video" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span class="line"><i id="vLine"></i></span><span class="nums mono"><span id="vT">0:00</span><span id="vLeft"></span></span></button>
   <div class="vcourse" id="vCourse" hidden></div>
   <div class="nextup" id="vNext" hidden></div>
   <div class="tmr">
@@ -379,7 +379,7 @@ body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,
 </section>
 
 <!-- Night player (podcasts) -->
-<section class="sheet night" id="nsheet" aria-label="Sleep player" aria-hidden="true">
+<section class="sheet night" id="nsheet" role="dialog" aria-modal="true" aria-label="Sleep player" aria-hidden="true">
   <div class="sh-top"><button type="button" data-act="close-night" aria-label="Close player, keep playing">↓ Keep playing</button><span id="nLock">Plays on the lock screen</span></div>
   <div class="nb">
     <img class="art" id="nArt" alt="" hidden>
@@ -389,7 +389,7 @@ body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,
     <div class="msg" id="nMsg" hidden></div>
     <div class="ncd mono off" id="nCd">No sleep timer</div>
     <div class="seg" id="nSeg" role="group" aria-label="Sleep timer"></div>
-    <button type="button" class="scrub" id="nScrub" aria-label="Seek"><span class="line"><i id="nLine"></i></span><span class="nums mono"><span id="nT">0:00</span><span id="nLeft"></span></span></button>
+    <button type="button" class="scrub" id="nScrub" role="slider" aria-label="Position in the episode" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span class="line"><i id="nLine"></i></span><span class="nums mono"><span id="nT">0:00</span><span id="nLeft"></span></span></button>
     <div class="nctl"><button type="button" data-act="a-back" aria-label="Back 15 seconds">−15</button><button type="button" id="nPlay" data-act="audio-toggle" aria-label="Pause">❚❚</button><button type="button" data-act="a-fwd" aria-label="Forward 30 seconds">+30</button></div>
     <button type="button" class="rate mono" id="nRate" data-act="a-rate">Speed 1×</button>
   </div>
@@ -2259,11 +2259,29 @@ if (typeof module !== 'undefined') module.exports = Courses;
     if (o.t) { v.t = o.t; v.done = false; }
     return v;
   }
+  // The players are modal: while one is open the page behind it is inert (no focus, no taps, hidden from VoiceOver),
+  // and closing hands focus back to whatever opened it
+  var sheetOpener = {};
+  function behindSheets(on) { ['#home', '#page', '#mini', 'nav.foot', '#vsheet', '#nsheet'].forEach(function (q) { var e = $(q); if (e && !e.classList.contains('open')) e.inert = on; }); }
   function openSheet(id) {
-    var el = $(id); el.classList.add('open'); el.setAttribute('aria-hidden', 'false');
+    var el = $(id), a = document.activeElement;
+    if (!el.classList.contains('open')) sheetOpener[id] = a && a !== document.body && !el.contains(a) ? a : null;
+    el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); el.inert = false;
+    behindSheets(true);
     var b = el.querySelector('[data-act^="close"]'); if (b) setTimeout(function () { try { b.focus({ preventScroll: true }); } catch (e) {} }, 300);
   }
-  function closeSheet(id) { var el = $(id); el.classList.remove('open'); el.setAttribute('aria-hidden', 'true'); }
+  function closeSheet(id) {
+    var el = $(id), wasOpen = el.classList.contains('open');
+    el.classList.remove('open'); el.setAttribute('aria-hidden', 'true');
+    var still = document.querySelector('.sheet.open');
+    behindSheets(false); if (still) behindSheets(true);
+    el.inert = !!still;
+    if (!wasOpen) return;
+    var o = sheetOpener[id]; sheetOpener[id] = null;
+    if (el.contains(document.activeElement) || document.activeElement === document.body) {
+      try { if (o && o.isConnected && !o.closest('[hidden],[inert]') && o.getClientRects().length) o.focus({ preventScroll: true }); else if (document.activeElement && el.contains(document.activeElement)) document.activeElement.blur(); } catch (e) {}
+    }
+  }
   function openVideo(o) {
     if (engine && engine.state().playing) engine.pause();
     var v = ensureVideo(o);
@@ -2385,7 +2403,7 @@ if (typeof module !== 'undefined') module.exports = Courses;
     var t = 0, d = 0, st = -1;
     try { t = player.getCurrentTime() || 0; d = player.getDuration() || 0; st = player.getPlayerState(); } catch (e) {}
     $('#vLine').style.width = d ? Math.min(100, t / d * 100).toFixed(2) + '%' : '0';
-    $('#vT').textContent = Core.fmt(t);
+    $('#vT').textContent = Core.fmt(t); scrubAria($('#vScrub'), t, d);
     $('#vLeft').textContent = d ? '−' + Core.fmt(Math.max(0, d - t)) : '';
     if (vTimer && SleepTimer.tick(vTimer, Date.now(), false) === 'stop') {
       vTimer = null; capture(true);
@@ -2504,7 +2522,7 @@ if (typeof module !== 'undefined') module.exports = Courses;
     var art = $('#nArt'); if (ep.image) { if (art.getAttribute('src') !== ep.image) art.src = ep.image; art.hidden = false; } else art.hidden = true;
     $('#nMsg').hidden = !st.message; $('#nMsg').textContent = st.message || '';
     $('#nLine').style.width = st.dur ? Math.min(100, st.t / st.dur * 100).toFixed(2) + '%' : '0';
-    $('#nT').textContent = Core.fmt(st.t);
+    $('#nT').textContent = Core.fmt(st.t); scrubAria($('#nScrub'), st.t, st.dur);
     $('#nLeft').textContent = st.dur ? '−' + Core.fmt(left) : '';
     $('#nPlay').textContent = st.playing ? '❚❚' : '▶';
     $('#nPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
@@ -2987,7 +3005,20 @@ if (typeof module !== 'undefined') module.exports = Courses;
     }
   });
   // Tap on a scrub line seeks
-  function scrubAt(el, ev, dur, fn) { var r = el.getBoundingClientRect(); if (!dur || !r.width) return; fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * dur); }
+  // A tap seeks to that point. A keyboard "click" (Space/Enter, detail 0) has no position, so it doesn't jump to the
+  // start; the arrow keys step back and forward instead (the line is a slider for VoiceOver and keyboards).
+  function scrubAt(el, ev, dur, fn) { var r = el.getBoundingClientRect(); if (!dur || !r.width || ev.detail === 0) return; fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * dur); }
+  function scrubKeys(el, step) {
+    el.addEventListener('keydown', function (ev) {
+      var d = { ArrowLeft: -15, ArrowDown: -15, ArrowRight: 30, ArrowUp: 30 }[ev.key];
+      if (d != null) { ev.preventDefault(); step(d); }
+    });
+  }
+  function scrubAria(el, t, d) { el.setAttribute('aria-valuemin', '0'); el.setAttribute('aria-valuemax', String(Math.round(d || 0))); el.setAttribute('aria-valuenow', String(Math.round(t || 0))); el.setAttribute('aria-valuetext', Core.fmt(t || 0) + (d ? ' of ' + Core.fmt(d) : '')); }
+  // YouTube ↗ opens at the spot playing now, not where the video was when the player opened
+  $('#ytLink').addEventListener('click', function () { capture(true); var v = current && videos[current]; if (v) this.href = ytLink(v); });
+  scrubKeys($('#vScrub'), function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
+  scrubKeys($('#nScrub'), function (s) { engine.seekBy(s); });
   $('#vScrub').addEventListener('click', function (ev) { try { var d = player.getDuration(); scrubAt(this, ev, d, function (t) { player.seekTo(t, true); videoTick(); }); } catch (e) {} });
   $('#nScrub').addEventListener('click', function (ev) { var st = engine.state(); scrubAt(this, ev, st.dur, function (t) { engine.seek(t); }); });
   $('#keyForm').addEventListener('submit', function (e) {
