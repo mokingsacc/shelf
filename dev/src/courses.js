@@ -148,6 +148,15 @@ var Courses = (function () {
     var cut = t.slice(0, 17).replace(/\s+\S*$/, ''); // whole words only
     return cut || t.slice(0, 16);
   }
+  // Step 2 CK, 30 Nov 2026 (local midnight)
+  var EXAM = new Date(2026, 10, 30);
+  // "1 a day", "2.6 a day", "1 every 3 days": rounded up so the plan never falls short
+  function perDay(x) {
+    if (!x) return '';
+    if (x <= 1) return 1 / x < 2 ? '1 a day' : '1 every ' + Math.floor(1 / x) + ' days';
+    var r = x >= 10 ? Math.ceil(x) : Math.ceil(x * 10) / 10;
+    return String(r).replace(/\.0$/, '') + ' a day';
+  }
   function fmtHours(sec) { var h = sec / 3600; return h >= 1 ? Math.round(h) + ' h' : Math.max(1, Math.round(sec / 60)) + ' min'; }
 
   // io: { load(key), save(key, string), fetchText(url, headers), postJSON(url, body, headers) -> Promise<string>, now(), apiKey(), watched(videoId) -> bool }
@@ -200,7 +209,11 @@ var Courses = (function () {
     function touch(c) { c.touched = now(); }
     function tick(id, vid, on) {
       var c = get(id); if (!c) return;
-      c.ticks[vid] = on ? 1 : 0; touch(c); save();
+      c.ticks[vid] = on ? 1 : 0; touch(c);
+      // When each one was ticked, for the day's tally and the pace (ticking a block with Set place doesn't count)
+      c.ticksAt = c.ticksAt || {};
+      if (on) c.ticksAt[vid] = now(); else delete c.ticksAt[vid];
+      save();
     }
     // Everything up to and including position i; returns what was there, for Undo
     function tickUpTo(id, i) {
@@ -391,14 +404,48 @@ var Courses = (function () {
       function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }
       return Promise.all([next(), next()]);
     }
+    // ----- Exam clock and pace -----
+    var DAY = 864e5;
+    function dayStart(t) { var d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+    function daysLeft(t) { return Math.max(0, Math.round((dayStart(EXAM.getTime()) - dayStart(t == null ? now() : t)) / DAY)); }
+    // Ticks done by hand (or by finishing a video) in [from, to)
+    function ticksBetween(c, from, to) {
+      var at = c.ticksAt || {}, n = 0, secs = 0, dur = {};
+      items(c.id).forEach(function (x) { dur[x.id] = x.dur || 0; });
+      Object.keys(at).forEach(function (v) { if (c.ticks[v] === 1 && at[v] >= from && at[v] < to) { n++; secs += dur[v] || 0; } });
+      return { n: n, secs: secs };
+    }
+    // What's left, how many a day finish it by the exam, and when it finishes at this week's rate
+    function pace(id, t) {
+      t = t || now();
+      var c = get(id), pr = progress(id); if (!c || !pr) return null;
+      var left = pr.total - pr.done, days = daysLeft(t), rate7 = ticksBetween(c, dayStart(t) - 6 * DAY, dayStart(t) + DAY).n / 7;
+      return { left: left, days: days, perDay: left ? (days ? left / days : left) : 0, rate7: rate7,
+        finishBy: left && rate7 ? dayStart(t) + Math.ceil(left / rate7) * DAY : 0 };
+    }
+    // All courses together: today, the last seven days (oldest first, today last), and what's left
+    function today(t) {
+      t = t || now();
+      var d0 = dayStart(t), out = { n: 0, secs: 0, week: [0, 0, 0, 0, 0, 0, 0], weekN: 0, left: 0, days: daysLeft(t), perDay: 0 };
+      list().forEach(function (c) {
+        var td = ticksBetween(c, d0, d0 + DAY); out.n += td.n; out.secs += td.secs;
+        for (var i = 0; i < 7; i++) out.week[i] += ticksBetween(c, d0 - (6 - i) * DAY, d0 - (5 - i) * DAY).n;
+        var pr = progress(c.id); if (pr && pr.total) out.left += pr.total - pr.done;
+      });
+      out.weekN = out.week.reduce(function (a, b) { return a + b; }, 0);
+      out.perDay = out.left ? (out.days ? out.left / out.days : out.left) : 0;
+      return out;
+    }
+
     return {
+      pace: pace, today: today, daysLeft: daysLeft,
       list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
       tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, move: move, remove: remove,
       load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists,
       get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
     };
   }
-  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
+  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
     initialData: initialData, readVideos: readVideos, readPlaylists: readPlaylists, fmtHours: fmtHours };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;

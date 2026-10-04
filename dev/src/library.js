@@ -80,6 +80,8 @@ var Library = (function () {
     }
     function source(id) { return state.sources[id] || null; }
     function setSection(id, sectionId) { var s = source(id); if (!s || !section(sectionId)) return false; s.section = sectionId; save(); return true; }
+    // Shorts and clips under 90 s stay off the sheet unless this is turned off for the channel
+    function setHideShorts(id, on) { var s = source(id); if (!s) return false; s.hideShorts = !!on; save(); return true; }
     function remove(id) { if (!state.sources[id]) return false; delete state.sources[id]; delete cache[id]; save(); return true; }
     // A private feed (Patreon) is never put in Send links or shown in full
     function isPrivate(url) { return /patreon|[?&](auth|token|key)=/i.test(url); }
@@ -248,7 +250,7 @@ var Library = (function () {
 
     return {
       sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
-      sources: sources, source: source, have: have, setSection: setSection, remove: remove, add: add, seed: seed,
+      sources: sources, source: source, have: have, setSection: setSection, setHideShorts: setHideShorts, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
       markSeen: markSeen, fresh: fresh, saveCache: saveCache, get seedMisses() { return state.seedMisses || []; }
     };

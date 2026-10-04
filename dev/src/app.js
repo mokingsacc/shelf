@@ -1,4 +1,4 @@
-// Shelf v2 (Day Sheet): Home bands, section/channel/search pages, YouTube player, night player, self-check.
+// Shelf v3 (Day Sheet): Home bands, section/channel/courses/search/marks pages, YouTube player, night player, self-check.
 (function () {
   var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1', AKEY = 'shelf.v2.audio';
   var $ = function (s) { return document.querySelector(s); };
@@ -18,7 +18,7 @@
   // Nothing is written to the phone until the phone's own copy was read and merged, so a slow or failed
   // start can't replace good spots, ticks or channels with the web view's (possibly stale) copy
   var guarded = function (k) { return Native.inApp && !restored && PHONE_KEYS().indexOf(k) >= 0; };
-  var PHONE_KEYS = function () { return [KEY, PREF, AKEY, Library.KEY, Courses.KEY]; };
+  var PHONE_KEYS = function () { return [KEY, PREF, AKEY, Library.KEY, Courses.KEY, Marks.KEY]; };
   function rawSet(k, s, mirror) {
     if (mirror !== false && !guarded(k)) Native.prefSet(k, s);
     if (!canSave) { mem[k] = s; return Native.inApp; }
@@ -28,7 +28,7 @@
   function store(k, v) { return rawSet(k, JSON.stringify(v)); }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
 
-  var videos, prefs, arec, lib, aMeta = {};
+  var videos, prefs, arec, lib, marks, aMeta = {};
   var lastSavedAt = 0;
   function saveVideos() { if (store(KEY, videos)) lastSavedAt = Date.now(); renderSoon(); }
   function saveAudio() { if (store(AKEY, arec)) lastSavedAt = Date.now(); }
@@ -79,7 +79,7 @@
   function isNew(e) { var s = lib.source(e.src), p = prog(e); return !!s && e.published > (s.seenUpTo || 0) && !(p && (p.t > 5 || p.done)); }
   function feedEntries(sectionId) {
     var out = [];
-    lib.sources(sectionId).forEach(function (s) { lib.items(s.id).forEach(function (it) { out.push(entryFromItem(s, it)); }); });
+    lib.sources(sectionId).forEach(function (s) { itemsOf(s).forEach(function (it) { out.push(entryFromItem(s, it)); }); });
     return out.sort(function (a, b) { return b.published - a.published; });
   }
   function startedEntries(sectionId) {
@@ -89,8 +89,38 @@
     return out.sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
   }
   function newCountFor(sectionId) { return feedEntries(sectionId).filter(isNew).length; }
-  function srcNewCount(id) { var s = lib.source(id); return s ? lib.items(id).map(function (it) { return entryFromItem(s, it); }).filter(isNew).length : 0; }
-  function thumbOf(e) { return e.type === 'video' ? (e.thumb || 'https://i.ytimg.com/vi/' + e.key + '/mqdefault.jpg') : (e.image || ''); }
+  function srcNewCount(id) { var s = lib.source(id); return s ? itemsOf(s).map(function (it) { return entryFromItem(s, it); }).filter(isNew).length : 0; }
+  function thumbOf(e) { return e.type === 'video' ? 'https://i.ytimg.com/vi/' + e.key + '/mqdefault.jpg' : (e.image || ''); }
+  // Shorts (and clips under 90 s) stay off the sheet when the channel says so (on unless turned off)
+  function hidesShorts(s) { return !!s && s.type !== 'podcast' && s.hideShorts !== false; }
+  function isShort(it) { var v = videos[it.id]; return /#shorts?\b/i.test(it.title || '') || !!(v && v.dur > 0 && v.dur < 90); }
+  function itemsOf(s) { var all = lib.items(s.id); return hidesShorts(s) ? all.filter(function (it) { return !isShort(it); }) : all; }
+
+  // Icons (inline, so nothing extra loads)
+  var I = {
+    play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+    chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>',
+    dots: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>',
+    refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>',
+    mark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+  };
+
+  // Day or night: after 21:30 (and until 05:00) Sleep comes first and Continue becomes Bedtime
+  function hourNow() { if (typeof window.__hour === 'number') return window.__hour; var d = new Date(); return d.getHours() + d.getMinutes() / 60; }
+  function dayPart() { var h = hourNow(); return h >= 21.5 || h < 5 ? 'night' : h >= 18 ? 'evening' : 'day'; }
+  function isNight() { return dayPart() === 'night'; }
+  function daySections() {
+    var secs = lib.sections();
+    if (!isNight()) return secs;
+    return secs.filter(function (x) { return x.kind === 'audio'; }).concat(secs.filter(function (x) { return x.kind !== 'audio'; }));
+  }
+  function shortDay(t) { var d = new Date(t); return d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3); }
 
   // Entries on screen, looked up by the code on each button
   var reg = { h: [], p: [] };
@@ -115,36 +145,55 @@
     var s = (Date.now() - ts) / 1000;
     return s < 3600 ? Math.max(1, Math.round(s / 60)) + 'm' : s < 86400 ? Math.round(s / 3600) + 'h' : Math.round(s / 86400) + 'd';
   }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function leftText(p) { return p && p.dur ? Core.left(p.t, p.dur).toLowerCase() : ''; }
   function bandRow(e, scope) {
-    var p = prog(e), pc = p && p.dur ? Core.pct(p) : 0;
-    return '<li><button type="button" data-act="play" data-e="' + regE(scope, e) + '"><span>' + (isNew(e) ? '<span class="nw">NEW</span>' : '') +
-      '<b>' + esc(e.title) + '</b><br><span class="src">' + esc(e.srcName) + (started(e) && p.dur ? ' · ' + esc(Core.left(p.t, p.dur).toLowerCase()) : '') + '</span>' +
-      (started(e) ? '<span class="pr"><i style="width:' + pc.toFixed(1) + '%"></i></span>' : '') +
+    var p = prog(e), pc = p && p.dur ? Core.pct(p) : 0, go = started(e);
+    return '<li><button type="button" class="row" data-act="play" data-e="' + regE(scope, e) + '"><span class="tx">' +
+      '<b>' + esc(e.title) + '</b><small>' + (isNew(e) ? '<span class="nw">NEW</span>' : '') + esc(e.srcName) + (go && p.dur ? ' · ' + esc(leftText(p)) : '') + '</small>' +
+      (go ? '<span class="pr"><i style="width:' + pc.toFixed(1) + '%"></i></span>' : '') +
       '</span><span class="n mono">' + esc(durText(e)) + '</span></button></li>';
+  }
+  // The course on the go: the one touched last that still has an episode to watch
+  function upNextCourse() {
+    if (!cs) return null;
+    return cs.list().filter(function (c) { var pr = cs.progress(c.id); return pr.state === 'go' && pr.next; })
+      .sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); })[0] || null;
+  }
+  // Under Medicine's heading: days to the exam and the course's pace (day), or what today counted (night)
+  function examSub() {
+    if (!cs || !cs.list().length) return '';
+    var c = upNextCourse(), pc = c && cs.pace(c.id), td = cs.today(), days = cs.daysLeft();
+    if (isNight()) return '<b>Today</b> ' + td.n + (td.n === 1 ? ' episode' : ' episodes') + (td.secs ? ' · ' + Math.round(td.secs / 60) + ' min' : '') + (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' : '');
+    return (days ? '<b>' + days + (days === 1 ? ' day' : ' days') + '</b> to Step 2 CK' : '<b>Step 2 CK</b> today') +
+      (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' + (pc.perDay ? ' · ' + Courses.perDay(pc.perDay) : '') : td.left ? ' · ' + td.left + ' left · ' + Courses.perDay(td.perDay) : '');
   }
   var refreshing = false;
   function renderHome() {
     reg.h = [];
-    var d = new Date();
-    $('#dayNum').textContent = (d.getDate() < 10 ? '0' : '') + d.getDate();
-    $('#dayName').textContent = DAYS[d.getDay()];
+    var d = new Date(), night = isNight();
+    $('#dayNum').textContent = pad2(d.getDate());
+    $('#dayName').textContent = DAYS[d.getDay()] + (night ? ' night' : '');
     $('#monthName').textContent = MONTHS[d.getMonth()] + ' ' + d.getFullYear();
     var allNew = 0, unfinished = startedEntries(undefined).length;
     Object.keys(videos).forEach(function (id) { var e = entryFromVideo(videos[id]); if (started(e)) unfinished++; });
     var html = '';
-    lib.sections().forEach(function (sec) {
+    daySections().forEach(function (sec) {
       var fresh = feedEntries(sec.id).filter(isNew), go = startedEntries(sec.id);
       allNew += fresh.length;
-      var list = fresh.slice(0, 2).concat(go.slice(0, 2));
-      fresh.slice(2).concat(go.slice(2)).forEach(function (e) { if (list.length < 4) list.push(e); });
-      var srcs = lib.sources(sec.id).length;
+      // At most three: the newest uploads and the one you're in the middle of, then "+N more"
+      var list = fresh.slice(0, go.length ? 2 : 3).concat(go.slice(0, 1));
+      fresh.slice(list.length - Math.min(go.length, 1)).concat(go.slice(1)).forEach(function (e) { if (list.length < 3 && list.indexOf(e) < 0) list.push(e); });
+      var rest = fresh.length + go.length - list.length, srcs = lib.sources(sec.id).length;
       html += '<section class="band ' + bandClass(sec.id) + '" aria-label="' + esc(sec.name) + '">' +
         '<button type="button" class="hd" data-act="open-section" data-id="' + esc(sec.id) + '"><h2>' + esc(sec.name) + '</h2><span class="tm mono">' +
-        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>' + coursesStrip(sec.id);
+        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>';
+      if (sec.id === Courses.SEED.section) { var sub = examSub(); if (sub) html += '<p class="sub mono">' + sub + '</p>'; }
       if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
       else if (!srcs && !feedsOn) html += '<p class="empty">Your channels show here in the Shelf app on your iPhone.</p>';
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
       else html += '<p class="empty">' + (refreshing && !lib.sources(sec.id).some(function (s) { return lib.items(s.id).length; }) ? 'Checking for new uploads…' : 'Nothing new. All caught up.') + '</p>';
+      if (rest > 0) html += '<button type="button" class="more" data-act="open-section" data-id="' + esc(sec.id) + '"><span>+' + rest + ' more in ' + esc(sec.name) + '</span><span aria-hidden="true">›</span></button>';
       html += '</section>';
     });
     // Pasted videos that belong to no section
@@ -152,52 +201,98 @@
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
     if (loose.length) {
       html += '<section class="band c0" aria-label="Pasted"><button type="button" class="hd" data-act="open-pasted"><h2>Pasted</h2><span class="tm mono">' + loose.length + ' ›</span></button>' +
-        '<ul>' + loose.slice(0, 4).map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul></section>';
+        '<ul>' + loose.slice(0, 3).map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>' +
+        (loose.length > 3 ? '<button type="button" class="more" data-act="open-pasted"><span>+' + (loose.length - 3) + ' more pasted</span><span aria-hidden="true">›</span></button>' : '') + '</section>';
     }
     $('#bands').innerHTML = html;
     fitAll($('#bands'));
-    // Resume strip: the most recent unfinished thing anywhere
+    // Continue: the most recent unfinished thing anywhere. At night, the last podcast you fell asleep to (Bedtime).
     var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(started))
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
-    var top = all[0];
+    var top = all[0], bed = night && all.filter(function (e) { return e.type === 'audio'; })[0];
+    if (bed) top = bed;
     $('#cont').hidden = !top;
     if (top) {
-      var p = prog(top);
+      var p = prog(top), th = thumbOf(top), img = $('#contImg');
       $('#cont').setAttribute('data-e', regE('h', top));
+      $('#cont').setAttribute('data-bed', bed ? '1' : '');
+      $('#contThumb').className = 'th' + (top.type === 'audio' ? ' sq' : '');
+      if (th) { if (img.getAttribute('src') !== th) { img.hidden = false; img.onerror = function () { this.hidden = true; }; img.src = th; } } else img.hidden = true;
+      $('#contLen').hidden = !p.dur; $('#contLen').textContent = p.dur ? Core.fmt(p.dur) : '';
+      $('#contK').textContent = (bed ? 'Bedtime' : 'Continue') + (top.srcName ? ' · ' + top.srcName : '');
       $('#contTitle').textContent = top.title;
-      $('#contMeta').textContent = (top.srcName ? top.srcName + ' · ' : '') + Core.fmt(p.t) + (p.dur ? ' / ' + Core.fmt(p.dur) : '');
-      $('#contBar').style.width = 'calc((100% - 2 * var(--g)) * ' + (Core.pct(p) / 100).toFixed(3) + ')';
-      $('#cont').setAttribute('aria-label', 'Resume ' + top.title + ' from ' + Core.fmt(p.t));
+      var tm = engine && engine.state().timer, lights = tm && tm.mode === 'min' ? tm.endsAt : Date.now() + (p.dur ? Math.min(45 * 60, (p.dur - p.t)) * 1000 : 45 * 60000);
+      $('#contMeta').textContent = bed ? (leftText(p) || Core.fmt(p.t)) + (tm ? ' · lights out ' + clockText(lights) : ' · 45-min timer, lights out ' + clockText(lights))
+        : Core.fmt(p.t) + (p.dur ? ' · ' + leftText(p) : '');
+      $('#contBar').style.width = Core.pct(p).toFixed(1) + '%';
+      $('#cont').setAttribute('aria-label', (bed ? 'Bedtime: ' : 'Continue ') + top.title + ' from ' + Core.fmt(p.t));
+    }
+    // Up next: the next episode of the course on the go (not at night, and not when Continue already is it)
+    var nc = !night && upNextCourse(), npr = nc && cs.progress(nc.id), nx = npr && npr.next;
+    if (nx && top && top.key === nx.id) nx = null;
+    $('#next').hidden = !nx;
+    if (nx) {
+      $('#next').setAttribute('data-id', nc.id); $('#next').setAttribute('data-v', nx.id);
+      $('#nextK').textContent = 'Up next · ' + nc.name + ' · ' + (npr.notch + 1) + ' of ' + npr.total;
+      $('#nextT').innerHTML = esc(epLabel(nx, npr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' <span class="mono">' + Core.fmt(nx.dur) + '</span>' : '');
+      $('#next').setAttribute('aria-label', 'Play next in ' + nc.name + ': ' + epLabel(nx, npr.notch));
     }
     $('#summary').textContent = refreshing ? 'Checking for new uploads…' : allNew + ' new · ' + unfinished + ' unfinished';
     var wn = $('#webNote');
-    if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can paste a link and pick up where you left off.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can paste a link (⌘V) and pick up where you left off.'; }
+    if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can pick up where you left off, or paste a YouTube link into Search.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can pick up where you left off, or press ⌘V to play a YouTube link.'; }
     else wn.hidden = true;
   }
+  // "11:57 pm"
+  function clockText(t) { return SleepTimer.clock(t).replace('about ', ''); }
 
   // ---------- Pages ----------
-  var stack = [];
-  function push(view) { stack.push(view); renderPage(); $('#page').scrollTop = 0; try { history.pushState({ shelf: stack.length }, ''); } catch (e) {} }
-  function pop() { stack.pop(); if (stack.length) renderPage(); else { $('#page').hidden = true; renderHome(); } }
-  window.addEventListener('popstate', function () { if (stack.length) pop(); });
+  var stack = [], skipPops = 0;
+  function push(view) { stack.push(view); renderPage(); $('#page').scrollTop = 0; renderTabs(); try { history.pushState({ shelf: stack.length }, ''); } catch (e) {} }
+  function pop() { stack.pop(); if (stack.length) renderPage(); else { $('#page').hidden = true; renderHome(); } renderTabs(); }
+  window.addEventListener('popstate', function () { if (skipPops) { skipPops--; return; } if (stack.length) pop(); });
   function back() { try { history.back(); } catch (e) { pop(); } }
+  // Tabs: Today is Home; Courses and Search each start a fresh page stack
+  function goHome() {
+    var n = stack.length;
+    if (!n) { try { window.scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {} return; }
+    stack = []; $('#page').hidden = true; renderHome(); renderTabs();
+    skipPops++; try { history.go(-n); } catch (e) { skipPops--; }
+  }
+  function openTab(view) {
+    var v = stack[stack.length - 1];
+    if (v && stack.length === 1 && v.name === view.name && v.id === view.id) { $('#page').scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' }); return false; }
+    stack = []; push(view); return true;
+  }
+  function renderTabs() {
+    var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && v.name === 'search' ? 'searchBtn' : 'todayBtn';
+    ['todayBtn', 'coursesBtn', 'searchBtn'].forEach(function (id) { var b = document.getElementById(id); if (id === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  }
   function itemHTML(e, scope, opts) {
     opts = opts || {};
-    var p = prog(e), done = isDoneE(e), pc = p && p.dur ? Core.pct(p) : 0, th = thumbOf(e);
+    var p = prog(e), done = isDoneE(e), pc = p && p.dur ? Core.pct(p) : 0, th = thumbOf(e), d = (p && p.dur) || e.dur;
     var meta;
     if (started(e)) meta = '<b>' + esc(Core.fmt(p.t)) + (p.dur ? ' / ' + esc(Core.fmt(p.dur)) : '') + '</b> · resume';
-    else meta = [e.dur ? '<b>' + esc(Core.fmt(e.dur)) + '</b>' : '', e.published ? esc(agoLong(e.published)) : '', done ? 'finished' : ''].filter(Boolean).join(' · ');
+    else meta = [d ? '<b>' + esc(Core.fmt(d)) + '</b>' : '', e.published ? esc(agoLong(e.published)) : '', done ? 'watched' : ''].filter(Boolean).join(' · ');
     return '<button type="button" class="item' + (done ? ' watched' : '') + '" data-act="play" data-e="' + regE(scope, e) + '">' +
-      '<span class="th">' + (th ? '<img src="' + esc(th) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' : '') + '</span>' +
-      '<span><span class="ch"><span>' + esc(e.srcName || (e.type === 'audio' ? 'Podcast' : 'YouTube')) + '</span>' + (opts.fresh || isNew(e) ? '<span class="nw">NEW</span>' : '') + '</span>' +
-      '<span class="t" style="display:block">' + esc(e.title) + '</span>' +
-      '<span class="meta mono" style="display:block">' + meta + '</span>' +
+      '<span class="th' + (e.type === 'audio' ? ' sq' : '') + '">' + (th ? '<img src="' + esc(th) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' : '') + (d ? '<span class="len mono">' + esc(Core.fmt(d)) + '</span>' : '') + '</span>' +
+      '<span class="tx"><span class="ch"><span>' + esc(e.srcName || (e.type === 'audio' ? 'Podcast' : 'YouTube')) + '</span>' + (opts.fresh || isNew(e) ? '<span class="nw">NEW</span>' : '') + '</span>' +
+      '<span class="t">' + esc(e.title) + '</span>' +
+      '<span class="meta mono">' + meta + '</span>' +
       (started(e) ? '<span class="pr"><i style="width:' + pc.toFixed(1) + '%"></i></span>' : '') + '</span></button>';
   }
-  function eyebrow(backLabel, right) {
-    return '<div class="eyebrow mono"><button type="button" data-act="back">← ' + esc(backLabel) + '</button><span>' + esc(right) + '</span></div>';
+  // A folded list: "Watched · 12", "Older · 8"
+  function fold(label, html, n) { return n ? '<details class="fold"><summary><span>' + esc(label) + ' · ' + n + '</span>' + I.down + '</summary>' + html + '</details>' : ''; }
+  function viewLabel(v) {
+    if (!v) return 'Today';
+    if (v.name === 'section') { var s = lib.section(v.id); return s ? s.name : 'Back'; }
+    if (v.name === 'channel') { var c = lib.source(v.id); return c ? c.name : 'Back'; }
+    return { courses: 'Courses', search: 'Search', marks: 'Marks', pasted: 'Pasted' }[v.name] || 'Back';
   }
-  function shortDate() { var d = new Date(); return (d.getDate() < 10 ? '0' : '') + d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3).toUpperCase(); }
+  function ib(act, id, icon, label, on) { return '<button type="button" class="ib' + (on ? ' on' : '') + '" data-act="' + act + '"' + (id != null ? ' data-id="' + esc(id) + '"' : '') + ' aria-label="' + esc(label) + '">' + icon + '</button>'; }
+  function topHTML(cls, title, meta, icons, extra) {
+    return '<div class="top band ' + cls + '"><div class="eyebrow"><button type="button" class="back" data-act="back">' + I.back + '<span>' + esc(viewLabel(stack[stack.length - 2])) + '</span></button>' +
+      (icons ? '<span class="iconrow">' + icons + '</span>' : '') + '</div>' + h1(title) + (meta ? '<div class="meta mono">' + meta + '</div>' : '') + (extra || '') + '</div>';
+  }
   function h1(name) { return '<h1 class="fit">' + esc(name) + '</h1>'; }
   // Long names get narrower letters first (Archivo has a width axis), then smaller, so a word never breaks mid-way
   function fit(el, maxSize, minSize) {
@@ -209,13 +304,22 @@
     if (el.scrollWidth > el.clientWidth + 1) el.classList.add('wrap'); // several words: let it wrap between them
   }
   function fitAll(scope) {
-    Array.prototype.forEach.call(scope.querySelectorAll('.band .hd h2'), function (h) { fit(h, innerWidth >= 900 ? 58 : 46, 26); });
-    Array.prototype.forEach.call(scope.querySelectorAll('.top h1.fit'), function (h) { fit(h, 62, 30); });
+    Array.prototype.forEach.call(scope.querySelectorAll('.band .hd h2'), function (h) { fit(h, innerWidth >= 900 ? 38 : 30, 22); });
+    Array.prototype.forEach.call(scope.querySelectorAll('.top h1.fit'), function (h) { fit(h, 38, 24); });
   }
   window.addEventListener('resize', function () { fitAll(document); });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(document); });
-  var chanNew = {}; // keys that were new when the channel page opened
-  var confirmRemove = null;
+  var chanNew = {}, confirmRemove = null; // keys that were new when the channel page opened
+  // Unwatched first (the ones you're in the middle of on top), then the rest folded: at most 8 showing
+  function listHTML(items, scope, opts, label) {
+    var todo = items.filter(function (e) { return !isDoneE(e); }), done = items.filter(isDoneE), h = '';
+    var shown = todo.slice(0, 8), older = todo.slice(8);
+    h += '<h2 class="subh"><span>' + label + '</span><span class="mono">' + todo.length + '</span></h2>';
+    h += shown.map(function (e) { return itemHTML(e, scope, opts && opts(e)); }).join('');
+    h += fold('Older', older.map(function (e) { return itemHTML(e, scope, opts && opts(e)); }).join(''), older.length);
+    h += fold('Watched', done.slice(0, 30).map(function (e) { return itemHTML(e, scope); }).join(''), done.length);
+    return h;
+  }
   function renderPage() {
     var v = stack[stack.length - 1], pg = $('#page'), html = '';
     if (!v) return;
@@ -224,73 +328,77 @@
     if (v.name === 'section') {
       var sec = lib.section(v.id);
       if (!sec) { stack.pop(); return renderPage(); }
-      var srcs = lib.sources(sec.id), nn = newCountFor(sec.id);
-      html += '<div class="top band ' + bandClass(sec.id) + '">' + eyebrow(shortDate(), srcs.length + (srcs.length === 1 ? ' CHANNEL' : ' CHANNELS') + (nn ? ' · ' + nn + ' NEW' : '')) + h1(sec.name) +
-        '<p>Newest first. Finished ones drop off this sheet and stay in their channel.</p><div class="acts">' +
-        '<button type="button" class="btn" data-act="add-channel" data-id="' + esc(sec.id) + '">+ Add channel</button>' +
-        (nn ? '<button type="button" class="btn" data-act="seen-section" data-id="' + esc(sec.id) + '">Mark all seen</button>' : '') +
-        '<button type="button" class="btn" data-act="edit-section" data-id="' + esc(sec.id) + '">Edit</button></div></div>';
+      var srcs = lib.sources(sec.id), nn = newCountFor(sec.id), med = sec.id === Courses.SEED.section && cs && cs.list().length;
+      html += topHTML(bandClass(sec.id), sec.name, '<b>' + srcs.length + (srcs.length === 1 ? ' channel' : ' channels') + '</b>' + (nn ? ' · ' + nn + ' new' : '') + (med ? ' · ' + cs.daysLeft() + ' days to Step 2 CK' : ''),
+        ib('add-channel', sec.id, I.plus, 'Add channel') + (nn ? ib('seen-section', sec.id, I.check, 'Mark all seen') : '') + (med ? ib('open-marks', null, I.mark, 'Marks') : '') + ib('edit-section', sec.id, I.dots, 'Edit section'));
       lib.seedMisses.filter(function (m) { return m.section === sec.id && !alreadyHave(m.input); }).forEach(function (m) {
         html += '<p class="pnote err">Couldn\'t find ' + esc(m.input) + ' automatically (' + esc(m.error) + ') <button type="button" data-act="fix-seed" data-in="' + esc(m.input) + '" data-id="' + esc(sec.id) + '">Fix</button></p>';
       });
       if (!feedsOn) html += '<p class="pnote">Channels load in the Shelf app on your iPhone.</p>';
-      var items = feedEntries(sec.id).filter(function (e) { return !isDoneE(e); });
+      var items = feedEntries(sec.id);
       var have = {}; items.forEach(function (e) { have[e.key] = 1; });
       startedEntries(sec.id).forEach(function (e) { if (!have[e.key]) items.unshift(e); });
-      if (srcs.length && !items.length) html += '<p class="pnote">' + (refreshing ? 'Checking for new uploads…' : 'Nothing waiting here. Open a channel below to see older videos.') + '</p>';
-      html += items.slice(0, 40).map(function (e) { return itemHTML(e, 'p'); }).join('');
-      html += '<h2 class="sub-h"><span>Channels</span><span class="mono">' + srcs.length + '</span></h2>';
+      items.sort(function (a, b) { return (started(b) - started(a)) || (started(a) ? (b.updated || 0) - (a.updated || 0) : 0); });
+      if (srcs.length && !items.length) html += '<p class="pnote">' + (refreshing ? 'Checking for new uploads…' : 'Nothing here yet. Open a channel below to see its videos.') + '</p>';
+      else if (items.length) html += listHTML(items, 'p', null, 'Latest');
+      html += '<h2 class="subh"><span>Channels</span><span class="mono">' + srcs.length + '</span></h2>';
       if (!srcs.length) html += '<p class="pnote">No channels here yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
       srcs.forEach(function (s) {
-        var st = lib.status(s.id), n = srcNewCount(s.id);
-        var sub = st && !st.ok ? '<span class="err">Couldn\'t update: ' + esc(st.error) + '</span>' : n ? n + ' new' : st ? 'Updated ' + esc(Core.ago(st.fetched)) : 'Not checked yet';
-        html += '<button type="button" class="chrow" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="av">' + (s.image ? '<img src="' + esc(s.image) + '" alt="" loading="lazy" onerror="this.remove()">' : esc(s.name.charAt(0))) + '</span>' +
-          '<span><b>' + esc(s.name) + '</b><small>' + (s.type === 'podcast' ? (s.private ? 'Private podcast · ' : 'Podcast · ') : '') + sub + '</small></span><span aria-hidden="true">›</span></button>';
+        var st = lib.status(s.id), n = srcNewCount(s.id), hid = hidesShorts(s) ? lib.items(s.id).filter(isShort).length : 0;
+        var sub = st && !st.ok ? '<span class="err">Couldn\'t update: ' + esc(st.error) + '</span>' : (n ? n + ' new' : st ? 'Updated ' + esc(Core.ago(st.fetched)) : 'Not checked yet') + (hid ? ' · ' + hid + ' Shorts hidden' : '');
+        html += '<button type="button" class="chrow" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="av">' + esc(s.name.charAt(0)) + (s.image ? '<img src="' + esc(s.image) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>' +
+          '<span class="tx"><b>' + esc(s.name) + '</b><small>' + (s.type === 'podcast' ? (s.private ? 'Private podcast · ' : 'Podcast · ') : '') + sub + '</small></span><span class="chev">' + I.chev + '</span></button>';
       });
-      html += '<button type="button" class="more" data-act="add-channel" data-id="' + esc(sec.id) + '"><span>+ Add channel</span><span class="mono">paste a channel link</span></button>';
+      html += '<button type="button" class="more" data-act="add-channel" data-id="' + esc(sec.id) + '"><span>+ Add channel</span><span class="mono">a link, @handle or name</span></button>';
     } else if (v.name === 'channel') {
       var s = lib.source(v.id);
       if (!s) { stack.pop(); return renderPage(); }
-      var sec2 = lib.section(s.section), st2 = lib.status(s.id), list = lib.items(s.id).map(function (it) { return entryFromItem(s, it); });
-      html += '<div class="top band ' + bandClass(s.section) + '">' + eyebrow(sec2 ? sec2.name.toUpperCase() : 'BACK', s.type === 'podcast' ? (s.private ? 'PRIVATE PODCAST' : 'PODCAST') : 'YOUTUBE') + h1(s.name) +
-        '<p>' + (st2 && !st2.ok ? 'Couldn\'t update: ' + esc(st2.error) : (s.type === 'podcast' ? 'Latest episodes.' : 'Latest ' + list.length + ' videos.') + (st2 ? ' Updated ' + esc(Core.ago(st2.fetched)) + '.' : '')) + '</p>' +
-        '<div class="acts"><button type="button" class="btn" data-act="refresh-channel" data-id="' + esc(s.id) + '">Refresh</button>' +
-        '<button type="button" class="btn danger" data-act="remove-channel" data-id="' + esc(s.id) + '">' + (confirmRemove === s.id ? 'Tap again to remove' : 'Remove') + '</button></div>' +
-        '<div class="acts">' + lib.sections().map(function (x) { return '<button type="button" class="btn' + (x.id === s.section ? ' solid' : '') + '" data-act="move-channel" data-id="' + esc(s.id) + '" data-to="' + esc(x.id) + '" aria-pressed="' + (x.id === s.section) + '">' + esc(x.name) + '</button>'; }).join('') + '</div></div>';
-      if (!list.length) html += '<p class="pnote">' + (st2 && !st2.ok ? 'Nothing loaded. Tap Refresh to try again.' : 'Loading…') + '</p>';
-      html += list.map(function (e) { return itemHTML(e, 'p', { fresh: chanNew[e.key] }); }).join('');
+      var st2 = lib.status(s.id), list = itemsOf(s).map(function (it) { return entryFromItem(s, it); });
+      var kind = s.type === 'podcast' ? (s.private ? 'Private podcast' : 'Podcast') : 'YouTube';
+      html += topHTML(bandClass(s.section), s.name, st2 && !st2.ok ? '<span class="err">Couldn\'t update: ' + esc(st2.error) + '</span>' : '<b>' + kind + '</b> · latest ' + list.length + (st2 ? ' · updated ' + esc(Core.ago(st2.fetched)) : ''),
+        ib('refresh-channel', s.id, I.refresh, 'Check for new uploads') + ib('channel-menu', s.id, I.dots, 'Section, Shorts or remove'));
+      if (!list.length) html += '<p class="pnote">' + (st2 && !st2.ok ? 'Nothing loaded. Tap ↻ to try again.' : 'Loading…') + '</p>';
+      else html += listHTML(list, 'p', function (e) { return { fresh: chanNew[e.key] }; }, s.type === 'podcast' ? 'Episodes' : 'Videos');
       if (s.type === 'youtube') html += '<p class="pnote">YouTube lists only the latest 15 uploads here. For older ones, use Search.</p>';
     } else if (v.name === 'pasted') {
       var vids = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section; })
         .sort(function (a, b) { return (isDoneE(a) - isDoneE(b)) || (b.updated || 0) - (a.updated || 0); });
-      html += '<div class="top band c0">' + eyebrow(shortDate(), vids.length + ' VIDEOS') + h1('Pasted') + '<p>Links you pasted from channels you don\'t follow. Finished ones stay at the bottom.</p></div>';
+      html += topHTML('c0', 'Pasted', vids.length + (vids.length === 1 ? ' video' : ' videos') + ' from channels you don\'t follow');
       if (!vids.length) html += '<p class="pnote">Nothing pasted yet.</p>';
-      vids.forEach(function (e) { html += itemHTML(e, 'p') + '<button type="button" class="more" data-act="remove-video" data-id="' + esc(e.key) + '"><span class="mono">Remove ' + esc(e.title.slice(0, 40)) + '</span><span>×</span></button>'; });
+      vids.forEach(function (e) { html += '<div class="irow">' + itemHTML(e, 'p') + ib('remove-video', e.key, I.x, 'Remove ' + e.title) + '</div>'; });
     } else if (v.name === 'courses') {
       html += coursesPage(v);
     } else if (v.name === 'search') {
-      html += '<div class="top band c2">' + eyebrow(shortDate(), prefs.apiKey ? 'GOOGLE KEY' : 'NO KEY NEEDED') + h1('Search') +
-        '<form class="sform" id="sform"><input id="sq" type="search" enterkeyhint="search" autocomplete="off" placeholder="hyperkalemia, Emu War…" value="' + esc(v.q || '') + '" aria-label="Search YouTube"><button type="submit">Go</button></form></div>';
+      html += topHTML('c2', 'Search', '', '', '<form class="sform" id="sform"><input id="sq" type="search" enterkeyhint="search" autocomplete="off" placeholder="hyperkalemia, or paste a link" value="' + esc(v.q || '') + '" aria-label="Search YouTube, or paste a link"><button type="submit">Go</button></form>');
       if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
       (v.results || []).forEach(function (r) {
         if (r.kind === 'channel') {
           var have2 = !!lib.source(r.id);
-          html += '<div class="item"><span class="th">' + (r.thumb ? '<img src="' + esc(r.thumb) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span><span><span class="ch"><span>Channel</span></span><span class="t" style="display:block">' + esc(r.title) + '</span>' +
-            (have2 ? '<span class="meta" style="display:block">Already on your shelf</span>' : '<button type="button" class="btn addch" data-act="add-channel" data-in="' + esc(r.id) + '">+ Add channel</button>') + '</span></div>';
+          html += '<div class="item"><span class="th sq">' + (r.thumb ? '<img src="' + esc(r.thumb) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span><span class="tx"><span class="ch"><span>Channel</span></span><span class="t">' + esc(r.title) + '</span>' +
+            (have2 ? '<span class="meta">Already on your shelf</span>' : '<button type="button" class="btn addch" data-act="add-channel" data-in="' + esc(r.id) + '">+ Add channel</button>') + '</span></div>';
         } else {
           var e = { type: 'video', key: r.id, title: r.title, src: r.channelId, srcName: r.channel, published: r.published || 0, dur: r.dur || 0, thumb: r.thumb, section: lib.source(r.channelId) ? lib.source(r.channelId).section : null };
           html += itemHTML(e, 'p');
         }
       });
+    } else if (v.name === 'marks') {
+      html += marksPage();
     }
-    pg.className = 'page' + ({ c1: ' d1', c2: ' d2' }[v.name === 'section' || v.name === 'courses' ? bandClass(v.id) : v.name === 'channel' && lib.source(v.id) ? bandClass(lib.source(v.id).section) : ''] || '');
+    pg.className = 'page';
     pg.innerHTML = html;
     fitAll(pg);
     if (v.name === 'search') {
       var f = $('#sform');
-      f.addEventListener('submit', function (ev) { ev.preventDefault(); runSearch($('#sq').value); });
+      f.addEventListener('submit', function (ev) { ev.preventDefault(); var q = $('#sq').value.trim(); if (isLinkish(q)) { prefs.lastQ = ''; handleText(q); } else runSearch(q); });
       if (!v.results && !v.msg) setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50);
     }
+  }
+  // A pasted link in Search plays (or adds) instead of searching
+  function isLinkish(q) {
+    if (!q) return false;
+    if (/#shelf=/.test(q) || Core.findLinks(q).length || Courses.playlistId(q)) return true;
+    var c = Feeds.parseChannelInput(q);
+    return !!c && (c.kind === 'id' || c.kind === 'handle' || c.kind === 'page' || (c.kind === 'feed' && /^https?:\/\//i.test(q)));
   }
   function alreadyHave(input) { return lib.have(input); }
   function openSection(id) { push({ name: 'section', id: id }); }
@@ -332,6 +440,7 @@
 
   // ---------- Video player ----------
   var player = null, playerReady = false, ytLoaded = false, ytFailed = false, current = null, pending = null, tick = null, lastErr = '';
+  var wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null;
   var armed = false, sawPlaying = false, loadStart = 0, startTimer = null, lastCaptureAt = 0, vTimer = null, vTimerMsg = '', wake = null, uiTick = null;
   window.onYouTubeIframeAPIReady = function () {
     ytLoaded = true; updateDot();
@@ -342,7 +451,11 @@
       events: {
         onReady: function () { playerReady = true; if (pending) { var p = pending; pending = null; loadVideo(p); } },
         onStateChange: onState,
-        onPlaybackRateChange: function (e) { prefs.rate = e.data; savePrefs(); },
+        onPlaybackRateChange: function (e) {
+          // A change made in YouTube's own menu sticks to the channel too; the reset YouTube does while loading doesn't
+          if (!current || !sawPlaying || Date.now() - loadAt < 2500 || e.data === wantRate) return;
+          setRateFor(current, e.data);
+        },
         onError: onError
       }
     });
@@ -368,12 +481,12 @@
   // The players are modal: while one is open the page behind it is inert (no focus, no taps, hidden from VoiceOver),
   // and closing hands focus back to whatever opened it
   var sheetOpener = {};
-  function behindSheets(on) { ['#home', '#page', '#mini', 'nav.foot', '#vsheet', '#nsheet'].forEach(function (q) { var e = $(q); if (e && !e.classList.contains('open')) e.inert = on; }); }
+  function behindSheets(on) { ['#home', '#page', '#mini', 'nav.tabs', '#vsheet', '#nsheet'].forEach(function (q) { var e = $(q); if (e && !e.classList.contains('open')) e.inert = on; }); }
   function openSheet(id) {
     var el = $(id), a = document.activeElement;
     if (!el.classList.contains('open')) sheetOpener[id] = a && a !== document.body && !el.contains(a) ? a : null;
-    el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); el.inert = false;
-    behindSheets(true);
+    el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); el.inert = false; el.style.transform = '';
+    behindSheets(true); document.body.classList.add('sheet-on');
     var b = el.querySelector('[data-act^="close"]'); if (b) setTimeout(function () { try { b.focus({ preventScroll: true }); } catch (e) {} }, 300);
   }
   function closeSheet(id) {
@@ -381,7 +494,8 @@
     el.classList.remove('open'); el.setAttribute('aria-hidden', 'true');
     var still = document.querySelector('.sheet.open');
     behindSheets(false); if (still) behindSheets(true);
-    el.inert = !!still;
+    document.body.classList.toggle('sheet-on', !!still);
+    el.inert = !!still; el.style.transform = '';
     if (!wasOpen) return;
     var o = sheetOpener[id]; sheetOpener[id] = null;
     if (el.contains(document.activeElement) || document.activeElement === document.body) {
@@ -396,8 +510,9 @@
     v.updated = Date.now(); saveVideos();
     $('#vTitle').textContent = v.title || 'YouTube video';
     $('#vCh').textContent = courseTag(v.id) || v.author || '';
-    $('#vNext').hidden = true; renderPlayerCourse(v.id);
+    $('#vNext').hidden = true; clearTimeout(nextTimer); renderPlayerCourse(v.id); renderNextBtn(v.id);
     $('#ytLink').href = ytLink(v);
+    wantRate = rateFor(v); renderRateUI(); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
     renderTimerUI('v');
@@ -415,8 +530,9 @@
     var start = Core.resumeAt(v);
     if (v.done) { v.done = false; v.t = 0; saveVideos(); }
     loadStart = start;
+    loadAt = Date.now();
     player.loadVideoById({ videoId: id, startSeconds: start });
-    if (prefs.rate && prefs.rate !== 1) { try { player.setPlaybackRate(prefs.rate); } catch (e) {} }
+    if (wantRate !== 1) { try { player.setPlaybackRate(wantRate); } catch (e) {} }
     clearTimeout(startTimer);
     startTimer = setTimeout(function () { if (current === id && !sawPlaying) $('#vCh').textContent = 'Tap the video to start.'; }, 3500);
   }
@@ -443,13 +559,13 @@
   function onState(e) {
     var S = YT.PlayerState;
     var playing = e.data === S.PLAYING;
-    $('#vPlay').textContent = playing ? '❚❚' : '▶';
+    $('#vPlay').innerHTML = playing ? I.pause : I.play;
     $('#vPlay').setAttribute('aria-label', playing ? 'Pause' : 'Play');
     $('#vPlay').classList.toggle('on', playing);
     if (playing) {
       sawPlaying = true; clearTimeout(startTimer);
       clearInterval(tick); tick = setInterval(capture, 5000);
-      if (prefs.rate && player.getPlaybackRate && player.getPlaybackRate() !== prefs.rate) { try { player.setPlaybackRate(prefs.rate); } catch (er) {} }
+      if (player.getPlaybackRate && player.getPlaybackRate() !== wantRate) { try { player.setPlaybackRate(wantRate); } catch (er) {} }
       capture(); keepAwake(true);
       var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake ? 'screen stays on' : 'saving your spot');
     } else {
@@ -493,7 +609,7 @@
     var cv = current && videos[current];
     if (cv && !cv.done && Core.isDone(cv.t, cv.dur)) { var cw = courseOf(cv.id); if (cw) { cv.done = true; cv.t = cv.dur; saveVideos(); cs.tick(cw.course.id, cv.id, true); } }
     try { player && player.pauseVideo(); } catch (e) {}
-    clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); keepAwake(false);
+    clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); clearTimeout(nextTimer); keepAwake(false);
     current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
     closeSheet('#vsheet');
     renderAll();
@@ -508,9 +624,8 @@
     if (!player || !current || !playerReady) return;
     var t = 0, d = 0, st = -1;
     try { t = player.getCurrentTime() || 0; d = player.getDuration() || 0; st = player.getPlayerState(); } catch (e) {}
-    $('#vLine').style.width = d ? Math.min(100, t / d * 100).toFixed(2) + '%' : '0';
-    $('#vT').textContent = Core.fmt(t); scrubAria($('#vScrub'), t, d);
-    $('#vLeft').textContent = d ? '−' + Core.fmt(Math.max(0, d - t)) : '';
+    if (!scrubbing) paintScrub('v', t, d, wantRate);
+    renderMarkBtn(t);
     if (vTimer && SleepTimer.tick(vTimer, Date.now(), false) === 'stop') {
       vTimer = null; capture(true);
       try { player.pauseVideo(); } catch (e) {}
@@ -549,7 +664,10 @@
     el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   });
   function buildSeg(sel, which) {
-    $(sel).innerHTML = SEGS.map(function (m) { return '<button type="button" data-act="timer" data-p="' + which + '" data-m="' + m + '" aria-pressed="false">' + (m === 'end' ? 'End' : m) + '</button>'; }).join('');
+    $(sel).innerHTML = SEGS.map(function (m) { return '<button type="button" data-act="timer" data-p="' + which + '" data-m="' + m + '" aria-pressed="false"' + (m === 'end' ? ' aria-label="Stop at the end"' : ' aria-label="' + m + ' minutes"') + '>' + (m === 'end' ? 'End' : m) + '</button>'; }).join('');
+  }
+  function buildRates() {
+    $('#vRate').innerHTML = VRATES.map(function (r) { return '<button type="button" data-act="v-rate" data-r="' + r + '" aria-pressed="false" aria-label="Speed ' + r + '"> ' + (r === 1 || r === 2 ? r + '×' : r) + '</button>'; }).join('');
   }
   function timerFor(which) { return which === 'v' ? vTimer : engine.state().timer; }
   function setTimer(which, m) {
@@ -562,24 +680,135 @@
   }
   function renderTimerUI(which, msg) {
     var t = timerFor(which), now = Date.now();
-    var seg = which === 'v' ? '#vSeg' : '#nSeg', cd = which === 'v' ? '#vCd' : '#nCd';
-    Array.prototype.forEach.call(document.querySelectorAll(seg + ' button'), function (b) {
+    Array.prototype.forEach.call(document.querySelectorAll((which === 'v' ? '#vSeg' : '#nSeg') + ' button'), function (b) {
       var m = b.getAttribute('data-m');
       b.setAttribute('aria-pressed', String(!!t && (t.mode === 'end' ? m === 'end' : String(t.minutes) === m)));
     });
-    var el = $(cd);
-    if (!t) {
-      el.className = (which === 'v' ? 'cd' : 'ncd') + ' mono off';
-      el.textContent = msg || (which === 'v' && vTimerMsg) || (which === 'v' ? 'Off. Tap a number to stop the video after that many minutes.' : 'No sleep timer');
-      if (which === 'v') $('#vStops').textContent = '';
+    if (which === 'v') {
+      var lab = $('#vStops');
+      if (!t) lab.textContent = msg || vTimerMsg || 'Off';
+      else lab.innerHTML = t.mode === 'end' ? 'stops when it ends' : '<b>' + SleepTimer.countdown(SleepTimer.remaining(t, now)) + '</b> · stops ' + esc(clockText(t.endsAt));
       return;
     }
-    el.className = (which === 'v' ? 'cd' : 'ncd') + ' mono';
-    var small = which === 'v' ? 'remaining' : 'lights out in';
-    if (t.mode === 'end') el.innerHTML = '<small>' + small + '</small>' + (which === 'v' ? 'End of video' : 'End');
-    else el.innerHTML = '<small>' + small + '</small>' + SleepTimer.countdown(SleepTimer.remaining(t, now));
-    if (t.mode === 'end') el.style.fontSize = which === 'v' ? '40px' : '64px'; else el.style.fontSize = '';
-    if (which === 'v') $('#vStops').textContent = t.mode === 'min' ? 'stops at ' + SleepTimer.clock(t.endsAt).replace('about ', '') : 'stops when it ends';
+    var cd = $('#nCd'), off = $('#nOff');
+    cd.hidden = !t; off.hidden = !!t;
+    if (!t) { off.textContent = msg || 'No sleep timer · tap a number'; return; }
+    cd.innerHTML = '<small>Lights out in</small>' + (t.mode === 'end' ? 'End' : SleepTimer.countdown(SleepTimer.remaining(t, now))) +
+      '<span class="at">' + (t.mode === 'end' ? 'when this episode ends' : 'about ' + esc(clockText(t.endsAt)) + ' · the volume fades over the last minute') + '</span>';
+  }
+
+  // ---------- Speed (remembered per channel and per podcast) ----------
+  var VRATES = [1, 1.25, 1.5, 1.75, 2];
+  function chanKey(v) {
+    if (v.channelId) return v.channelId;
+    var a = (v.author || '').toLowerCase(), s = a && lib.sources().filter(function (x) { return x.name.toLowerCase() === a; })[0];
+    return s ? s.id : a || 'yt';
+  }
+  function chanName(v) { var s = v.channelId && lib.source(v.channelId); return (s && s.name) || v.author || 'This channel'; }
+  function rateFor(v) { var r = prefs.rates && prefs.rates['v:' + chanKey(v)]; return r > 0 ? r : 1; }
+  function setRateFor(id, r) {
+    var v = videos[id]; if (!v) return;
+    prefs.rates = prefs.rates || {}; prefs.rates['v:' + chanKey(v)] = r; savePrefs();
+    wantRate = r; renderRateUI();
+  }
+  function renderRateUI() {
+    var v = current && videos[current];
+    Array.prototype.forEach.call(document.querySelectorAll('#vRate button'), function (b) { b.setAttribute('aria-pressed', String(+b.getAttribute('data-r') === wantRate)); });
+    $('#vRateLab').textContent = !v ? '' : wantRate === 1 ? chanName(v) + ' plays at 1×' : chanName(v) + ' remembers ' + wantRate + '×';
+  }
+  function podKey(guid) { var r = arec[guid] || {}, m = aMeta[guid] || {}; return 'a:' + (r.source || m.source || r.podcast || 'pod'); }
+  function podRate(guid) { var r = prefs.rates && prefs.rates[podKey(guid)]; return r > 0 ? r : 1; }
+
+  // ---------- Time lines (tap or drag to seek) ----------
+  function paintScrub(w, t, d, rate) {
+    var pc = d ? Math.min(100, Math.max(0, t / d * 100)) : 0, left = Math.max(0, d - t);
+    $('#' + w + 'Line').style.width = pc.toFixed(2) + '%'; $('#' + w + 'Knob').style.left = pc.toFixed(2) + '%';
+    $('#' + w + 'T').textContent = Core.fmt(t); scrubAria($('#' + w + 'Scrub'), t, d);
+    $('#' + w + 'Left').textContent = d ? '−' + Core.fmt(left) + (rate && rate !== 1 ? ' · at ' + rate + '× −' + Core.fmt(left / rate) : '') : '';
+  }
+  function scrubDrag(el, w, durOf, rateOf, seek) {
+    var at = 0;
+    function frac(e) { var r = el.querySelector('.line').getBoundingClientRect(); return r.width ? Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) : 0; }
+    function move(e) { if (scrubbing !== w) return; var d = durOf(); at = frac(e) * d; paintScrub(w, at, d, rateOf()); }
+    el.addEventListener('pointerdown', function (e) {
+      if (e.button > 0 || !durOf()) return;
+      scrubbing = w; try { el.setPointerCapture(e.pointerId); } catch (er) {}
+      move(e);
+    });
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', function (e) { if (scrubbing !== w) return; move(e); scrubbing = null; seek(at); });
+    el.addEventListener('pointercancel', function () { scrubbing = null; });
+  }
+
+  // ---------- Swipe a sheet down to close it ----------
+  // Past 120 px, or a quick flick, closes; less springs back. Only from the grabber and the top bar, so the
+  // video, the chips and scrolling the sheet behave as normal.
+  var swallowClick = 0;
+  function sheetSwipe(el, handles, close) {
+    var y0 = 0, t0 = 0, dy = 0, live = false, moved = false, pid = null;
+    el.addEventListener('pointerdown', function (e) {
+      if (e.button > 0 || !e.target.closest(handles)) return;
+      y0 = e.clientY; t0 = Date.now(); dy = 0; live = true; moved = false; pid = e.pointerId;
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!live || e.pointerId !== pid) return;
+      dy = Math.max(0, e.clientY - y0);
+      if (!moved && dy > 8) { moved = true; el.classList.add('drag'); try { el.setPointerCapture(pid); } catch (er) {} }
+      if (moved) { el.style.transform = 'translateY(' + dy + 'px)'; e.preventDefault(); }
+    });
+    function end(e) {
+      if (!live || e.pointerId !== pid) return;
+      live = false;
+      if (!moved) return;
+      swallowClick = Date.now() + 400;
+      var fast = dy > 40 && dy / Math.max(1, Date.now() - t0) > 0.6;
+      el.classList.remove('drag');
+      el.style.transform = '';
+      if (dy > 120 || fast) close();
+    }
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  document.addEventListener('click', function (e) { if (Date.now() < swallowClick) { e.stopPropagation(); e.preventDefault(); } }, true);
+
+  // ---------- Mark (that's a card) ----------
+  var noteFor = null;
+  function renderMarkBtn(t) { var sp = $('#vMark span'); if (sp) sp.textContent = 'Mark ' + Core.fmt(t || 0); }
+  function doMark() {
+    if (!current || !videos[current]) return;
+    var v = videos[current], t = 0, w = courseOf(current);
+    try { t = player.getCurrentTime() || 0; } catch (e) {}
+    var m = marks.add({ vid: current, title: v.title || 'YouTube video', t: t, course: w ? w.course.name : '' });
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+    toast('Marked ' + Core.fmt(m.t) + '.', '', { label: 'Add note', fn: function () { openNote(m.id); } });
+    if (stack.length && stack[stack.length - 1].name === 'marks') renderPage();
+  }
+  function openNote(id) {
+    var m = marks.get(id); if (!m) return;
+    noteFor = id; $('#noteWhat').textContent = Core.fmt(m.t) + ' · ' + m.title; $('#noteInput').value = m.note || '';
+    openDlg($('#noteDlg')); setTimeout(function () { $('#noteInput').focus(); }, 60);
+  }
+  $('#noteForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (noteFor) marks.setNote(noteFor, $('#noteInput').value);
+    $('#noteDlg').close(); toast('Note saved.');
+    if (stack.length && stack[stack.length - 1].name === 'marks') renderPage();
+  });
+  function marksPage() {
+    var list = marks.list(), h = topHTML('c1', 'Marks', list.length ? list.length + (list.length === 1 ? ' moment' : ' moments') + ' saved from the player' : 'Moments saved from the player');
+    if (!list.length) return h + '<p class="pnote">Nothing marked yet. While a video plays, tap Mark when something should become a card.</p>';
+    h += '<div class="pad"><button type="button" class="primary" data-act="marks-copy">Copy for Anki</button><span class="small">Copies one card a line: the moment on the front, its YouTube link on the back. In Anki on the Mac, File › Import, fields separated by Tab.</span></div>';
+    h += '<h2 class="subh"><span>Newest first</span><span class="mono">' + list.length + '</span></h2>';
+    list.forEach(function (m) {
+      h += '<div class="mrow"><button type="button" data-act="mark-play" data-id="' + esc(m.id) + '"><b><span class="mono">' + Core.fmt(m.t) + '</span> · ' + esc(m.title) + '</b>' +
+        '<small>' + (m.note ? esc(m.note) : (m.course ? esc(m.course) + ' · ' : '') + 'no note yet') + '</small></button>' +
+        '<span class="iconrow">' + ib('mark-note', m.id, I.dots, 'Note for ' + Core.fmt(m.t)) + ib('mark-remove', m.id, I.x, 'Remove the mark at ' + Core.fmt(m.t)) + '</span></div>';
+    });
+    return h;
+  }
+  function copyText(text, done) {
+    var fail = function () { toast("Couldn't copy. Try again.", 'warn'); };
+    try { navigator.clipboard.writeText(text).then(done, function () { Native.call('Clipboard', 'write', { string: text }).then(done, fail); }); }
+    catch (e) { fail(); }
   }
 
   // ---------- Night player (podcasts) ----------
@@ -592,18 +821,20 @@
       save: function (g, r) { arec[g] = Object.assign({}, arec[g] || {}, aMeta[g] || {}, r); saveAudio(); },
       onChange: function () { renderAudio(); renderSoon(); }
     });
-    if (prefs.arate) engine.setRate(prefs.arate);
     // A podcast starting ends the self-check's sound test (the engine then takes the lock-screen controls back)
-    $('#audio').addEventListener('play', function () { if (Native.tonePlaying) { Native.stopTone(); var tb = $('#toneBtn'); if (tb) tb.textContent = 'Test lock-screen sound'; if ($('#checkDlg').open) fillCheck(); } clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
+    $('#audio').addEventListener('play', function () { if (Native.tonePlaying) { Native.stopTone(); if ($('#checkDlg').open) fillCheck(); } clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
     $('#audio').addEventListener('pause', function () { clearInterval(aTick); renderAudio(); });
   }
   function openAudio(e) {
     if (current) closeVideo(true);
     aMeta[e.key] = { source: e.src, image: e.image || '', published: e.published || 0, podcast: e.srcName };
     nightOpen = true; openSheet('#nsheet');
-    var st = engine.state();
-    if (st.episode && st.episode.guid === e.key) { if (!st.playing) engine.toggle(); renderAudio(); return; }
-    engine.play({ guid: e.key, url: e.url, title: e.title, podcast: e.srcName, image: e.image, duration: e.dur });
+    var st = engine.state(), same = st.episode && st.episode.guid === e.key;
+    if (!same) engine.play({ guid: e.key, url: e.url, title: e.title, podcast: e.srcName, image: e.image, duration: e.dur });
+    else if (!st.playing) engine.toggle();
+    engine.setRate(podRate(e.key));
+    // At night a podcast starts with a 45-minute sleep timer, so it never has to be remembered half asleep
+    if (isNight() && !engine.state().timer) { engine.setTimer(45); setTimeout(function () { toast('45-minute sleep timer on. Tap a number to change it.'); }, 400); }
     renderAudio();
   }
   function renderAudio() {
@@ -616,7 +847,7 @@
     var left = st.dur ? Math.max(0, st.dur - st.t) : 0;
     $('#miniTitle').textContent = ep.title;
     $('#miniSub').textContent = (st.timer ? (st.timer.mode === 'end' ? 'stops at the end' : SleepTimer.countdown(SleepTimer.remaining(st.timer)) + ' to sleep') : (ep.podcast || '')) + (st.dur ? ' · ' + Core.fmt(left) + ' left' : '');
-    $('#miniPlay').textContent = st.playing ? '❚❚' : '▶';
+    var mp = st.playing ? 'pause' : 'play'; if ($('#miniPlay').getAttribute('data-g') !== mp) { $('#miniPlay').innerHTML = I[mp]; $('#miniPlay').setAttribute('data-g', mp); }
     $('#miniPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
     if (!nightOpen) return;
     var r = arec[ep.guid] || {}, m = aMeta[ep.guid] || {};
@@ -624,16 +855,15 @@
     var nsec = src && lib.section(src.section);
     $('#nCh').textContent = (nsec ? nsec.name + ' · ' : '') + (ep.podcast || '') + (src && src.private ? ' · Private' : '');
     $('#nTitle').textContent = ep.title;
-    $('#nEp').textContent = Core.fmt(st.t) + (st.dur ? ' / ' + Core.fmt(st.dur) : '') + (Native.inApp ? '' : ' · keep this tab open');
+    $('#nEp').textContent = Core.fmt(st.t) + (st.dur ? ' / ' + Core.fmt(st.dur) + ' · ' + Core.left(st.t, st.dur).toLowerCase() : '') + (Native.inApp ? '' : ' · keep this tab open');
     var art = $('#nArt'); if (ep.image) { if (art.getAttribute('src') !== ep.image) art.src = ep.image; art.hidden = false; } else art.hidden = true;
     $('#nMsg').hidden = !st.message; $('#nMsg').textContent = st.message || '';
-    $('#nLine').style.width = st.dur ? Math.min(100, st.t / st.dur * 100).toFixed(2) + '%' : '0';
-    $('#nT').textContent = Core.fmt(st.t); scrubAria($('#nScrub'), st.t, st.dur);
-    $('#nLeft').textContent = st.dur ? '−' + Core.fmt(left) : '';
-    $('#nPlay').textContent = st.playing ? '❚❚' : '▶';
+    if (scrubbing !== 'n') paintScrub('n', st.t, st.dur, st.rate);
+    if ($('#nPlay').getAttribute('data-g') !== mp) { $('#nPlay').innerHTML = I[mp]; $('#nPlay').setAttribute('data-g', mp); }
     $('#nPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
-    $('#nRate').textContent = 'Speed ' + st.rate + '×';
-    $('#nLock').textContent = Native.inApp ? 'Plays on the lock screen' : '';
+    $('#nRate').innerHTML = '<span>Speed <b>' + st.rate + '×</b></span><span>' + (st.rate === 1 ? 'tap to change' : 'remembered for this podcast') + '</span>';
+    $('#nRate').setAttribute('aria-label', 'Speed ' + st.rate + ' times. Tap to change.');
+    $('#nLock').hidden = !Native.inApp;
     renderTimerUI('a');
   }
   function closeNight() { nightOpen = false; closeSheet('#nsheet'); renderAudio(); renderAll(); }
@@ -648,7 +878,7 @@
     } else openVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur });
   }
 
-  // ---------- Paste ----------
+  // ---------- A pasted link (Search box, ⌘V on the Mac, a shelf link) ----------
   function handleText(text, from) {
     text = String(text || '').trim();
     var shelf = text.match(/#shelf=([A-Za-z0-9_-]+)/);
@@ -667,20 +897,9 @@
     }
     var c = text && Feeds.parseChannelInput(text);
     if (c && c.kind !== 'name') { openAdd(text); return true; }
-    toast(text ? "That doesn't look like a YouTube link. Copy the address from YouTube and try again." : 'Nothing to paste. Copy a YouTube link first.', 'warn');
+    toast(text ? "That doesn't look like a YouTube link. Copy the address from YouTube and try again." : 'Nothing to open. Copy a YouTube link first.', 'warn');
     return false;
   }
-  function doPaste() {
-    var fallback = function () { openDlg($('#pasteDlg')); $('#pasteInput').value = ''; setTimeout(function () { $('#pasteInput').focus(); }, 50); };
-    try {
-      Native.readClipboard().then(function (txt) {
-        if (txt && txt.trim()) return handleText(txt);
-        // Universal Clipboard can take a moment to arrive from the Mac: try once more
-        setTimeout(function () { Native.readClipboard().then(function (t2) { if (t2 && t2.trim()) handleText(t2); else fallback(); }, fallback); }, 1200);
-      }, fallback);
-    } catch (e) { fallback(); }
-  }
-  $('#pasteForm').addEventListener('submit', function (e) { e.preventDefault(); if (handleText($('#pasteInput').value)) $('#pasteDlg').close(); });
   document.addEventListener('paste', function (e) {
     var t = e.target, cd = e.clipboardData || window.clipboardData, txt = cd ? cd.getData('text') : '';
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) return;
@@ -693,6 +912,7 @@
     var secs = lib.sections();
     addSec = sectionId && lib.section(sectionId) ? sectionId : (stack.length && stack[stack.length - 1].name === 'section' ? stack[stack.length - 1].id : secs[0].id);
     $('#addPicks').innerHTML = secs.map(function (s) { return '<button type="button" data-act="add-pick" data-id="' + esc(s.id) + '" aria-pressed="' + (s.id === addSec) + '">' + esc(s.name) + '</button>'; }).join('');
+    $('#addGo').textContent = 'Add to ' + lib.section(addSec).name;
     $('#addInput').value = prefill || '';
     $('#addMsg').textContent = feedsOn ? '' : 'Adding channels works in the Shelf app on your iPhone.';
     $('#addMsg').className = 'msgline';
@@ -715,6 +935,19 @@
       msg.textContent = (err && err.message) || "Couldn't add that."; msg.className = 'msgline err';
     });
   });
+
+  // Channel options: its section, Shorts, remove
+  function openChanMenu(id) {
+    var s = lib.source(id); if (!s) return;
+    if (!$('#chanDlg').open) confirmRemove = null;
+    $('#chanH').textContent = s.name;
+    $('#chanPicks').innerHTML = lib.sections().map(function (x) { return '<button type="button" data-act="move-channel" data-id="' + esc(s.id) + '" data-to="' + esc(x.id) + '" aria-pressed="' + (x.id === s.section) + '">' + esc(x.name) + '</button>'; }).join('');
+    var hid = lib.items(s.id).filter(isShort).length;
+    $('#chanShorts').innerHTML = s.type === 'podcast' ? '' : '<button type="button" class="ghost" style="width:100%" data-act="toggle-shorts" data-id="' + esc(s.id) + '" aria-pressed="' + hidesShorts(s) + '">' +
+      (hidesShorts(s) ? 'Shorts hidden' + (hid ? ' (' + hid + ')' : '') + ' · tap to show them' : 'Shorts showing · tap to hide them') + '</button>';
+    $('#chanDel').setAttribute('data-id', s.id); $('#chanDel').textContent = confirmRemove === s.id ? 'Tap again to remove' : 'Remove channel';
+    openDlg($('#chanDlg'));
+  }
 
   // ---------- Sections ----------
   var editing = null, secKind = 'video', confirmDel = false;
@@ -781,19 +1014,20 @@
   }
   function courseSub(c, pr, arr) {
     var st = cs.status(c.id);
-    if (!arr.length) return st.loading ? 'Loading episodes…' : !st.ok ? "Couldn't load it. Tap to see why." : c.seed ? 'Loading episodes…' : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app on your iPhone';
+    if (!arr.length) return st.loading ? 'Loading episodes…' : !st.ok ? 'Couldn\'t load it. Tap to see why.' : c.seed ? 'Loading episodes…' : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app on your iPhone';
     if (pr.state === 'done') return 'Done · ' + pr.done + '/' + pr.total;
-    if (pr.state === 'new') return 'Not started · ' + pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '');
-    var nx = pr.next, sp = spotOf(nx);
-    return 'Next · ' + epLabel(nx, pr.notch) + ' · ' + shortTitle(nx.title) + (sp ? ' · ' + sp : '');
+    var pc = cs.pace(c.id), per = pc && pc.perDay ? Courses.perDay(pc.perDay) : '';
+    if (pr.state === 'new') return pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '') + (per ? ' · <b>' + per + '</b> by the exam' : '');
+    var late = pc.finishBy && pc.finishBy > Courses.EXAM.getTime();
+    return '<b>' + pc.left + ' left</b>' + (per ? ' · ' + per : '') + (pc.finishBy ? ' · <span' + (late ? ' class="late"' : '') + '>done ' + shortDay(pc.finishBy) + ' at this week\'s pace</span>' : '');
   }
   function courseRow(c) {
     var arr = cs.items(c.id), pr = cs.progress(c.id), open = openC === c.id, nx = pr.next;
     var h = '<div class="course ' + pr.state + (open ? ' open' : '') + '">' +
       '<button type="button" class="cr" data-act="course-open" data-id="' + esc(c.id) + '" aria-expanded="' + open + '" aria-label="' + esc(c.name + ', ' + pr.done + ' of ' + pr.total + ' watched. ' + (open ? 'Close' : 'Open')) + '">' +
       '<span class="cl">' + esc(c.name) + '</span>' + rulerHTML(c, pr, arr) + '<span class="cn mono">' + (arr.length ? pr.done + '/' + pr.total : '–') + '</span>' +
-      '<span class="cx mono">' + esc(courseSub(c, pr, arr)) + '</span></button>';
-    if (nx) h += '<button type="button" class="cgo" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '" aria-label="' + esc((pr.state === 'new' ? 'Start ' : 'Play next: ') + epLabel(nx, pr.notch)) + '">▶</button>';
+      '<span class="cx mono">' + courseSub(c, pr, arr) + '</span>' + (nx && pr.state !== 'new' ? '<span class="cx mono">Next · ' + esc(epLabel(nx, pr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (spotOf(nx) ? ' · ' + esc(spotOf(nx)) : '') + '</span>' : '') + '</button>';
+    if (nx) h += '<button type="button" class="cgo" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '" aria-label="' + esc((pr.state === 'new' ? 'Start ' : 'Play next: ') + epLabel(nx, pr.notch)) + '">' + I.play + '</button>';
     else h += '<span class="cgo" aria-hidden="true">' + (pr.state === 'done' ? '✓' : '') + '</span>';
     var pins = arr.map(function (x, i) { return c.pins[x.id] ? { x: x, i: i } : null; }).filter(Boolean);
     if (pins.length && !open) h += '<span class="cpin mono"><span class="pin">‼</span> ' + esc(epLabel(pins[0].x, pins[0].i)) + ' · ' + esc(shortTitle(pins[0].x.title)) + (pins.length > 1 ? ' · +' + (pins.length - 1) : '') + '</span>';
@@ -823,7 +1057,7 @@
     var w = cwin[c.id] || (cwin[c.id] = { b: 2, a: 3 });
     var center = pr.notch >= 0 ? pr.notch : arr.length - 1;
     var from = Math.max(0, center - w.b), to = Math.min(arr.length - 1, center + w.a), h = '';
-    if (from > 0) h += '<button type="button" class="cmore" data-act="course-earlier" data-id="' + esc(c.id) + '">▲ ' + from + ' earlier</button>';
+    if (from > 0) h += '<button type="button" class="cmore" data-act="course-earlier" data-id="' + esc(c.id) + '"><span>▲ ' + from + ' earlier</span></button>';
     h += '<ul class="eps">';
     for (var i = from; i <= to; i++) {
       var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
@@ -834,7 +1068,7 @@
         '<span class="du mono">' + esc(spotOf(x)) + '</span></li>';
     }
     h += '</ul>';
-    if (to < arr.length - 1) h += '<button type="button" class="cmore" data-act="course-later" data-id="' + esc(c.id) + '">▼ ' + (arr.length - 1 - to) + ' more</button>';
+    if (to < arr.length - 1) h += '<button type="button" class="cmore" data-act="course-later" data-id="' + esc(c.id) + '"><span>▼ ' + (arr.length - 1 - to) + ' more</span></button>';
     return h;
   }
   function gridHTML(c, pr, arr) {
@@ -843,37 +1077,44 @@
       return '<button type="button" class="' + (d ? 'd' : '') + (i === pr.notch ? ' n' : '') + (c.pins[x.id] ? ' p' : '') + '" data-act="ep-tick" data-hold="upto" data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '" aria-pressed="' + d + '" aria-label="' + esc(lab + ': ' + shortTitle(x.title)) + '">' + esc(lab) + '</button>';
     }).join('') + '</div>';
   }
-  // Courses shown on a section's band: the ones on the go, at most two
-  function coursesStrip(secId) {
-    if (!cs) return '';
-    var all = cs.list().filter(function (c) { return courseSec(c) === secId; });
-    if (!all.length) return '';
-    var go = all.filter(function (c) { var s = cs.progress(c.id).state; return s === 'go' || (s === 'empty' && (c.touched || (c.seed && c.seed.upTo))); })
-      .sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
-    if (openC && !go.some(function (c) { return c.id === openC; }) && all.some(function (c) { return c.id === openC; }) && !stack.length) go.unshift(cs.get(openC));
-    var h = '<div class="courses"><button type="button" class="chd" data-act="open-courses" data-id="' + esc(secId) + '"><span>Courses</span><span class="mono">' +
-      (go.length ? go.length + ' on the go' : all.length + ' · none on the go') + ' ›</span></button>';
-    go.slice(0, 2).forEach(function (c) { h += courseRow(c); });
-    return h + '</div>';
+  function examHTML() {
+    var td = cs.today(), days = cs.daysLeft(), max = Math.max.apply(null, td.week.concat([1]));
+    return '<div class="exam"><div class="big mono"><small>Days to Step 2 CK</small>' + days + '</div><div class="nums mono">' +
+      '<p><b>' + esc(DAYS[Courses.EXAM.getDay()].slice(0, 3) + ' ' + shortDay(Courses.EXAM.getTime())) + '</b> · ' + td.left + ' left</p>' +
+      '<p>' + (td.left ? '<b>' + esc(Courses.perDay(td.perDay)) + '</b> to finish in time' : '<b>Every course done.</b>') + '</p>' +
+      '<p>Today <b>' + td.n + (td.secs ? ' · ' + Math.round(td.secs / 60) + ' min' : '') + '</b> · this week <b>' + td.weekN + '</b></p>' +
+      '<div class="week" role="img" aria-label="Episodes ticked each day, last 7 days: ' + td.week.join(', ') + '">' + td.week.map(function (n) { return '<i class="' + (n ? '' : 'z') + '" style="height:' + (n ? Math.max(15, Math.round(n / max * 100)) : 8) + '%"></i>'; }).join('') + '</div>' +
+      '</div></div>';
+  }
+  function courseGroups(list) {
+    var groups = { go: [], new: [], done: [] }, h = '';
+    list.forEach(function (c) { var s = cs.progress(c.id).state; (groups[s === 'empty' ? (c.touched || c.seed ? 'go' : 'new') : s] || groups.new).push(c); });
+    groups.go.sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
+    [['go', 'On the go'], ['new', 'Not started'], ['done', 'Done']].forEach(function (g) {
+      if (!groups[g[0]].length) return;
+      h += '<h2 class="subh"><span>' + g[1] + '</span><span class="mono">' + groups[g[0]].length + '</span></h2><div class="cgroup">' + groups[g[0]].map(courseRow).join('') + '</div>';
+    });
+    return h;
   }
   function coursesPage(v) {
     var sec = lib.section(v.id) || lib.sections()[0], all = cs.list().filter(function (c) { return courseSec(c) === sec.id; }), h = '';
-    h += '<div class="top band ' + bandClass(sec.id) + '">' + eyebrow(sec.name.toUpperCase(), all.length + (all.length === 1 ? ' COURSE' : ' COURSES')) + h1('Courses') +
-      '<p>Playlists ticked episode by episode. Tap one to open it. Hold a box to tick everything up to it.</p>' +
-      '<div class="acts"><button type="button" class="btn" data-act="add-course" data-id="' + esc(sec.id) + '">+ Add course</button></div></div>';
+    var chans = {}; all.forEach(function (c) { if (c.channel) chans[c.channel] = 1; });
+    var who = Object.keys(chans).length === 1 ? Object.keys(chans)[0] : sec.name;
+    h += topHTML(bandClass(sec.id), 'Courses', esc(who) + ' · ' + all.length + (all.length === 1 ? ' course' : ' courses'),
+      ib('open-marks', null, I.mark, 'Marks') + ib('add-course', sec.id, I.plus, 'Add course'), cs.list().length ? examHTML() : '');
     if (sec.id === Courses.SEED.section) cs.misses.forEach(function (m) {
       h += '<p class="pnote err">Couldn\'t find your ' + esc(m.name) + ' playlist on Mehlman\'s channel (' + esc(m.error) + '). <button type="button" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '">Fix</button></p>';
     });
     if (!feedsOn && !prefs.apiKey) h += '<p class="pnote">Episodes load in the Shelf app on your iPhone.</p>';
-    var groups = { go: [], new: [], done: [] };
-    all.forEach(function (c) { var s = cs.progress(c.id).state; (groups[s === 'empty' ? (c.touched || c.seed ? 'go' : 'new') : s] || groups.new).push(c); });
-    groups.go.sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
-    [['go', 'On the go'], ['new', 'Not started'], ['done', 'Done']].forEach(function (g) {
-      if (!groups[g[0]].length) return;
-      h += '<h2 class="sub-h"><span>' + g[1] + '</span><span class="mono">' + groups[g[0]].length + '</span></h2><div class="cgroup">' + groups[g[0]].map(courseRow).join('') + '</div>';
+    h += courseGroups(all);
+    if (!all.length) h += '<p class="pnote">No courses yet. Add a playlist and Shelf ticks it episode by episode.</p>';
+    // Courses kept in other sections follow under their own band colour
+    lib.sections().forEach(function (o) {
+      if (o.id === sec.id) return;
+      var mine = cs.list().filter(function (c) { return courseSec(c) === o.id; });
+      if (mine.length) h += '<h2 class="subh band ' + bandClass(o.id) + '"><span>' + esc(o.name) + '</span><span class="mono">' + mine.length + '</span></h2><div class="cgroup">' + mine.map(courseRow).join('') + '</div>';
     });
-    if (!all.length) h += '<p class="pnote">No courses yet. Paste a playlist link and it lands here.</p>';
-    h += '<button type="button" class="more" data-act="add-course" data-id="' + esc(sec.id) + '"><span>+ Add course</span><span class="mono">paste a playlist link</span></button>';
+    h += '<button type="button" class="more" data-act="add-course" data-id="' + esc(sec.id) + '"><span>+ Add course</span><span class="mono">a playlist link, or type a name</span></button>';
     return h;
   }
   function courseSec(c) { return lib.section(c.section) ? c.section : lib.sections()[0].id; }
@@ -1008,17 +1249,46 @@
     box.hidden = false;
     box.innerHTML = rulerHTML(w.course, cs.progress(w.course.id), cs.items(w.course.id));
   }
+  // The next unticked episode after position i (or the first gap earlier on)
+  function nextAfter(c, i) {
+    var arr = cs.items(c.id);
+    for (var k = i + 1; k < arr.length; k++) if (!cs.isDone(c.id, arr[k].id)) return { x: arr[k], i: k };
+    for (var j = 0; j < arr.length; j++) if (j !== i && !cs.isDone(c.id, arr[j].id)) return { x: arr[j], i: j };
+    return null;
+  }
+  // In the player: "Next: 1123 ▶" beside Mark, inside a course
+  function renderNextBtn(vid) {
+    var w = courseOf(vid), n = w && nextAfter(w.course, w.i), b = $('#vNextBtn');
+    b.hidden = !n;
+    if (!n) return;
+    b.setAttribute('data-id', w.course.id); b.setAttribute('data-v', n.x.id);
+    b.innerHTML = '<span>Next: ' + esc(epLabel(n.x, n.i)) + '</span>' + I.play;
+    b.setAttribute('aria-label', 'Play next: ' + epLabel(n.x, n.i) + ' ' + shortTitle(n.x.title));
+  }
   function showNextUp(w) {
-    var c = w.course, arr = cs.items(c.id), nx = null, ni = -1;
-    for (var i = w.i + 1; i < arr.length; i++) if (!cs.isDone(c.id, arr[i].id)) { nx = arr[i]; ni = i; break; }
-    if (!nx) for (var k = 0; k < arr.length; k++) if (!cs.isDone(c.id, arr[k].id)) { nx = arr[k]; ni = k; break; } // gaps earlier on
-    var box = $('#vNext'), pr = cs.progress(c.id);
-    if (nx) box.innerHTML = '<small>Next up · ' + esc(c.name) + '</small><b>' + esc(epLabel(nx, ni)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' · ' + Core.fmt(nx.dur) : '') + '</b>' +
-      '<div class="row2"><button type="button" class="btn solid" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '">Play next ▶</button><button type="button" class="btn" data-act="close-video">Done for now</button></div>';
-    else box.innerHTML = '<small>' + esc(c.name) + '</small><b>Course done · ' + pr.done + '/' + pr.total + '</b><div class="row2"><button type="button" class="btn solid" data-act="course-back" data-id="' + esc(c.section || 'med') + '">Back to courses</button></div>';
+    var c = w.course, n = nextAfter(c, w.i), box = $('#vNext'), pr = cs.progress(c.id), auto = prefs.autoNext !== false && n && document.visibilityState === 'visible';
+    clearTimeout(nextTimer);
+    if (n) box.innerHTML = '<small>Next up · ' + esc(c.name) + '</small><b>' + esc(epLabel(n.x, n.i)) + ' · ' + esc(shortTitle(n.x.title)) + (n.x.dur ? ' · ' + Core.fmt(n.x.dur) : '') + '</b>' +
+      '<span class="cdn">' + (auto ? 'Plays in 5 s' : '') + '</span>' +
+      '<div class="twin"><button type="button" class="act solid" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(n.x.id) + '"><span>Play next</span>' + I.play + '</button>' +
+      (auto ? '<button type="button" class="act" data-act="next-cancel">Stop</button>' : '<button type="button" class="act" data-act="close-video">Done for now</button>') + '</div>' +
+      '<button type="button" class="auto" data-act="auto-toggle">Autoplay next: ' + (prefs.autoNext === false ? 'off' : 'on') + '</button>';
+    else box.innerHTML = '<small>' + esc(c.name) + '</small><b>Course done · ' + pr.done + '/' + pr.total + '</b><div class="twin"><button type="button" class="act solid" data-act="course-back" data-id="' + esc(c.section || 'med') + '">Back to courses</button></div>';
     box.hidden = false;
-    renderPlayerCourse(w.course.id && arr[w.i] ? arr[w.i].id : '');
+    $('#vNextBtn').hidden = true;
+    renderPlayerCourse(w.course.id && cs.items(c.id)[w.i] ? cs.items(c.id)[w.i].id : '');
     try { box.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {}
+    // A question-bank session flows on: the next one starts after a 5-second countdown (Stop, or turn it off)
+    if (auto) {
+      var left = 5, vid = current;
+      var step = function () {
+        var cdn = $('#vNext .cdn');
+        if (current !== vid || !cdn || box.hidden || document.visibilityState !== 'visible') return;
+        if (--left <= 0) { playEp(c.id, n.x.id); return; }
+        cdn.textContent = 'Plays in ' + left + ' s'; nextTimer = setTimeout(step, 1000);
+      };
+      nextTimer = setTimeout(step, 1000);
+    }
   }
 
   // ---------- Clicks ----------
@@ -1031,14 +1301,13 @@
       case 'open-channel': openChannel(id); break;
       case 'open-pasted': push({ name: 'pasted' }); break;
       case 'back': back(); break;
-      case 'search': if (!stack.length || stack[stack.length - 1].name !== 'search') push({ name: 'search', q: prefs.lastQ || '' }); else { var q = $('#sq'); if (q) q.focus(); } break;
-      case 'paste': doPaste(); break;
+      case 'home': goHome(); break;
+      case 'search': if (!openTab({ name: 'search', q: prefs.lastQ || '' })) { var q = $('#sq'); if (q) q.focus(); } break;
       case 'refresh': refreshAll(true); break;
       case 'refresh-channel': lib.refresh(id, true).then(function () { lib.saveCache(); renderAll(); }); toast('Checking for new uploads…'); break;
       case 'add-channel': openAdd(b.getAttribute('data-in') || '', id); break;
       case 'fix-seed': openAdd(b.getAttribute('data-in'), id); break;
-      case 'add-pick': addSec = id; Array.prototype.forEach.call(document.querySelectorAll('#addPicks button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); break;
-      case 'add-paste': Native.readClipboard().then(function (t) { $('#addInput').value = (t || '').trim(); }, function () { $('#addInput').focus(); toast('Tap the box, then tap Paste.'); }); break;
+      case 'add-pick': addSec = id; Array.prototype.forEach.call(document.querySelectorAll('#addPicks button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); $('#addGo').textContent = 'Add to ' + lib.section(id).name; break;
       case 'add-section': openSec(null); break;
       case 'edit-section': openSec(id); break;
       case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
@@ -1048,16 +1317,28 @@
         catch (err) { $('#secMsg').textContent = err.message; $('#secMsg').className = 'msgline err'; }
         break;
       case 'seen-section': lib.sources(id).forEach(function (s) { lib.markSeen(s.id); }); renderAll(); break;
-      case 'move-channel': lib.setSection(id, b.getAttribute('data-to')); renderAll(); break;
+      case 'channel-menu': openChanMenu(id); break;
+      case 'move-channel': lib.setSection(id, b.getAttribute('data-to')); openChanMenu(id); renderAll(); break;
+      case 'toggle-shorts': var ts = lib.source(id); if (ts) { lib.setHideShorts(id, !hidesShorts(ts)); openChanMenu(id); renderAll(); } break;
       case 'remove-channel':
-        if (confirmRemove !== id) { confirmRemove = id; renderPage(); break; }
-        var nm = lib.source(id).name; lib.remove(id); confirmRemove = null; lib.saveCache(); back(); toast('Removed ' + nm + '.'); break;
+        if (confirmRemove !== id) { confirmRemove = id; b.textContent = 'Tap again to remove'; break; }
+        var nm = lib.source(id).name; lib.remove(id); confirmRemove = null; lib.saveCache(); $('#chanDlg').close(); back(); toast('Removed ' + nm + '.'); break;
       case 'remove-video':
         var gone = videos[id]; delete videos[id]; saveVideos(); renderAll();
+        if (!Object.keys(videos).some(function (k) { return !entryFromVideo(videos[k]).section; }) && stack.length && stack[stack.length - 1].name === 'pasted') back();
         toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; saveVideos(); renderAll(); } });
         break;
       case 'close-video': closeVideo(); break;
-      case 'open-courses': openCourses(id); break;
+      case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
+      case 'open-marks': push({ name: 'marks' }); break;
+      case 'mark': doMark(); break;
+      case 'mark-play': var mk = marks.get(id); if (mk) openVideo({ id: mk.vid, t: Math.max(1, mk.t), title: mk.title }); break;
+      case 'mark-note': openNote(id); break;
+      case 'mark-remove': var gm = marks.remove(id); renderPage(); if (gm) toast('Mark removed.', '', { label: 'Undo', fn: function () { marks.restore(gm); renderAll(); } }); break;
+      case 'marks-copy': var n0 = marks.count; copyText(marks.anki(), function () { b.textContent = 'Copied ' + n0 + (n0 === 1 ? ' card' : ' cards'); setTimeout(function () { b.textContent = 'Copy for Anki'; }, 2500); toast('Copied. In Anki: File › Import, then paste or pick the text.'); }); break;
+      case 'v-rate': var vr = +b.getAttribute('data-r'); if (current) { setRateFor(current, vr); try { player.setPlaybackRate(vr); } catch (er) {} videoTick(); } break;
+      case 'next-cancel': clearTimeout(nextTimer); var cdn = $('#vNext .cdn'); if (cdn) cdn.textContent = 'Autoplay stopped for this one.'; b.remove(); break;
+      case 'auto-toggle': prefs.autoNext = prefs.autoNext === false; savePrefs(); b.textContent = 'Autoplay next: ' + (prefs.autoNext === false ? 'off' : 'on'); if (prefs.autoNext === false) { clearTimeout(nextTimer); var cd2 = $('#vNext .cdn'); if (cd2) cd2.textContent = ''; } break;
       case 'course-open':
         openC = openC === id ? null : id; confirmCourse = null;
         if (openC && !cs.items(id).length && !cs.status(id).loading && (feedsOn || prefs.apiKey)) cs.load(id, true).then(renderAll);
@@ -1083,7 +1364,6 @@
         $('#courseInput').value = 'https://www.youtube.com/playlist?list=' + b.getAttribute('data-pl');
         if (!$('#courseName').value.trim() || $('#courseName').getAttribute('data-auto') === '1') { $('#courseName').value = Courses.shortName(b.getAttribute('data-t')); $('#courseName').setAttribute('data-auto', '1'); }
         $('#coursePicks').innerHTML = '<span class="small">Picked: ' + esc(b.getAttribute('data-t')) + '. Tap Add.</span>'; break;
-      case 'course-paste': Native.readClipboard().then(function (t) { $('#courseInput').value = (t || '').trim(); renderCoursePicks(); }, function () { $('#courseInput').focus(); toast('Tap the box, then tap Paste.'); }); break;
       case 'v-toggle': try { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); } catch (er) {} break;
       case 'v-back': case 'v-fwd': try { player.seekTo(Math.max(0, player.getCurrentTime() + (act === 'v-back' ? -15 : 15)), true); videoTick(); } catch (er) {} break;
       case 'timer': if (held) { held = false; break; } setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
@@ -1092,7 +1372,7 @@
       case 'audio-toggle': engine.toggle(); break;
       case 'a-back': engine.seekBy(-engine.BACK); break;
       case 'a-fwd': engine.seekBy(engine.FWD); break;
-      case 'a-rate': var cr = engine.state().rate, nr = RATES[(RATES.indexOf(cr) + 1) % RATES.length]; engine.setRate(nr); prefs.arate = nr; savePrefs(); break;
+      case 'a-rate': var ast = engine.state(), nr = RATES[(RATES.indexOf(ast.rate) + 1) % RATES.length]; engine.setRate(nr); if (ast.episode) { prefs.rates = prefs.rates || {}; prefs.rates[podKey(ast.episode.guid)] = nr; savePrefs(); } break;
       case 'check': openCheck(); break;
       case 'dismiss': var d = b.closest('dialog'); if (d) d.close(); break;
       case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
@@ -1102,18 +1382,16 @@
       case 'yt-settings': Native.openSettings().catch(function () { toast("Open the iPhone's Settings app, scroll down to Shelf, and turn on Allow Cross-Website Tracking.", 'warn'); }); break;
       case 'phone-retry': if (navigator.onLine === false) { toast("You're offline. Reconnect, then tap Try again.", 'warn'); break; } b.textContent = 'Reopening…'; capture(true); if (engine) engine.capture(true); setTimeout(function () { location.reload(); }, 300); break; // a fresh start reads the phone's copy again and merges it
       case 'tone':
-        if (Native.tonePlaying) { Native.stopTone(); if (engine) engine.session(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
+        if (Native.tonePlaying) { Native.stopTone(); if (engine) engine.session(); fillCheck(); return; }
         if (engine.state().playing) engine.pause();
         if (current) closeVideo();
-        Native.playTone().then(function () { b.textContent = 'Stop the sound test'; fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },
+        Native.playTone().then(function () { fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },
           function () { toast("The sound test couldn't start. Turn the volume up and try again.", 'warn'); });
         break;
     }
   });
-  // Tap on a scrub line seeks
-  // A tap seeks to that point. A keyboard "click" (Space/Enter, detail 0) has no position, so it doesn't jump to the
-  // start; the arrow keys step back and forward instead (the line is a slider for VoiceOver and keyboards).
-  function scrubAt(el, ev, dur, fn) { var r = el.getBoundingClientRect(); if (!dur || !r.width || ev.detail === 0) return; fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * dur); }
+  // A tap or a drag on a time line seeks (pointer events, above). Space or Enter on it does nothing (a keyboard "click"
+  // has no position); the arrow keys step back and forward instead (the line is a slider for VoiceOver and keyboards).
   function scrubKeys(el, fwd, step) { // same steps as the player's own buttons: back 15 s, forward 15 s (video) or 30 s (podcast)
     el.addEventListener('keydown', function (ev) {
       var d = { ArrowLeft: -15, ArrowDown: -15, ArrowRight: fwd, ArrowUp: fwd }[ev.key];
@@ -1125,8 +1403,12 @@
   $('#ytLink').addEventListener('click', function () { capture(true); var v = current && videos[current]; if (v) this.href = ytLink(v); });
   scrubKeys($('#vScrub'), 15, function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
   scrubKeys($('#nScrub'), 30, function (s) { engine.seekBy(s); });
-  $('#vScrub').addEventListener('click', function (ev) { try { var d = player.getDuration(); scrubAt(this, ev, d, function (t) { player.seekTo(t, true); videoTick(); }); } catch (e) {} });
-  $('#nScrub').addEventListener('click', function (ev) { var st = engine.state(); scrubAt(this, ev, st.dur, function (t) { engine.seek(t); }); });
+  scrubDrag($('#vScrub'), 'v', function () { try { return player && current ? player.getDuration() : 0; } catch (e) { return 0; } }, function () { return wantRate; }, function (t) { try { player.seekTo(t, true); } catch (e) {} videoTick(); });
+  scrubDrag($('#nScrub'), 'n', function () { return engine ? engine.state().dur : 0; }, function () { return engine.state().rate; }, function (t) { engine.seek(t); renderAudio(); });
+  // Swipe down on the grabber or the top bar closes a player or a sheet
+  sheetSwipe($('#vsheet'), '.grab,.sh-top', function () { closeVideo(); });
+  sheetSwipe($('#nsheet'), '.grab,.sh-top', function () { closeNight(); });
+  Array.prototype.forEach.call(document.querySelectorAll('dialog'), function (d) { sheetSwipe(d, '.grab,.dh', function () { d.close(); }); });
   $('#keyForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var k = $('#keyInput').value.trim();
@@ -1183,7 +1465,7 @@
     if (feedsOn) {
       var srcs = lib.sources(), failed = srcs.filter(function (s) { var st = lib.status(s.id); return st && !st.ok; });
       if (refreshing) out.push({ ok: 2, text: 'Checking your channels for new uploads…' });
-      else if (srcs.length && failed.length === srcs.length) out.push({ ok: 0, text: "Couldn't check any of your channels. Check your internet, then tap the date's \"new\" line to try again." });
+      else if (srcs.length && failed.length === srcs.length) out.push({ ok: 0, text: "Couldn't check any of your channels. Check your internet, then tap the date at the top to try again." });
       else if (failed.length) out.push({ ok: 0, text: "Couldn't update " + failed.map(function (s) { return s.name + ' (' + lib.status(s.id).error + ')'; }).join(', ') + '. Open the channel and tap Refresh.' });
       else if (srcs.length) out.push({ ok: 1, text: 'Checked ' + srcs.length + ' channels for new uploads' + (lastRefresh ? ' ' + Core.ago(lastRefresh) : '') });
       lib.seedMisses.filter(function (m) { return !alreadyHave(m.input); }).forEach(function (m) {
@@ -1202,18 +1484,18 @@
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       var ya = Native.ytAccount.state;
-      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. With "Allow Cross-Website Tracking" on for Shelf (button below), the player should use your Premium. If ads still show, YouTube ↗ opens the video in the YouTube app.' }
-        : ya === 'out' ? { ok: 0, text: 'Not signed in to YouTube, so videos play with ads even with Premium. Tap "Sign in to YouTube" below.' }
+      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. With "Allow Cross-Website Tracking" on for Shelf (iPhone Settings for Shelf, below), the player uses your Premium. If ads still show, YouTube ↗ opens the video in the YouTube app.' }
+        : ya === 'out' ? { ok: 0, text: 'Not signed in to YouTube, so videos play with ads even with Premium.', fix: 'yt' }
         : ya === 'old' ? { ok: 0, text: "This copy of the Shelf app is older than the website, so it can't sign in to YouTube yet. On your Mac, run the installer again." }
         : ya === 'wait' ? { ok: 2, text: 'Checking your YouTube sign-in…' }
         : { ok: 0, text: "Couldn't check your YouTube sign-in. Close and reopen Shelf." });
-      if (!restored) out.push({ ok: 0, text: "The phone's storage didn't answer at start, so nothing is being backed up to it (your spots, ticks and channels stay in Shelf for now). Tap \"Try again\" below." });
+      if (!restored) out.push({ ok: 0, text: "The phone's storage didn't answer at start, so nothing is being backed up to it (your spots, ticks and channels stay in Shelf for now).", fix: 'retry' });
       if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
       var fs = Native.feedStatus;
       out.push(fs.state === 'ok' ? { ok: 1, text: fs.text } : fs.state === 'bad' ? { ok: 0, text: fs.text } : { ok: 2, text: 'Checking podcast feeds…' });
       var tr = Native.toneResult;
       out.push(Native.tonePlaying ? { ok: 2, text: 'Sound test playing. Lock your phone for 10 seconds, then come back.' }
-        : !tr ? { ok: 1, text: 'Lock-screen sound: optional test below (tap it, lock the phone for 10 seconds, come back)' }
+        : !tr ? { ok: 1, text: 'Lock-screen sound: optional Sound test below (tap it, lock the phone for 10 seconds, come back)' }
         : tr.ok ? { ok: 1, text: 'Sound keeps playing on the lock screen' }
         : { ok: 0, text: 'Sound stopped when the screen locked. The app shell needs a fix and a rebuild in Xcode; tell Claude.' });
     }
@@ -1222,26 +1504,47 @@
     return out;
   }
   var checkedAt = 0;
+  function verdictOf(c) {
+    var bad = c.filter(function (x) { return x.ok === 0; }), wait = c.some(function (x) { return x.ok === 2; });
+    return { bad: bad, state: bad.length ? 'bad' : wait ? 'wait' : 'good',
+      label: bad.length ? (bad.length === 1 ? 'One thing to fix' : bad.length + ' things to fix') : wait ? 'Getting ready' : 'All good' };
+  }
   function updateDot() {
-    var c = checks(), bad = c.filter(function (x) { return x.ok === 0; }), wait = c.some(function (x) { return x.ok === 2; });
-    var state = bad.length ? 'bad' : wait ? 'wait' : 'good';
-    $('#statusDot').className = 'dot ' + state;
-    var label = bad.length ? 'Needs a look' : wait ? 'Getting ready' : 'All good';
-    $('#statusText').textContent = label;
+    var c = checks(), vd = verdictOf(c), btn = $('#statusBtn'), txt = $('#statusText');
+    $('#statusDot').className = 'dot ' + vd.state;
+    // The square shows only colour when all is well; a problem widens it to say so
+    btn.classList.toggle('bad', vd.state === 'bad');
+    txt.textContent = vd.state === 'bad' ? (vd.bad.length === 1 ? '1 problem' : vd.bad.length + ' problems') : vd.label;
+    txt.className = vd.state === 'bad' ? '' : 'sr';
     checkedAt = Date.now();
-    var d = new Date(checkedAt);
-    $('#statusSub').textContent = 'checked ' + (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
-    $('#statusBtn').setAttribute('aria-label', 'Self-check: ' + label + '. Show details.');
+    btn.setAttribute('aria-label', 'Self-check: ' + vd.label + '. Show details.');
     if ($('#checkDlg').open) fillCheck();
   }
+  function fixBtn(kind) {
+    var ya = Native.ytAccount.state;
+    if (kind === 'yt') return '<button type="button" class="fix" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : ya === 'in' ? 'Sign out of YouTube' : 'Sign in to YouTube') + '</button>';
+    if (kind === 'retry') return '<button type="button" class="fix" id="retryBtn" data-act="phone-retry">Try again</button>';
+    return '';
+  }
   function fillCheck() {
-    $('#checkList').innerHTML = checks().map(function (x) {
+    var c = checks(), vd = verdictOf(c), d = new Date(checkedAt || Date.now());
+    var ok = c.filter(function (x) { return x.ok === 1; }).length;
+    $('#checkVerdict').className = 'verdict ' + vd.state;
+    $('#checkVerdict').innerHTML = '<i></i><span><b>' + esc(vd.label) + '</b><small class="mono">' + ok + ' of ' + c.length + ' checks passed · ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + '</small></span>';
+    // Only what's wrong (or still loading), each with its fix
+    $('#checkProblems').innerHTML = c.filter(function (x) { return x.ok !== 1; }).map(function (x) {
+      return '<div class="prob' + (x.ok === 2 ? ' wait' : '') + '"><span class="ic" aria-hidden="true">' + (x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + (x.fix ? '<br>' + fixBtn(x.fix) : '') + '</span></div>';
+    }).join('');
+    var ya = Native.ytAccount.state, signIn = Native.inApp && ya !== 'old', acts = '';
+    if (Native.inApp) acts += '<button type="button" class="ghost" id="toneBtn" data-act="tone">' + (Native.tonePlaying ? 'Stop the sound test' : 'Sound test') + '</button>';
+    acts += '<button type="button" class="ghost" id="sendBtn" data-act="send">Copy shelf link</button>';
+    if (signIn && ya === 'in') acts += '<button type="button" class="ghost" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : 'Sign out of YouTube') + '</button>';
+    $('#checkActs').innerHTML = acts;
+    $('#trackBtn').hidden = !signIn;
+    $('#checkAllSum').textContent = 'Show all ' + c.length + ' checks';
+    $('#checkList').innerHTML = c.map(function (x) {
       return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + '</span></li>';
     }).join('');
-    $('#retryBtn').hidden = !(Native.inApp && !restored);
-    var ya = Native.ytAccount.state, canSign = Native.inApp && ya !== 'old';
-    $('#ytBtn').hidden = !canSign; $('#trackBtn').hidden = !canSign;
-    if (!signingIn) $('#ytBtn').textContent = ya === 'in' ? 'Sign out of YouTube' : 'Sign in to YouTube';
   }
   var signingIn = false;
   function signInYT(b) {
@@ -1250,7 +1553,7 @@
       Native.signOutYT().then(function () { fillCheck(); updateDot(); toast('Signed out of YouTube.'); }, function () { toast("Couldn't sign out. Close and reopen Shelf.", 'warn'); });
       return;
     }
-    signingIn = true; b.textContent = 'Signing in…';
+    signingIn = true; b.textContent = 'Signing in…'; fillCheck();
     Native.signInYT().then(function (a) {
       signingIn = false; fillCheck(); updateDot();
       // The player was made before the sign-in: a fresh page gives YouTube a player that knows the account
@@ -1264,9 +1567,7 @@
   function copyShelf(btn) {
     capture(true);
     var link = location.origin + location.pathname + '#shelf=' + Core.encodeShelf(videos);
-    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy shelf link'; }, 2000); toast(isPhone ? 'Copied. Send it to your Mac and open it in Safari.' : 'Copied. Send it to your iPhone and paste it into Shelf.'); };
-    try { navigator.clipboard.writeText(link).then(done, function () { Native.call('Clipboard', 'write', { string: link }).then(done, function () { toast("Couldn't copy. Try again.", 'warn'); }); }); }
-    catch (e) { toast("Couldn't copy. Try again.", 'warn'); }
+    copyText(link, function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy shelf link'; }, 2000); toast(isPhone ? 'Copied. Send it to your Mac and open it in Safari.' : 'Copied. Send it to your iPhone and paste it into Search in Shelf.'); });
   }
   function importShelf(code) {
     try {
@@ -1305,6 +1606,7 @@
         if (ph[2]) { var la = load(AKEY, {}), pa = records(ph[2]); Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); writes.push([AKEY, JSON.stringify(la)]); }
         if (ph[3] && pickLibrary(load(Library.KEY, null), ph[3])) writes.push([Library.KEY, r[3]]);
         if (ph[4]) { var lc = load(Courses.KEY, null); if (!lc || (ph[4].saved || 0) > (lc.saved || 0)) writes.push([Courses.KEY, r[4]]); }
+        if (ph[5]) { var lm = load(Marks.KEY, null); if (!lm || (ph[5].saved || 0) > (lm.saved || 0)) writes.push([Marks.KEY, r[5]]); }
         writes.forEach(function (w) { rawSet(w[0], w[1], false); });
         restored = true; restoreFailed = false;
       } catch (e) { restoreFailed = true; }
@@ -1329,15 +1631,13 @@
     // Keep the phone's copy complete even before anything changes
     // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
     if (Native.inApp && restored) PHONE_KEYS().forEach(function (k) { var v = rawGet(k); if (v) Native.prefSet(k, v); });
+    marks = Marks.create({ load: rawGet, save: function (k, v) { rawSet(k, v); } });
     if (restoreFailed) setTimeout(function () { toast("The phone's storage didn't answer, so changes aren't backed up to it yet. Tap the self-check to try again.", 'warn'); }, 800);
-    buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a');
+    buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a'); buildRates();
     initAudio();
-    if (Native.inApp) $('#toneBtn').hidden = false;
-    $('#pasteIntro').textContent = isPhone ? 'Tap the box, then tap Paste. A YouTube video plays straight away; a channel link opens Add channel.' : 'Press ⌘V. A YouTube video plays straight away; a channel link opens Add channel.';
-    if (!isPhone) $('#pasteBtn').querySelector('small').textContent = 'or press ⌘V';
     var m = location.hash.match(/^#shelf=([A-Za-z0-9_-]+)/);
     if (m) { importShelf(m[1]); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
-    renderHome(); renderAudio();
+    renderHome(); renderAudio(); renderTabs();
     loadYT();
     updateDot();
     if (Native.inApp) Native.checkYT().then(updateDot); // the corner turns green as soon as the sign-in is known
@@ -1348,7 +1648,7 @@
     refreshAll(false);
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture,
-      get current() { return current; }, get vTimer() { return vTimer; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);

@@ -117,6 +117,33 @@ function setup(store, opts = {}) {
   c.restore(peds, undo);
   assert.strictEqual(c.progress(peds).done, 91, 'undo puts it back');
   assert.deepStrictEqual(c.findNumber(peds, 1203), [102]);
+  // Exam clock and pace (the fake clock is 4 Oct 2026, 16:30 UTC; the exam 30 Nov)
+  {
+    const r = setup({}, {}); await r.c.seed(); await r.c.loadAll(true);
+    const cc = r.c, a = cc.items(peds);
+    assert.strictEqual(cc.daysLeft(), 57, '57 days to Step 2 CK on 4 Oct');
+    let pc = cc.pace(peds);
+    assert.strictEqual(pc.left, 39); assert.strictEqual(pc.rate7, 0); assert.strictEqual(pc.finishBy, 0, 'no finish date without ticks this week');
+    assert.strictEqual(Courses.perDay(pc.perDay), '1 a day');
+    // Ticked one each on three days: rate 3/7, today counts one, Set place doesn't count
+    cc.tick(peds, a[91].id, true); r.tick(-864e5); cc.tick(peds, a[92].id, true); r.tick(-864e5); cc.tick(peds, a[93].id, true); r.tick(2 * 864e5);
+    cc.tickUpTo(peds, 110);
+    pc = cc.pace(peds);
+    assert.ok(Math.abs(pc.rate7 - 3 / 7) < 1e-9, 'rate from the last seven days: ' + pc.rate7);
+    assert.strictEqual(pc.left, 19);
+    assert.strictEqual(new Date(pc.finishBy).getDate(), new Date(Date.parse('2026-10-04T12:00:00Z') + 45 * 864e5).getDate(), 'finishes in ceil(19 / (3/7)) = 45 days');
+    const td = cc.today();
+    assert.strictEqual(td.n, 1, 'today: one ticked by hand'); assert.ok(td.secs > 500, 'today has its minutes');
+    assert.deepStrictEqual(td.week, [0, 0, 0, 0, 1, 1, 1], 'last seven days, today last');
+    assert.strictEqual(td.weekN, 3);
+    assert.strictEqual(td.left, 19 + 150 + 80 + 40, 'all courses left');
+    // Unticking takes it off the tally
+    cc.tick(peds, a[91].id, false); assert.strictEqual(cc.today().n, 0);
+    // Exam day and after: no divide by zero
+    r.tick(60 * 864e5); assert.strictEqual(cc.daysLeft(), 0); assert.ok(isFinite(cc.pace(peds).perDay));
+    assert.strictEqual(Courses.perDay(269 / 57), '4.8 a day'); assert.strictEqual(Courses.perDay(0.3), '1 every 3 days'); assert.strictEqual(Courses.perDay(0), '');
+  }
+
   assert.strictEqual(c.where(arr[5].id).course.name, 'Paeds');
   assert.strictEqual(c.where(arr[5].id).i, 5);
 
