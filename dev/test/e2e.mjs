@@ -1,4 +1,4 @@
-// End-to-end run of the v2 "done" test (done-test.md) in Chromium, with the iPhone shell and the internet faked.
+// End-to-end run of the v3 "done" test (done-test.md) in Chromium, with the iPhone shell and the internet faked.
 // Usage: node dev/test/e2e.mjs
 import { chromium } from 'playwright';
 import http from 'http';
@@ -23,6 +23,8 @@ const phone = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch:
 async function appPage({ prefs = {}, clip = '', fakes = {}, ctxOpts = {}, shell = {} } = {}) {
   const ctx = await browser.newContext({ ...phone, ...ctxOpts });
   await installFakes(ctx, fakes);
+  // Shelf orders Home by the time of day; tests run at mid-afternoon unless they say otherwise
+  await ctx.addInitScript('window.__hour = ' + (shell.hour ?? 14.13) + ';');
   await ctx.addInitScript(CAP(prefs, clip, shell));
   const p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(e.message));
@@ -61,10 +63,10 @@ ok(await p.locator('.band.c1 .nw').count() === 1, '2 opening the channel clears 
 const savedPrefs = await shelf(p, () => window.__prefs);
 ok(!!savedPrefs['shelf.v2.library'], '2 channel list saved on the phone');
 
-console.log('\n== 3 Paste');
-await p.evaluate(() => { window.__clip = 'https://youtu.be/dQw4w9WgXcQ?si=xyz'; });
-await p.locator('#pasteBtn').click(); await p.waitForTimeout(500);
-ok(await p.locator('#vsheet.open').count() === 1 && await shelf(p, () => window.__shelf.current) === 'dQw4w9WgXcQ', '3 Paste plays the copied video');
+console.log('\n== 3 A link in Search');
+await p.locator('#searchBtn').click();
+await p.fill('#sq', 'https://youtu.be/dQw4w9WgXcQ?si=xyz'); await p.press('#sq', 'Enter'); await p.waitForTimeout(500);
+ok(await p.locator('#vsheet.open').count() === 1 && await shelf(p, () => window.__shelf.current) === 'dQw4w9WgXcQ', '3 a YouTube link typed or pasted into Search plays');
 ok(await shelf(p, () => window.__fake.getPlayerState()) === 1, '3 it is playing');
 
 console.log('\n== 4 Resume');
@@ -84,20 +86,20 @@ ok(Math.abs(start - (t - 3)) < 2, '4 one tap carries on from the saved spot (sta
 
 console.log('\n== 5 Sleep timer (video)');
 await p.locator('#vSeg [data-m="15"]').click();
-ok(/14:5\d|15:00/.test(await p.locator('#vCd').textContent()) && (await p.locator('#vStops').textContent()).startsWith('stops at'), '5 countdown shows: ' + (await p.locator('#vCd').textContent()).replace('remaining', ''));
+ok(/14:5\d|15:00/.test(await p.locator('#vStops').textContent()) && (await p.locator('#vStops').textContent()).includes('stops'), '5 countdown shows: ' + await p.locator('#vStops').textContent());
 await p.evaluate(() => { window.__shelf.vTimer.endsAt = Date.now() + 1200; });
 await p.waitForTimeout(2600);
 ok(await shelf(p, () => window.__fake.getPlayerState()) === 2, '5 video pauses when the timer hits zero');
-ok((await p.locator('#vCd').textContent()).includes('Paused by the sleep timer'), '5 says it was the sleep timer');
+ok((await p.locator('#vStops').textContent()).includes('Paused by the sleep timer'), '5 says it was the sleep timer');
 const b15 = p.locator('#vSeg [data-m="15"]').first(); const bb = await b15.boundingBox();
 await p.mouse.move(bb.x + 10, bb.y + 10); await p.mouse.down(); await p.waitForTimeout(800); await p.mouse.up(); await p.waitForTimeout(100);
-ok(await shelf(p, () => window.__shelf.vTimer && window.__shelf.vTimer.minutes) === 1 && /[01]:\d\d/.test(await p.locator('#vCd').textContent()), '5 press and hold sets a 1-minute test timer');
+ok(await shelf(p, () => window.__shelf.vTimer && window.__shelf.vTimer.minutes) === 1 && /[01]:\d\d/.test(await p.locator('#vStops').textContent()), '5 press and hold sets a 1-minute test timer');
 await p.locator('#vSeg [data-m="30"]').click(); await p.locator('#vSeg [data-m="30"]').click();
-ok((await p.locator('#vCd').textContent()).startsWith('Off'), '5 tapping the chosen number again turns the timer off');
+ok((await p.locator('#vStops').textContent()).startsWith('Off'), '5 tapping the chosen number again turns the timer off');
 // guards from v1: video swap and pre-roll ads must not overwrite a spot
-await p.evaluate(() => { window.__lag = true; window.__clip = 'https://youtu.be/swapswapswa'; });
+await p.evaluate(() => { window.__lag = true; });
 await p.locator('[data-act="close-video"]').click();
-await p.locator('#pasteBtn').click(); await p.waitForTimeout(100);
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/swapswapswa')); await p.waitForTimeout(100);
 await shelf(p, () => window.__shelf.capture(true));
 ok((await shelf(p, () => window.__shelf.videos.swapswapswa.t)) < 5, 'swap: the new video keeps its own spot');
 await p.waitForTimeout(600); await p.evaluate(() => { window.__lag = false; window.__ad = true; });
@@ -171,7 +173,7 @@ console.log('\n== Player for keyboards and VoiceOver');
 await settle(p);
 await p.focus('#statusBtn');
 await shelf(p, () => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(600);
-ok(await p.evaluate(() => ['#home', 'nav.foot'].every((q) => document.querySelector(q).inert) && !document.querySelector('#vsheet').inert), 'a11y: the page behind the player is inert');
+ok(await p.evaluate(() => ['#home', 'nav.tabs'].every((q) => document.querySelector(q).inert) && !document.querySelector('#vsheet').inert), 'a11y: the page behind the player is inert');
 let escaped = 0;
 for (let i = 0; i < 14; i++) { await p.keyboard.press('Tab'); if (await p.evaluate(() => { const a = document.activeElement; return a && a !== document.body && !document.querySelector('#vsheet').contains(a); })) escaped++; }
 ok(escaped === 0, 'a11y: Tab stays inside the player (' + escaped + ' escapes)');
@@ -196,6 +198,7 @@ await settle(p);
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 ok(/Not signed in to YouTube, so videos play with ads/.test(await p.locator('#checkList').textContent()) && await p.locator('#statusDot.bad').count() === 1, 'YT signed out is explained and the corner needs a look');
 ok(await p.locator('#ytBtn').isVisible() && (await p.locator('#ytBtn').textContent()) === 'Sign in to YouTube', 'YT offers Sign in to YouTube');
+ok(/One thing to fix/.test(await p.locator('#checkVerdict').textContent()) && await p.locator('#checkProblems .prob:not(.wait)').count() === 1 && /1 problem/.test(await p.locator('#statusText').textContent()), 'verdict: one thing to fix, shown on its own with its button');
 const reloaded = p.waitForEvent('load', { timeout: 5000 }).then(() => true, () => false);
 await p.locator('#ytBtn').click();
 ok(await reloaded, 'YT after the sheet closes signed in, the page reloads so the player sees the account');
@@ -204,6 +207,7 @@ await p.waitForFunction(() => document.querySelector('#statusDot').classList.con
 ok(await shelf(p, () => window.__ytCalls.length) === 0 && await p.locator('#statusDot.good').count() === 1, 'YT fresh page is all good');
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 ok(/Signed in to YouTube.*Allow Cross-Website Tracking/.test(await p.locator('#checkList').textContent()), 'YT signed in, and says what else Premium needs');
+ok(/All good/.test(await p.locator('#checkVerdict').textContent()) && await p.locator('#checkProblems .prob:not(.wait)').count() === 0, 'verdict: All good, nothing listed to fix');
 await p.locator('#trackBtn').click(); await p.waitForTimeout(100);
 ok(await shelf(p, () => window.__ytCalls.includes('openSettings')), 'YT the settings button opens Shelf\'s iPhone settings');
 await p.locator('#ytBtn').click(); await p.waitForTimeout(200);
@@ -328,12 +332,16 @@ const cinfo = await shelf(p, () => window.__shelf.courses.list().map((c) => { co
 ok(cinfo.join(' ') === 'Paeds:91/130:go OBGYN:60/60:done Ophthal:12/12:done Internal Med:0/150:new Pharm:0/80:new Family Med:0/40:new', 'C six playlists found and ticked from Mo\'s note: ' + cinfo.join(' '));
 ok(await shelf(p, () => window.__httpCalls.some((c) => c.method === 'POST' && /youtubei\/v1\/browse/.test(c.url))), 'C long playlists load past the first 100 (native POST)');
 ok(await shelf(p, () => { const c = window.__shelf.courses, ob = c.list()[1], pid = Object.keys(ob.pins)[0]; return c.items(ob.id).find((x) => x.id === pid).n; }) === 1607, 'C OBGYN 1607 carries the ‼ pin');
-ok(await p.locator('.band.c1 .courses .course').count() === 1 && /1 on the go/.test(await p.locator('.band.c1 .chd').textContent()), 'C Medicine band shows only the course on the go');
-ok(/91\/130/.test(await p.locator('.band.c1 .course .cn').textContent()) && /Next · 1115/.test(await p.locator('.band.c1 .course .cx').textContent()), 'C Paeds row: 91/130, next is 1115');
-await p.locator('.band.c1 .course .cr').click(); await p.waitForTimeout(150);
+ok(await p.locator('#next').isVisible() && /Paeds · 92 of 130/.test(await p.locator('#nextK').textContent()) && /1115/.test(await p.locator('#nextT').textContent()), 'C Home\'s Up next: ' + await p.locator('#nextK').textContent() + ' · ' + await p.locator('#nextT').textContent());
+const msub = await p.locator('.band.c1 .sub').textContent();
+ok(/\d+ days to Step 2 CK/.test(msub) && /Paeds 39 left/.test(msub), 'C Medicine says days to the exam and what is left: ' + msub);
+await p.locator('#coursesBtn').click(); await p.waitForTimeout(150);
+ok(await p.locator('#coursesBtn[aria-current="page"]').count() === 1 && await p.locator('#todayBtn[aria-current]').count() === 0, 'tabs: Courses is the current tab');
+ok(await p.locator('#page .course').count() === 6, 'C Courses page lists all six');
+await p.locator('#page .course .cr').first().click(); await p.waitForTimeout(150);
 ok(await p.locator('.course.open .epr').count() === 6 && (await p.locator('.course.open .epr.n .no').textContent()).includes('1115'), 'C expands to a short window around where you are (' + await p.locator('.course.open .epr').count() + ' rows)');
 await p.locator('.course.open .epr.n .tk').click(); await p.waitForTimeout(150);
-ok(/92\/130/.test(await p.locator('.band.c1 .course .cn').textContent()), 'C tapping a tick ticks it');
+ok(/92\/130/.test(await p.locator('.course.open .cn').textContent()), 'C tapping a tick ticks it');
 await p.locator('.course.open [data-act="course-later"]').click(); await p.waitForTimeout(100);
 ok(await p.locator('.course.open .epr').count() === 16, 'C "more" reveals 10 more, not the whole list');
 // hold a later tick: everything above it is ticked, with Undo
@@ -348,33 +356,36 @@ await p.locator('.course.open [data-act="course-place"]').click(); await p.waitF
 await p.fill('#pl-PLpeds0000000000', '1203'); await p.press('#pl-PLpeds0000000000', 'Enter'); await p.waitForTimeout(150);
 ok(await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done) === 103 && /1203 is 103 of 130. Ticked everything up to it/.test(await p.locator('#toast').textContent()), 'C Set place 1203 ticks down to it in playlist order');
 // play next from the row, finish it, Next up
-await p.locator('.band.c1 .course .cgo').click(); await p.waitForTimeout(500);
-ok(/PAEDS · 104 OF 130/.test(await p.locator('#vCh').textContent()), 'C player says which course and where: ' + await p.locator('#vCh').textContent());
+await p.locator('.course.open .cgo').click(); await p.waitForTimeout(500);
+ok(/PAEDS · 104 OF 130/i.test(await p.locator('#vCh').textContent()), 'C player says which course and where: ' + await p.locator('#vCh').textContent());
 ok(await p.locator('#vCourse').isVisible(), 'C player shows the course ruler');
+ok(await p.locator('#vNextBtn').isVisible() && /Next: /.test(await p.locator('#vNextBtn').textContent()), 'C player offers the next one beside Mark: ' + await p.locator('#vNextBtn').textContent());
 const firstId = await shelf(p, () => window.__shelf.current);
 await p.evaluate(() => window.__fake.seekTo(600)); await p.waitForTimeout(300);
-ok(await p.locator('#vNext').isVisible() && /Next up/i.test(await p.locator('#vNext').textContent()) && await shelf(p, () => window.__shelf.courses.isDone('PLpeds0000000000', window.__shelf.current)), 'C finishing ticks it and offers the next one');
+ok(await p.locator('#vNext').isVisible() && /Next up/i.test(await p.locator('#vNext').textContent()) && /Plays in/.test(await p.locator('#vNext').textContent()) && await shelf(p, () => window.__shelf.courses.isDone('PLpeds0000000000', window.__shelf.current)), 'C finishing ticks it and counts down to the next one');
 await p.locator('#vNext [data-act="ep-play"]').click(); await p.waitForTimeout(400);
-ok(await shelf(p, () => window.__shelf.current) !== firstId && /105 OF 130/.test(await p.locator('#vCh').textContent()), 'C Play next plays the next episode');
+ok(await shelf(p, () => window.__shelf.current) !== firstId && /105 OF 130/i.test(await p.locator('#vCh').textContent()), 'C Play next plays the next episode');
 await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(200);
-// Courses page and adding one
-await p.locator('.band.c1 .chd').click(); await p.waitForTimeout(150);
-ok((await p.locator('#page .sub-h').allTextContents()).map((x) => x.replace(/\d+/g, '').trim()).join(',') === 'On the go,Not started,Done', 'C Courses page groups: on the go, not started, done');
+ok((await p.locator('#page .subh').allTextContents()).map((x) => x.replace(/\d+/g, '').trim()).join(',') === 'On the go,Not started,Done', 'C Courses page groups: on the go, not started, done');
+const days = await shelf(p, () => window.__shelf.courses.daysLeft());
+const ex = await p.locator('#page .exam').textContent();
+ok(ex.includes(String(days)) && /Today 2/.test(ex), 'C exam clock: ' + days + ' days, today 2 ticked (' + ex.replace(/\s+/g, ' ').slice(0, 90) + ')');
 await p.locator('#page .top [data-act="add-course"]').click(); await p.waitForTimeout(500);
 await p.fill('#courseInput', 'surg'); await p.waitForTimeout(150);
 ok(await p.locator('#coursePicks [data-pl]').count() === 1, 'C typing finds Mehlman\'s Surgery playlist');
 await p.locator('#coursePicks [data-pl]').click(); await p.locator('#courseGo').click(); await p.waitForTimeout(600);
 ok(/Added Surgery · 25 videos/.test(await p.locator('#courseMsg').textContent()), 'C added: ' + await p.locator('#courseMsg').textContent());
 await p.waitForTimeout(500);
-await p.evaluate(() => { window.__clip = 'https://www.youtube.com/playlist?list=PLs1pharm0000000'; });
-await p.locator('#pasteBtn').click(); await p.waitForTimeout(300);
-ok(await p.locator('#courseDlg[open]').count() === 1 && (await p.inputValue('#courseInput')).includes('PLs1pharm'), 'C pasting a playlist link opens Add course');
 await p.keyboard.press('Escape');
-await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
-// Watched the newest Internal Med video first (the last in its playlist): Home still draws, next is the first gap
+await p.locator('#searchBtn').click(); await p.fill('#sq', 'https://www.youtube.com/playlist?list=PLs1pharm0000000'); await p.press('#sq', 'Enter'); await p.waitForTimeout(300);
+ok(await p.locator('#courseDlg[open]').count() === 1 && (await p.inputValue('#courseInput')).includes('PLs1pharm'), 'C a playlist link in Search opens Add course');
+await p.keyboard.press('Escape');
+// Watched the newest Internal Med video first (the last in its playlist): still draws, next is the first gap
 await shelf(p, () => { const c = window.__shelf.courses, it = c.items('PLim000000000000'); c.tick('PLim000000000000', it[it.length - 1].id, true); });
-await p.locator('.band.c2 .hd').click(); await p.waitForTimeout(150); await p.locator('[data-act="back"]').click(); await p.waitForTimeout(200);
-ok(await p.locator('.band.c1 .course').count() === 2 && /Next · 100 /.test(await p.locator('.band.c1 .course', { hasText: 'Internal Med' }).locator('.cx').textContent()), 'C last video ticked first: Home still draws, next is the first one still open');
+await p.locator('#coursesBtn').click(); await p.waitForTimeout(200);
+ok(/Next · 100 /.test((await p.locator('#page .course', { hasText: 'Internal Med' }).locator('.cx').allTextContents()).join(' ')), 'C last video ticked first: next is the first one still open');
+await p.locator('#todayBtn').click(); await p.waitForTimeout(150);
+ok(await p.locator('#todayBtn[aria-current="page"]').count() === 1 && await p.locator('#home').isVisible(), 'tabs: Today goes back to Home');
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 ok(/Tracking 7 courses/.test(await p.locator('#checkList').textContent()), 'C self-check counts the courses');
 await p.keyboard.press('Escape');
@@ -397,13 +408,72 @@ await ctx.close();
 // iPhone SE: the open course fits
 ({ ctx, p } = await appPage({ ctxOpts: { viewport: { width: 375, height: 667 } } }));
 await settle(p);
-await p.locator('.band.c1 .course .cr').click(); await p.waitForTimeout(150);
+await p.locator('#coursesBtn').click(); await p.locator('#page .course .cr').first().click(); await p.waitForTimeout(150);
 ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'SE: open course has no sideways scroll');
+await ctx.close();
+
+console.log('\n== Player: swipe, speed per channel, Mark');
+({ ctx, p } = await appPage({ ctxOpts: { permissions: ['clipboard-read', 'clipboard-write'] } }));
+await settle(p);
+const playFrom = async (sec, chan, title) => {
+  await p.locator('#todayBtn').click(); await p.waitForTimeout(100);
+  await p.locator('.band', { hasText: sec }).locator('.hd').first().click();
+  await p.locator('#page .chrow', { hasText: chan }).click();
+  await p.locator('#page .item', { hasText: title }).first().click(); await p.waitForTimeout(700);
+};
+await playFrom('Medicine', 'Mehlman Medical', 'Renal');
+// swipe down on the top bar: a short pull springs back, a long one closes
+const drag = async (dist) => { const bx = await p.locator('#vsheet .sh-top').boundingBox(); const x = bx.x + bx.width / 2, y = bx.y + bx.height / 2;
+  await p.mouse.move(x, y); await p.mouse.down(); for (let i = 1; i <= dist / 10; i++) { await p.mouse.move(x, y + i * 10); await p.waitForTimeout(30); } await p.mouse.up(); await p.waitForTimeout(400); };
+await drag(60);
+ok(await p.locator('#vsheet.open').count() === 1, 'swipe: a short pull springs back');
+await drag(160);
+ok(await p.locator('#vsheet.open').count() === 0, 'swipe: pulling the player down closes it');
+await p.locator('#page .item', { hasText: 'Renal' }).first().click(); await p.waitForTimeout(700);
+await p.locator('#vRate [data-r="1.5"]').click(); await p.waitForTimeout(200);
+ok(await shelf(p, () => window.__fake.getPlaybackRate()) === 1.5 && /Mehlman Medical remembers 1.5×/.test(await p.locator('#vRateLab').textContent()), 'speed: ' + await p.locator('#vRateLab').textContent());
+await p.evaluate(() => window.__fake.advance(150)); await p.waitForTimeout(1300);
+await p.locator('#vMark').click(); await p.waitForTimeout(200);
+ok(await shelf(p, () => window.__shelf.marks.count) === 1 && /Marked 2:\d\d/.test(await p.locator('#toast').textContent()), 'mark: one tap marks the spot: ' + await p.locator('#toast').textContent());
+await p.locator('[data-act="close-video"]').first().click(); await p.waitForTimeout(200);
+await p.locator('#page .item', { hasText: 'Endocrine' }).first().click(); await p.waitForTimeout(3200);
+ok(await shelf(p, () => window.__fake.getPlaybackRate()) === 1.5, 'speed: another Mehlman video starts at 1.5×');
+await p.locator('[data-act="close-video"]').first().click();
+await playFrom('Entertainment', 'Breaking Points', 'Fed Cuts');
+await p.waitForTimeout(2600);
+ok(await shelf(p, () => window.__fake.getPlaybackRate()) === 1 && /plays at 1×/.test(await p.locator('#vRateLab').textContent()), 'speed: Breaking Points stays at 1×');
+await p.locator('[data-act="close-video"]').first().click();
+await p.reload(); await settle(p);
+await playFrom('Medicine', 'Mehlman Medical', 'Psychiatry');
+await p.waitForTimeout(2600);
+ok(await shelf(p, () => window.__fake.getPlaybackRate()) === 1.5, 'speed: remembered after closing the app');
+await p.locator('[data-act="close-video"]').first().click();
+await p.locator('#todayBtn').click(); await p.locator('.band.c1 .hd').click();
+await p.locator('#page .top [data-act="open-marks"]').click(); await p.waitForTimeout(150);
+ok(await p.locator('#page .mrow').count() === 1 && /Renal/.test(await p.locator('#page .mrow').textContent()), 'mark: the Marks page lists it');
+await p.locator('[data-act="marks-copy"]').click(); await p.waitForTimeout(300);
+const anki = (await shelf(p, () => window.__clip)) || await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
+ok(/Renal.*@ 2:\d\d.*\t.*youtube.*t=\d+s/.test(anki), 'mark: Copy for Anki gives tab-separated cards: ' + JSON.stringify(anki).slice(0, 90));
+await ctx.close();
+
+console.log('\n== Night (23:12)');
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 23.2 } }));
+await settle(p);
+ok((await p.locator('.band .hd h2').first().textContent()) === 'Sleep' && /night/.test(await p.locator('#dayName').textContent()), 'night: Sleep comes first');
+await p.locator('.band.c3 .hd').click();
+await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTimeout(1200);
+const tmr = await p.evaluate(() => { const t = window.__shelf.engine.state().timer; return t && Math.round((t.endsAt - Date.now()) / 60000); });
+ok(tmr === 45 && /45-minute sleep timer on/.test(await p.locator('#toast').textContent()), 'night: a 45-minute sleep timer starts by itself (' + tmr + ' min)');
+await p.evaluate(() => { document.querySelector('#audio').currentTime = 60; }); await p.waitForTimeout(600);
+await p.evaluate(() => { document.querySelector('#audio').pause(); window.__shelf.engine.capture(true); }); await p.waitForTimeout(200);
+await p.locator('[data-act="close-night"]').click(); await p.locator('#todayBtn').click(); await p.waitForTimeout(300);
+ok((await p.locator('#contK').textContent()).startsWith('Bedtime') && /lights out/.test(await p.locator('#contMeta').textContent()), 'night: the Bedtime card offers the podcast: ' + await p.locator('#contMeta').textContent());
+ok(!(await p.locator('#next').isVisible()), 'night: no Up next lecture at bedtime');
 await ctx.close();
 
 console.log('\n== Mac browser (no app)');
 const mctx = await browser.newContext({ viewport: { width: 1280, height: 820 }, permissions: ['clipboard-read', 'clipboard-write'] });
-await installFakes(mctx);
+await installFakes(mctx); await mctx.addInitScript('window.__hour = 14.13;');
 const m = await mctx.newPage(); m.on('pageerror', (e) => errors.push('mac: ' + e.message));
 await m.goto(URL0); await m.waitForTimeout(500);
 ok(await m.locator('#webNote').isVisible(), 'mac: says channels load in the iPhone app');
@@ -420,9 +490,9 @@ ok(/#shelf=/.test(link), 'mac: shelf link copied');
 await m.keyboard.press('Escape');
 await m.screenshot({ path: SHOTS + '/e2e-mac.png' });
 // the link carries the spot into the phone app
-({ ctx, p } = await appPage({ clip: link }));
+({ ctx, p } = await appPage());
 await p.waitForTimeout(800);
-await p.locator('#pasteBtn').click(); await p.waitForTimeout(300);
+await p.locator('#searchBtn').click(); await p.fill('#sq', link); await p.press('#sq', 'Enter'); await p.waitForTimeout(300);
 ok(await shelf(p, () => !!window.__shelf.videos['9bZkp7q19f0']), 'phone: pasting the shelf link brings the spots over');
 await ctx.close();
 // opened as a file

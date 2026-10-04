@@ -512,7 +512,7 @@
     $('#vCh').textContent = courseTag(v.id) || v.author || '';
     $('#vNext').hidden = true; clearTimeout(nextTimer); renderPlayerCourse(v.id); renderNextBtn(v.id);
     $('#ytLink').href = ytLink(v);
-    wantRate = rateFor(v); renderRateUI(); renderMarkBtn(Core.resumeAt(v));
+    wantRate = rateFor(v); renderRateUI(v); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
     renderTimerUI('v');
@@ -709,10 +709,10 @@
   function setRateFor(id, r) {
     var v = videos[id]; if (!v) return;
     prefs.rates = prefs.rates || {}; prefs.rates['v:' + chanKey(v)] = r; savePrefs();
-    wantRate = r; renderRateUI();
+    wantRate = r; renderRateUI(v);
   }
-  function renderRateUI() {
-    var v = current && videos[current];
+  function renderRateUI(v) {
+    v = v || current && videos[current];
     Array.prototype.forEach.call(document.querySelectorAll('#vRate button'), function (b) { b.setAttribute('aria-pressed', String(+b.getAttribute('data-r') === wantRate)); });
     $('#vRateLab').textContent = !v ? '' : wantRate === 1 ? chanName(v) + ' plays at 1×' : chanName(v) + ' remembers ' + wantRate + '×';
   }
@@ -767,6 +767,8 @@
       if (dy > 120 || fast) close();
     }
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    // A mouse drag on the bar must not turn into a text or link drag (that cancels the swipe)
+    el.addEventListener('dragstart', function (e) { if (e.target.closest && e.target.closest(handles)) e.preventDefault(); });
   }
   document.addEventListener('click', function (e) { if (Date.now() < swallowClick) { e.stopPropagation(); e.preventDefault(); } }, true);
 

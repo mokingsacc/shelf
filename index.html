@@ -308,6 +308,7 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 @media (prefers-reduced-motion:reduce){.sheet,.sheet.open{transition:none}}
 .grab{width:36px;height:5px;border-radius:3px;background:var(--pl-dim);margin:calc(env(safe-area-inset-top,0px) + 8px) auto 0;flex:none;touch-action:none}
 .grabzone{touch-action:none;flex:none}
+.grab,.sh-top,.dh{-webkit-user-select:none;user-select:none}
 .sh-top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px var(--g) 6px;min-height:52px;flex:none;touch-action:none}
 .x{width:var(--tap);height:var(--tap);display:flex;align-items:center;justify-content:center;border:2px solid currentColor;flex:none;color:inherit}
 .x svg{width:22px;height:22px}
@@ -2636,7 +2637,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
     $('#vCh').textContent = courseTag(v.id) || v.author || '';
     $('#vNext').hidden = true; clearTimeout(nextTimer); renderPlayerCourse(v.id); renderNextBtn(v.id);
     $('#ytLink').href = ytLink(v);
-    wantRate = rateFor(v); renderRateUI(); renderMarkBtn(Core.resumeAt(v));
+    wantRate = rateFor(v); renderRateUI(v); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
     renderTimerUI('v');
@@ -2833,10 +2834,10 @@ if (typeof module !== 'undefined') module.exports = Marks;
   function setRateFor(id, r) {
     var v = videos[id]; if (!v) return;
     prefs.rates = prefs.rates || {}; prefs.rates['v:' + chanKey(v)] = r; savePrefs();
-    wantRate = r; renderRateUI();
+    wantRate = r; renderRateUI(v);
   }
-  function renderRateUI() {
-    var v = current && videos[current];
+  function renderRateUI(v) {
+    v = v || current && videos[current];
     Array.prototype.forEach.call(document.querySelectorAll('#vRate button'), function (b) { b.setAttribute('aria-pressed', String(+b.getAttribute('data-r') === wantRate)); });
     $('#vRateLab').textContent = !v ? '' : wantRate === 1 ? chanName(v) + ' plays at 1×' : chanName(v) + ' remembers ' + wantRate + '×';
   }
@@ -2891,6 +2892,8 @@ if (typeof module !== 'undefined') module.exports = Marks;
       if (dy > 120 || fast) close();
     }
     el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    // A mouse drag on the bar must not turn into a text or link drag (that cancels the swipe)
+    el.addEventListener('dragstart', function (e) { if (e.target.closest && e.target.closest(handles)) e.preventDefault(); });
   }
   document.addEventListener('click', function (e) { if (Date.now() < swallowClick) { e.stopPropagation(); e.preventDefault(); } }, true);
 
