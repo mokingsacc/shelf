@@ -1,0 +1,2756 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Shelf">
+<meta name="theme-color" content="#FBFBF9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17181B" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232B4C9B'/%3E%3Cpath d='M26 20l18 12-18 12z' fill='%23FBFBF9'/%3E%3Crect x='12' y='50' width='40' height='3' rx='1.5' fill='%23FBFBF9' opacity='.45'/%3E%3Crect x='12' y='50' width='24' height='3' rx='1.5' fill='%23FBFBF9'/%3E%3C/svg%3E">
+<title>Shelf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Quiet Shelf: paper, one serif, one ink blue. Desktop: player left, list right. Phone: one column. */
+:root {
+  --bg: #FBFBF9; --surface: #FFFFFF; --fg: #1C1D1F; --muted: #6E7078; --line: #E6E6E2; --field: #F1F1ED;
+  --accent: #2B4C9B; --ok: #2E8B57; --wait: #B7791F; --bad: #C0392B;
+  --shadow: 0 1px 2px rgba(20,20,30,.06), 0 12px 32px -16px rgba(20,20,30,.18);
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Figtree", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+  --gutter: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #17181B; --surface: #1F2024; --fg: #ECECE8; --muted: #9A9BA3; --line: #2C2D33; --field: #23242A;
+    --accent: #8FA8E8; --ok: #5CC48A; --wait: #E3B341; --bad: #F07167;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -16px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #17181B; --surface: #1F2024; --fg: #ECECE8; --muted: #9A9BA3; --line: #2C2D33; --field: #23242A;
+  --accent: #8FA8E8; --ok: #5CC48A; --wait: #E3B341; --bad: #F07167;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -16px rgba(0,0,0,.6);
+}
+@media (min-width: 720px) { :root { --gutter: 44px; } }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-ui); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+  padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px)) max(var(--gutter), env(safe-area-inset-right, 0px));
+  padding-block: max(22px, env(safe-area-inset-top, 0px)) max(28px, env(safe-area-inset-bottom, 0px));
+  min-height: 100vh;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+img { max-width: 100%; }
+
+/* header */
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.brand { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 30px; letter-spacing: -0.01em; line-height: 1; }
+.brand em { color: var(--muted); font-style: italic; font-size: .82em; }
+.status { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 6px 4px; font-size: 13px; color: var(--muted); border-radius: 8px; }
+.status:hover { color: var(--fg); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+.dot.good { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.dot.wait { background: var(--wait); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wait) 18%, transparent); }
+.dot.bad { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 22%, transparent); }
+.dot.pulse { animation: pulse .7s ease-out; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+.status-text { white-space: nowrap; }
+
+/* paste field */
+.paste { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 8px 8px 20px; border-radius: 16px; background: var(--field); border: 1px dashed color-mix(in srgb, var(--fg) 22%, transparent); transition: border-color .2s ease-out, background-color .2s ease-out; }
+.paste:focus-within { border-style: solid; border-color: var(--accent); background: var(--surface); }
+.paste > svg { width: 20px; height: 20px; flex: none; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.paste input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: 17px; padding: 10px 0; outline: none; }
+.paste input::placeholder { color: var(--muted); opacity: 1; }
+.kbd { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.kbd kbd { font: 600 12px var(--font-ui); padding: 2px 7px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); color: var(--fg); }
+.add-btn { flex: none; border: 0; border-radius: 10px; padding: 11px 18px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 14px; transition: transform .18s ease-out; }
+.add-btn:active { transform: scale(.97); }
+
+/* main layout */
+.main { display: grid; gap: 28px; align-items: start; }
+@media (min-width: 980px) { .main { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 44px; } }
+
+/* hero / player */
+.hero { min-width: 0; }
+.screen { position: relative; aspect-ratio: 16 / 9; width: 100%; border-radius: 14px; overflow: hidden; background: #0E0F12; box-shadow: var(--shadow); }
+.screen iframe, .screen #player { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.poster { position: absolute; inset: 0; border: 0; padding: 0; background: #0E0F12; display: block; width: 100%; z-index: 2; }
+.poster img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease-out, filter .3s ease-out; }
+.poster::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,.4)); pointer-events: none; }
+.poster:hover img { transform: scale(1.015); filter: brightness(1.04); }
+.play-ic { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,.92); display: grid; place-items: center; z-index: 3; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); transition: transform .2s ease-out; }
+.play-ic::after { content: ""; border-left: 22px solid #1C1D1F; border-top: 13px solid transparent; border-bottom: 13px solid transparent; margin-left: 5px; }
+.poster:hover .play-ic { transform: translate(-50%, -50%) scale(1.06); }
+.chip { position: absolute; left: 16px; bottom: 14px; z-index: 3; color: #fff; font-size: 13px; font-weight: 500; background: rgba(0,0,0,.45); padding: 5px 10px; border-radius: 8px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.chip b, .meta b, .left b, .row-sub { font-variant-numeric: tabular-nums; }
+.hero > .bar { margin: 14px 2px 0; }
+.bar { display: block; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .22s ease-out; }
+.hero-title { font-family: var(--font-display); font-weight: 400; font-size: clamp(25px, 3.2vw, 32px); line-height: 1.1; margin: 16px 0 6px; letter-spacing: -0.01em; text-wrap: balance; overflow-wrap: anywhere; }
+.meta { margin: 0; color: var(--muted); font-size: 14px; }
+.meta b { color: var(--fg); font-weight: 500; }
+.hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 18px; }
+.resume { display: inline-flex; align-items: center; gap: 10px; border: 0; padding: 11px 18px 11px 15px; border-radius: 10px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; transition: transform .18s ease-out; }
+.resume:active { transform: scale(.97); }
+.resume i { border-left: 9px solid currentColor; border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
+.quiet { border: 0; background: none; padding: 8px 2px; color: var(--muted); font-size: 13.5px; text-decoration: none; }
+.quiet:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+.only-playing { display: none; }
+body.playing .only-playing { display: inline-flex; }
+body.playing .not-playing { display: none; }
+.player-error { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--bad) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.player-error[hidden] { display: none; }
+.player-error a { color: var(--accent); font-weight: 600; }
+
+/* empty and caught up */
+.empty { border: 1px dashed var(--line); border-radius: 14px; padding: 36px 28px; }
+.empty h2 { font-family: var(--font-display); font-weight: 400; font-size: 30px; line-height: 1.1; margin: 0 0 10px; }
+.empty p { margin: 0; color: var(--muted); max-width: 46ch; }
+.empty ol { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s; }
+.empty li { display: flex; gap: 12px; align-items: baseline; counter-increment: s; }
+.empty li::before { content: counter(s); font-family: var(--font-display); font-size: 20px; color: var(--accent); width: 14px; flex: none; }
+
+/* lists */
+.side { min-width: 0; display: flex; flex-direction: column; gap: 30px; }
+.side:empty { display: none; }
+.h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 6px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.h span { font-weight: 500; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+.list { list-style: none; margin: 0; padding: 0; }
+.row { position: relative; display: flex; align-items: center; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row.fresh { animation: slidein .32s ease-out; }
+@keyframes slidein { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.row-main { flex: 1; min-width: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 0; border: 0; background: none; text-align: left; border-radius: 8px; }
+.th { position: relative; width: 92px; aspect-ratio: 16 / 9; border-radius: 7px; overflow: hidden; background: var(--field); display: block; }
+.th img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease-out; }
+.row-main:hover .th img { transform: scale(1.04); }
+.row-text { min-width: 0; display: flex; flex-direction: column; }
+.row-title { font-weight: 500; font-size: 14.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-main:hover .row-title { color: var(--accent); }
+.row-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .bar { margin-top: 8px; height: 2px; }
+.left { font-size: 12.5px; color: var(--muted); white-space: nowrap; text-align: right; }
+.left b { display: block; color: var(--fg); font-weight: 600; font-size: 14px; }
+.ring { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--muted); display: grid; place-items: center; color: var(--muted); justify-self: end; }
+.ring svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.row-tools { display: flex; gap: 2px; margin-left: 6px; }
+.tool { width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--muted); display: grid; place-items: center; }
+.tool:hover { background: var(--field); color: var(--fg); }
+.tool svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+@media (hover: hover) and (pointer: fine) {
+  .row-tools { position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: var(--bg); padding-left: 8px; box-shadow: -12px 0 12px -4px var(--bg); opacity: 0; pointer-events: none; transition: opacity .15s ease-out; }
+  .row:hover .row-tools, .row:focus-within .row-tools { opacity: 1; pointer-events: auto; }
+}
+.done-list .row { opacity: .72; }
+.done-list .row:hover { opacity: 1; }
+.done-list .th img { filter: saturate(.35); }
+.done-list summary { cursor: pointer; list-style: none; border-radius: 6px; }
+.done-list summary::-webkit-details-marker { display: none; }
+.done-list summary .h { margin: 0; }
+.done-list summary .h::after { content: "Show"; margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.done-list details[open] summary .h::after { content: "Hide"; }
+.done-list details[open] summary { margin-bottom: 6px; }
+
+/* footer */
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+.foot-note { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.send { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-size: 13.5px; font-weight: 600; }
+.send svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.send:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.send:disabled { opacity: .45; cursor: default; }
+
+/* dialogs */
+dialog { border: 0; border-radius: 18px; padding: 26px 26px 20px; background: var(--surface); color: var(--fg); box-shadow: 0 30px 80px -20px rgba(0,0,0,.45); width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; }
+dialog::backdrop { background: rgba(15,16,20,.42); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+dialog h2 { font-family: var(--font-display); font-weight: 400; font-size: 28px; margin: 0 0 6px; line-height: 1.1; }
+dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.checks { list-style: none; margin: 14px 0 18px; padding: 0; display: grid; gap: 10px; }
+.checks li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; line-height: 1.4; }
+.checks .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; margin-top: -1px; }
+.checks .ok .ic { background: var(--ok); }
+.checks .wait .ic { background: var(--wait); }
+.checks .bad .ic { background: var(--bad); }
+.checks .bad { font-weight: 600; }
+.qr { display: grid; place-items: center; background: #fff; border-radius: 14px; padding: 12px; margin: 4px auto 16px; width: min(320px, 100%); border: 1px solid var(--line); }
+.qr svg { width: 100%; height: auto; display: block; }
+.qr-fail { color: #1C1D1F; font-size: 14px; margin: 8px; }
+.copy-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.copyrow { display: flex; gap: 8px; }
+.copyrow input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--field); border-radius: 10px; padding: 9px 12px; font-size: 13px; color: var(--muted); }
+.btn2 { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+.btn2:hover { border-color: var(--accent); color: var(--accent); }
+.dlg-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.dlg-actions .resume { padding: 10px 18px; }
+.tip { font-size: 13px; color: var(--muted); margin: 14px 0 0 !important; }
+
+/* toast */
+.toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 16px); opacity: 0; pointer-events: none; z-index: 10;
+  display: flex; align-items: center; gap: 14px; width: max-content; max-width: calc(100vw - 32px); padding: 11px 16px; border-radius: 12px; background: var(--fg); color: var(--bg); font-size: 14px; box-shadow: 0 16px 40px -12px rgba(0,0,0,.4); transition: opacity .2s ease-out, transform .2s ease-out; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.toast.warn { background: var(--bad); color: #fff; }
+.toast-act { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
+
+/* phone */
+@media (max-width: 719px) {
+  .brand { font-size: 26px; }
+  .paste { min-height: 56px; padding: 6px 6px 6px 16px; border-radius: 14px; }
+  .paste input { font-size: 16px; }
+  .kbd { display: none; }
+  .screen { border-radius: 12px; }
+  .play-ic { width: 56px; height: 56px; }
+  .play-ic::after { border-left-width: 16px; border-top-width: 10px; border-bottom-width: 10px; }
+  .row-main { grid-template-columns: 76px minmax(0, 1fr) auto; gap: 12px; padding: 11px 0; }
+  .th { width: 76px; }
+  .row-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 14px; }
+  .resume.not-playing { flex: 1 1 100%; justify-content: center; padding-block: 13px; }
+  .empty { padding: 26px 20px; }
+}
+@media (hover: none) { .kbd { display: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">Shelf <em id="count"></em></h1>
+    <button id="statusBtn" class="status" data-act="check" type="button"><span id="statusDot" class="dot wait"></span><span id="statusText" class="status-text">Getting ready</span></button>
+  </header>
+
+  <form id="addForm" class="paste" autocomplete="off">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg>
+    <label for="paste" class="sr">YouTube link</label>
+    <input id="paste" type="text" inputmode="url" placeholder="Paste a YouTube link" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go">
+    <span class="kbd" aria-hidden="true"><kbd>⌘</kbd><kbd>V</kbd> works anywhere</span>
+    <button id="addBtn" class="add-btn" type="submit">Paste</button>
+  </form>
+
+  <section id="empty" class="empty">
+    <h2>Your shelf is empty</h2>
+    <p>Put any YouTube video here and it will always pick up where you stopped.</p>
+    <ol>
+      <li>Copy a video's link on YouTube.</li>
+      <li>Come back here and press ⌘V, or tap Paste.</li>
+      <li>Watch. Close the tab whenever you like; your spot is saved every few seconds.</li>
+    </ol>
+    <p id="homeHint" class="tip" hidden>Already using Shelf in Safari? The Home Screen app keeps its own shelf. In Safari, tap Send to Mac, then Copy link, come back here and tap Paste.</p>
+  </section>
+
+  <div class="main">
+    <section id="hero" class="hero" hidden aria-label="Now playing">
+      <div class="screen">
+        <div id="player"></div>
+        <button id="poster" class="poster" type="button" data-act="play-featured">
+          <img id="posterImg" alt="" decoding="async">
+          <span class="play-ic" aria-hidden="true"></span>
+          <span id="chip" class="chip" hidden>Picks up at <b id="chipTime"></b></span>
+        </button>
+      </div>
+      <div id="playerError" class="player-error" role="alert" hidden></div>
+      <span class="bar"><i id="heroBar"></i></span>
+      <h2 id="heroTitle" class="hero-title"></h2>
+      <p id="heroMeta" class="meta"></p>
+      <div class="hero-actions">
+        <button class="resume not-playing" type="button" data-act="play-featured"><i aria-hidden="true"></i><span id="resumeText">Play</span></button>
+        <button class="quiet only-playing" type="button" data-act="close">Close player</button>
+        <button class="quiet" type="button" data-act="done-featured">Mark finished</button>
+        <a id="heroYouTube" class="quiet" href="https://www.youtube.com/" target="_blank" rel="noopener">Open on YouTube</a>
+      </div>
+    </section>
+
+    <section id="caught" class="empty" hidden>
+      <h2>All caught up</h2>
+      <p>Everything on your shelf is finished. Paste a new link to start another.</p>
+    </section>
+
+    <div class="side">
+      <section id="watchingWrap" hidden>
+        <h2 class="h">Continue watching <span id="watchingSum"></span></h2>
+        <ul id="watching" class="list"></ul>
+      </section>
+      <section id="finishedWrap" class="done-list" hidden>
+        <details>
+          <summary><h2 class="h">Finished · <span id="finishedCount"></span></h2></summary>
+          <ul id="finished" class="list"></ul>
+        </details>
+      </section>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span class="foot-note"><span>Saved in this browser</span><span id="lastSaved"></span></span>
+    <button id="sendBtn" class="send" type="button" data-act="send" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span id="sendLabel">Send to iPhone</span></button>
+  </footer>
+</div>
+
+<dialog id="checkDlg" aria-labelledby="checkH">
+  <h2 id="checkH">Self-check</h2>
+  <p>What's working, in plain words.</p>
+  <ul id="checkList" class="checks"></ul>
+  <div class="dlg-actions"><button class="resume" type="button" data-act="dismiss" autofocus>Close</button></div>
+</dialog>
+
+<dialog id="sendDlg" aria-labelledby="sendH">
+  <h2 id="sendH">Send to iPhone</h2>
+  <p id="sendIntro">Point your iPhone camera at the code and tap the link. Your shelf opens there with the same spots.</p>
+  <div id="qr" class="qr"></div>
+  <p id="qrNote" class="tip" hidden></p>
+  <label id="copyLabel" for="sendLink" class="copy-label">Or copy the link and send it to yourself</label>
+  <div class="copyrow"><input id="sendLink" readonly><button class="btn2" type="button" data-act="copy">Copy link</button></div>
+  <p id="sendTip" class="tip">Using Shelf from your iPhone Home Screen? Copy the link on the phone, open Shelf, and tap Paste.</p>
+  <div class="dlg-actions"><button class="resume" type="button" data-act="dismiss" autofocus>Done</button></div>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+var qrcode = function() {
+  //---------------------------------------------------------------------
+  // qrcode
+  //---------------------------------------------------------------------
+  /**
+   * qrcode
+   * @param typeNumber 1 to 40
+   * @param errorCorrectionLevel 'L','M','Q','H'
+   */
+  var qrcode = function(typeNumber, errorCorrectionLevel) {
+    var PAD0 = 0xEC;
+    var PAD1 = 0x11;
+    var _typeNumber = typeNumber;
+    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
+    var _modules = null;
+    var _moduleCount = 0;
+    var _dataCache = null;
+    var _dataList = [];
+    var _this = {};
+    var makeImpl = function(test, maskPattern) {
+      _moduleCount = _typeNumber * 4 + 17;
+      _modules = function(moduleCount) {
+        var modules = new Array(moduleCount);
+        for (var row = 0; row < moduleCount; row += 1) {
+          modules[row] = new Array(moduleCount);
+          for (var col = 0; col < moduleCount; col += 1) {
+            modules[row][col] = null;
+          }
+        }
+        return modules;
+      }(_moduleCount);
+      setupPositionProbePattern(0, 0);
+      setupPositionProbePattern(_moduleCount - 7, 0);
+      setupPositionProbePattern(0, _moduleCount - 7);
+      setupPositionAdjustPattern();
+      setupTimingPattern();
+      setupTypeInfo(test, maskPattern);
+      if (_typeNumber >= 7) {
+        setupTypeNumber(test);
+      }
+      if (_dataCache == null) {
+        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
+      }
+      mapData(_dataCache, maskPattern);
+    };
+    var setupPositionProbePattern = function(row, col) {
+      for (var r = -1; r <= 7; r += 1) {
+        if (row + r <= -1 || _moduleCount <= row + r) continue;
+        for (var c = -1; c <= 7; c += 1) {
+          if (col + c <= -1 || _moduleCount <= col + c) continue;
+          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
+              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
+              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+            _modules[row + r][col + c] = true;
+          } else {
+            _modules[row + r][col + c] = false;
+          }
+        }
+      }
+    };
+    var getBestMaskPattern = function() {
+      var minLostPoint = 0;
+      var pattern = 0;
+      for (var i = 0; i < 8; i += 1) {
+        makeImpl(true, i);
+        var lostPoint = QRUtil.getLostPoint(_this);
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+      return pattern;
+    };
+    var setupTimingPattern = function() {
+      for (var r = 8; r < _moduleCount - 8; r += 1) {
+        if (_modules[r][6] != null) {
+          continue;
+        }
+        _modules[r][6] = (r % 2 == 0);
+      }
+      for (var c = 8; c < _moduleCount - 8; c += 1) {
+        if (_modules[6][c] != null) {
+          continue;
+        }
+        _modules[6][c] = (c % 2 == 0);
+      }
+    };
+    var setupPositionAdjustPattern = function() {
+      var pos = QRUtil.getPatternPosition(_typeNumber);
+      for (var i = 0; i < pos.length; i += 1) {
+        for (var j = 0; j < pos.length; j += 1) {
+          var row = pos[i];
+          var col = pos[j];
+          if (_modules[row][col] != null) {
+            continue;
+          }
+          for (var r = -2; r <= 2; r += 1) {
+            for (var c = -2; c <= 2; c += 1) {
+              if (r == -2 || r == 2 || c == -2 || c == 2
+                  || (r == 0 && c == 0) ) {
+                _modules[row + r][col + c] = true;
+              } else {
+                _modules[row + r][col + c] = false;
+              }
+            }
+          }
+        }
+      }
+    };
+    var setupTypeNumber = function(test) {
+      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
+      }
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
+      }
+    };
+    var setupTypeInfo = function(test, maskPattern) {
+      var data = (_errorCorrectionLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+      // vertical
+      for (var i = 0; i < 15; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        if (i < 6) {
+          _modules[i][8] = mod;
+        } else if (i < 8) {
+          _modules[i + 1][8] = mod;
+        } else {
+          _modules[_moduleCount - 15 + i][8] = mod;
+        }
+      }
+      // horizontal
+      for (var i = 0; i < 15; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        if (i < 8) {
+          _modules[8][_moduleCount - i - 1] = mod;
+        } else if (i < 9) {
+          _modules[8][15 - i - 1 + 1] = mod;
+        } else {
+          _modules[8][15 - i - 1] = mod;
+        }
+      }
+      // fixed module
+      _modules[_moduleCount - 8][8] = (!test);
+    };
+    var mapData = function(data, maskPattern) {
+      var inc = -1;
+      var row = _moduleCount - 1;
+      var bitIndex = 7;
+      var byteIndex = 0;
+      var maskFunc = QRUtil.getMaskFunction(maskPattern);
+      for (var col = _moduleCount - 1; col > 0; col -= 2) {
+        if (col == 6) col -= 1;
+        while (true) {
+          for (var c = 0; c < 2; c += 1) {
+            if (_modules[row][col - c] == null) {
+              var dark = false;
+              if (byteIndex < data.length) {
+                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
+              }
+              var mask = maskFunc(row, col - c);
+              if (mask) {
+                dark = !dark;
+              }
+              _modules[row][col - c] = dark;
+              bitIndex -= 1;
+              if (bitIndex == -1) {
+                byteIndex += 1;
+                bitIndex = 7;
+              }
+            }
+          }
+          row += inc;
+          if (row < 0 || _moduleCount <= row) {
+            row -= inc;
+            inc = -inc;
+            break;
+          }
+        }
+      }
+    };
+    var createBytes = function(buffer, rsBlocks) {
+      var offset = 0;
+      var maxDcCount = 0;
+      var maxEcCount = 0;
+      var dcdata = new Array(rsBlocks.length);
+      var ecdata = new Array(rsBlocks.length);
+      for (var r = 0; r < rsBlocks.length; r += 1) {
+        var dcCount = rsBlocks[r].dataCount;
+        var ecCount = rsBlocks[r].totalCount - dcCount;
+        maxDcCount = Math.max(maxDcCount, dcCount);
+        maxEcCount = Math.max(maxEcCount, ecCount);
+        dcdata[r] = new Array(dcCount);
+        for (var i = 0; i < dcdata[r].length; i += 1) {
+          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
+        }
+        offset += dcCount;
+        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
+        var modPoly = rawPoly.mod(rsPoly);
+        ecdata[r] = new Array(rsPoly.getLength() - 1);
+        for (var i = 0; i < ecdata[r].length; i += 1) {
+          var modIndex = i + modPoly.getLength() - ecdata[r].length;
+          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
+        }
+      }
+      var totalCodeCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalCodeCount += rsBlocks[i].totalCount;
+      }
+      var data = new Array(totalCodeCount);
+      var index = 0;
+      for (var i = 0; i < maxDcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < dcdata[r].length) {
+            data[index] = dcdata[r][i];
+            index += 1;
+          }
+        }
+      }
+      for (var i = 0; i < maxEcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < ecdata[r].length) {
+            data[index] = ecdata[r][i];
+            index += 1;
+          }
+        }
+      }
+      return data;
+    };
+    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
+      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+      var buffer = qrBitBuffer();
+      for (var i = 0; i < dataList.length; i += 1) {
+        var data = dataList[i];
+        buffer.put(data.getMode(), 4);
+        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+        data.write(buffer);
+      }
+      // calc num max data.
+      var totalDataCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalDataCount += rsBlocks[i].dataCount;
+      }
+      if (buffer.getLengthInBits() > totalDataCount * 8) {
+        throw 'code length overflow. ('
+          + buffer.getLengthInBits()
+          + '>'
+          + totalDataCount * 8
+          + ')';
+      }
+      // end code
+      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+        buffer.put(0, 4);
+      }
+      // padding
+      while (buffer.getLengthInBits() % 8 != 0) {
+        buffer.putBit(false);
+      }
+      // padding
+      while (true) {
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD0, 8);
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD1, 8);
+      }
+      return createBytes(buffer, rsBlocks);
+    };
+    _this.addData = function(data, mode) {
+      mode = mode || 'Byte';
+      var newData = null;
+      switch(mode) {
+      case 'Numeric' :
+        newData = qrNumber(data);
+        break;
+      case 'Alphanumeric' :
+        newData = qrAlphaNum(data);
+        break;
+      case 'Byte' :
+        newData = qr8BitByte(data);
+        break;
+      case 'Kanji' :
+        newData = qrKanji(data);
+        break;
+      default :
+        throw 'mode:' + mode;
+      }
+      _dataList.push(newData);
+      _dataCache = null;
+    };
+    _this.isDark = function(row, col) {
+      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
+        throw row + ',' + col;
+      }
+      return _modules[row][col];
+    };
+    _this.getModuleCount = function() {
+      return _moduleCount;
+    };
+    _this.make = function() {
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+        for (; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
+            break;
+          }
+        }
+        _typeNumber = typeNumber;
+      }
+      makeImpl(false, getBestMaskPattern() );
+    };
+    _this.createTableTag = function(cellSize, margin) {
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+      var qrHtml = '';
+      qrHtml += '<table style="';
+      qrHtml += ' border-width: 0px; border-style: none;';
+      qrHtml += ' border-collapse: collapse;';
+      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
+      qrHtml += '">';
+      qrHtml += '<tbody>';
+      for (var r = 0; r < _this.getModuleCount(); r += 1) {
+        qrHtml += '<tr>';
+        for (var c = 0; c < _this.getModuleCount(); c += 1) {
+          qrHtml += '<td style="';
+          qrHtml += ' border-width: 0px; border-style: none;';
+          qrHtml += ' border-collapse: collapse;';
+          qrHtml += ' padding: 0px; margin: 0px;';
+          qrHtml += ' width: ' + cellSize + 'px;';
+          qrHtml += ' height: ' + cellSize + 'px;';
+          qrHtml += ' background-color: ';
+          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
+          qrHtml += ';';
+          qrHtml += '"/>';
+        }
+        qrHtml += '</tr>';
+      }
+      qrHtml += '</tbody>';
+      qrHtml += '</table>';
+      return qrHtml;
+    };
+    _this.createSvgTag = function(cellSize, margin, alt, title) {
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+        alt = opts.alt;
+        title = opts.title;
+      }
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+      // Compose alt property surrogate
+      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
+      alt.text = alt.text || null;
+      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
+      // Compose title property surrogate
+      title = (typeof title === 'string') ? {text: title} : title || {};
+      title.text = title.text || null;
+      title.id = (title.text) ? title.id || 'qrcode-title' : null;
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var c, mc, r, mr, qrSvg='', rect;
+      rect = 'l' + cellSize + ',0 0,' + cellSize +
+        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
+      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
+          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
+      qrSvg += '>';
+      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
+          escapeXml(title.text) + '</title>' : '';
+      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
+          escapeXml(alt.text) + '</description>' : '';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
+      qrSvg += '<path d="';
+      for (r = 0; r < _this.getModuleCount(); r += 1) {
+        mr = r * cellSize + margin;
+        for (c = 0; c < _this.getModuleCount(); c += 1) {
+          if (_this.isDark(r, c) ) {
+            mc = c*cellSize+margin;
+            qrSvg += 'M' + mc + ',' + mr + rect;
+          }
+        }
+      }
+      qrSvg += '" stroke="transparent" fill="black"/>';
+      qrSvg += '</svg>';
+      return qrSvg;
+    };
+    _this.createDataURL = function(cellSize, margin) {
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+      return createDataURL(size, size, function(x, y) {
+        if (min <= x && x < max && min <= y && y < max) {
+          var c = Math.floor( (x - min) / cellSize);
+          var r = Math.floor( (y - min) / cellSize);
+          return _this.isDark(r, c)? 0 : 1;
+        } else {
+          return 1;
+        }
+      } );
+    };
+    _this.createImgTag = function(cellSize, margin, alt) {
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += escapeXml(alt);
+        img += '"';
+      }
+      img += '/>';
+      return img;
+    };
+    var escapeXml = function(s) {
+      var escaped = '';
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charAt(i);
+        switch(c) {
+        case '<': escaped += '&lt;'; break;
+        case '>': escaped += '&gt;'; break;
+        case '&': escaped += '&amp;'; break;
+        case '"': escaped += '&quot;'; break;
+        default : escaped += c; break;
+        }
+      }
+      return escaped;
+    };
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+      var y, x, r1, r2, p;
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+        ascii += '\n';
+      }
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+      return ascii.substring(0, ascii.length-1);
+    };
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+      var y, x, r, p;
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+      return ascii.substring(0, ascii.length-1);
+    };
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // qrcode.stringToBytes
+  //---------------------------------------------------------------------
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
+    }
+  };
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
+  //---------------------------------------------------------------------
+  // qrcode.createStringToBytes
+  //---------------------------------------------------------------------
+  /**
+   * @param unicodeData base64 string of byte array.
+   * [16bit Unicode],[16bit Bytes], ...
+   * @param numChars
+   */
+  qrcode.createStringToBytes = function(unicodeData, numChars) {
+    // create conversion map.
+    var unicodeMap = function() {
+      var bin = base64DecodeInputStream(unicodeData);
+      var read = function() {
+        var b = bin.read();
+        if (b == -1) throw 'eof';
+        return b;
+      };
+      var count = 0;
+      var unicodeMap = {};
+      while (true) {
+        var b0 = bin.read();
+        if (b0 == -1) break;
+        var b1 = read();
+        var b2 = read();
+        var b3 = read();
+        var k = String.fromCharCode( (b0 << 8) | b1);
+        var v = (b2 << 8) | b3;
+        unicodeMap[k] = v;
+        count += 1;
+      }
+      if (count != numChars) {
+        throw count + ' != ' + numChars;
+      }
+      return unicodeMap;
+    }();
+    var unknownChar = '?'.charCodeAt(0);
+    return function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+          bytes.push(c);
+        } else {
+          var b = unicodeMap[s.charAt(i)];
+          if (typeof b == 'number') {
+            if ( (b & 0xff) == b) {
+              // 1byte
+              bytes.push(b);
+            } else {
+              // 2bytes
+              bytes.push(b >>> 8);
+              bytes.push(b & 0xff);
+            }
+          } else {
+            bytes.push(unknownChar);
+          }
+        }
+      }
+      return bytes;
+    };
+  };
+  //---------------------------------------------------------------------
+  // QRMode
+  //---------------------------------------------------------------------
+  var QRMode = {
+    MODE_NUMBER :    1 << 0,
+    MODE_ALPHA_NUM : 1 << 1,
+    MODE_8BIT_BYTE : 1 << 2,
+    MODE_KANJI :     1 << 3
+  };
+  //---------------------------------------------------------------------
+  // QRErrorCorrectionLevel
+  //---------------------------------------------------------------------
+  var QRErrorCorrectionLevel = {
+    L : 1,
+    M : 0,
+    Q : 3,
+    H : 2
+  };
+  //---------------------------------------------------------------------
+  // QRMaskPattern
+  //---------------------------------------------------------------------
+  var QRMaskPattern = {
+    PATTERN000 : 0,
+    PATTERN001 : 1,
+    PATTERN010 : 2,
+    PATTERN011 : 3,
+    PATTERN100 : 4,
+    PATTERN101 : 5,
+    PATTERN110 : 6,
+    PATTERN111 : 7
+  };
+  //---------------------------------------------------------------------
+  // QRUtil
+  //---------------------------------------------------------------------
+  var QRUtil = function() {
+    var PATTERN_POSITION_TABLE = [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50],
+      [6, 30, 54],
+      [6, 32, 58],
+      [6, 34, 62],
+      [6, 26, 46, 66],
+      [6, 26, 48, 70],
+      [6, 26, 50, 74],
+      [6, 30, 54, 78],
+      [6, 30, 56, 82],
+      [6, 30, 58, 86],
+      [6, 34, 62, 90],
+      [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98],
+      [6, 30, 54, 78, 102],
+      [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110],
+      [6, 30, 58, 86, 114],
+      [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122],
+      [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130],
+      [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138],
+      [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146],
+      [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154],
+      [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162],
+      [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170]
+    ];
+    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
+    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
+    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
+    var _this = {};
+    var getBCHDigit = function(data) {
+      var digit = 0;
+      while (data != 0) {
+        digit += 1;
+        data >>>= 1;
+      }
+      return digit;
+    };
+    _this.getBCHTypeInfo = function(data) {
+      var d = data << 10;
+      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
+        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
+      }
+      return ( (data << 10) | d) ^ G15_MASK;
+    };
+    _this.getBCHTypeNumber = function(data) {
+      var d = data << 12;
+      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
+        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
+      }
+      return (data << 12) | d;
+    };
+    _this.getPatternPosition = function(typeNumber) {
+      return PATTERN_POSITION_TABLE[typeNumber - 1];
+    };
+    _this.getMaskFunction = function(maskPattern) {
+      switch (maskPattern) {
+      case QRMaskPattern.PATTERN000 :
+        return function(i, j) { return (i + j) % 2 == 0; };
+      case QRMaskPattern.PATTERN001 :
+        return function(i, j) { return i % 2 == 0; };
+      case QRMaskPattern.PATTERN010 :
+        return function(i, j) { return j % 3 == 0; };
+      case QRMaskPattern.PATTERN011 :
+        return function(i, j) { return (i + j) % 3 == 0; };
+      case QRMaskPattern.PATTERN100 :
+        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
+      case QRMaskPattern.PATTERN101 :
+        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
+      case QRMaskPattern.PATTERN110 :
+        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
+      case QRMaskPattern.PATTERN111 :
+        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
+      default :
+        throw 'bad maskPattern:' + maskPattern;
+      }
+    };
+    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
+      var a = qrPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i += 1) {
+        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
+      }
+      return a;
+    };
+    _this.getLengthInBits = function(mode, type) {
+      if (1 <= type && type < 10) {
+        // 1 - 9
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 10;
+        case QRMode.MODE_ALPHA_NUM : return 9;
+        case QRMode.MODE_8BIT_BYTE : return 8;
+        case QRMode.MODE_KANJI     : return 8;
+        default :
+          throw 'mode:' + mode;
+        }
+      } else if (type < 27) {
+        // 10 - 26
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 12;
+        case QRMode.MODE_ALPHA_NUM : return 11;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 10;
+        default :
+          throw 'mode:' + mode;
+        }
+      } else if (type < 41) {
+        // 27 - 40
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 14;
+        case QRMode.MODE_ALPHA_NUM : return 13;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 12;
+        default :
+          throw 'mode:' + mode;
+        }
+      } else {
+        throw 'type:' + type;
+      }
+    };
+    _this.getLostPoint = function(qrcode) {
+      var moduleCount = qrcode.getModuleCount();
+      var lostPoint = 0;
+      // LEVEL1
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount; col += 1) {
+          var sameCount = 0;
+          var dark = qrcode.isDark(row, col);
+          for (var r = -1; r <= 1; r += 1) {
+            if (row + r < 0 || moduleCount <= row + r) {
+              continue;
+            }
+            for (var c = -1; c <= 1; c += 1) {
+              if (col + c < 0 || moduleCount <= col + c) {
+                continue;
+              }
+              if (r == 0 && c == 0) {
+                continue;
+              }
+              if (dark == qrcode.isDark(row + r, col + c) ) {
+                sameCount += 1;
+              }
+            }
+          }
+          if (sameCount > 5) {
+            lostPoint += (3 + sameCount - 5);
+          }
+        }
+      };
+      // LEVEL2
+      for (var row = 0; row < moduleCount - 1; row += 1) {
+        for (var col = 0; col < moduleCount - 1; col += 1) {
+          var count = 0;
+          if (qrcode.isDark(row, col) ) count += 1;
+          if (qrcode.isDark(row + 1, col) ) count += 1;
+          if (qrcode.isDark(row, col + 1) ) count += 1;
+          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
+          if (count == 0 || count == 4) {
+            lostPoint += 3;
+          }
+        }
+      }
+      // LEVEL3
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount - 6; col += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row, col + 1)
+              &&  qrcode.isDark(row, col + 2)
+              &&  qrcode.isDark(row, col + 3)
+              &&  qrcode.isDark(row, col + 4)
+              && !qrcode.isDark(row, col + 5)
+              &&  qrcode.isDark(row, col + 6) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount - 6; row += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row + 1, col)
+              &&  qrcode.isDark(row + 2, col)
+              &&  qrcode.isDark(row + 3, col)
+              &&  qrcode.isDark(row + 4, col)
+              && !qrcode.isDark(row + 5, col)
+              &&  qrcode.isDark(row + 6, col) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+      // LEVEL4
+      var darkCount = 0;
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount; row += 1) {
+          if (qrcode.isDark(row, col) ) {
+            darkCount += 1;
+          }
+        }
+      }
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+      return lostPoint;
+    };
+    return _this;
+  }();
+  //---------------------------------------------------------------------
+  // QRMath
+  //---------------------------------------------------------------------
+  var QRMath = function() {
+    var EXP_TABLE = new Array(256);
+    var LOG_TABLE = new Array(256);
+    // initialize tables
+    for (var i = 0; i < 8; i += 1) {
+      EXP_TABLE[i] = 1 << i;
+    }
+    for (var i = 8; i < 256; i += 1) {
+      EXP_TABLE[i] = EXP_TABLE[i - 4]
+        ^ EXP_TABLE[i - 5]
+        ^ EXP_TABLE[i - 6]
+        ^ EXP_TABLE[i - 8];
+    }
+    for (var i = 0; i < 255; i += 1) {
+      LOG_TABLE[EXP_TABLE[i] ] = i;
+    }
+    var _this = {};
+    _this.glog = function(n) {
+      if (n < 1) {
+        throw 'glog(' + n + ')';
+      }
+      return LOG_TABLE[n];
+    };
+    _this.gexp = function(n) {
+      while (n < 0) {
+        n += 255;
+      }
+      while (n >= 256) {
+        n -= 255;
+      }
+      return EXP_TABLE[n];
+    };
+    return _this;
+  }();
+  //---------------------------------------------------------------------
+  // qrPolynomial
+  //---------------------------------------------------------------------
+  function qrPolynomial(num, shift) {
+    if (typeof num.length == 'undefined') {
+      throw num.length + '/' + shift;
+    }
+    var _num = function() {
+      var offset = 0;
+      while (offset < num.length && num[offset] == 0) {
+        offset += 1;
+      }
+      var _num = new Array(num.length - offset + shift);
+      for (var i = 0; i < num.length - offset; i += 1) {
+        _num[i] = num[i + offset];
+      }
+      return _num;
+    }();
+    var _this = {};
+    _this.getAt = function(index) {
+      return _num[index];
+    };
+    _this.getLength = function() {
+      return _num.length;
+    };
+    _this.multiply = function(e) {
+      var num = new Array(_this.getLength() + e.getLength() - 1);
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        for (var j = 0; j < e.getLength(); j += 1) {
+          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
+        }
+      }
+      return qrPolynomial(num, 0);
+    };
+    _this.mod = function(e) {
+      if (_this.getLength() - e.getLength() < 0) {
+        return _this;
+      }
+      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
+      var num = new Array(_this.getLength() );
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        num[i] = _this.getAt(i);
+      }
+      for (var i = 0; i < e.getLength(); i += 1) {
+        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
+      }
+      // recursive call
+      return qrPolynomial(num, 0).mod(e);
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // QRRSBlock
+  //---------------------------------------------------------------------
+  var QRRSBlock = function() {
+    var RS_BLOCK_TABLE = [
+      // L
+      // M
+      // Q
+      // H
+      // 1
+      [1, 26, 19],
+      [1, 26, 16],
+      [1, 26, 13],
+      [1, 26, 9],
+      // 2
+      [1, 44, 34],
+      [1, 44, 28],
+      [1, 44, 22],
+      [1, 44, 16],
+      // 3
+      [1, 70, 55],
+      [1, 70, 44],
+      [2, 35, 17],
+      [2, 35, 13],
+      // 4
+      [1, 100, 80],
+      [2, 50, 32],
+      [2, 50, 24],
+      [4, 25, 9],
+      // 5
+      [1, 134, 108],
+      [2, 67, 43],
+      [2, 33, 15, 2, 34, 16],
+      [2, 33, 11, 2, 34, 12],
+      // 6
+      [2, 86, 68],
+      [4, 43, 27],
+      [4, 43, 19],
+      [4, 43, 15],
+      // 7
+      [2, 98, 78],
+      [4, 49, 31],
+      [2, 32, 14, 4, 33, 15],
+      [4, 39, 13, 1, 40, 14],
+      // 8
+      [2, 121, 97],
+      [2, 60, 38, 2, 61, 39],
+      [4, 40, 18, 2, 41, 19],
+      [4, 40, 14, 2, 41, 15],
+      // 9
+      [2, 146, 116],
+      [3, 58, 36, 2, 59, 37],
+      [4, 36, 16, 4, 37, 17],
+      [4, 36, 12, 4, 37, 13],
+      // 10
+      [2, 86, 68, 2, 87, 69],
+      [4, 69, 43, 1, 70, 44],
+      [6, 43, 19, 2, 44, 20],
+      [6, 43, 15, 2, 44, 16],
+      // 11
+      [4, 101, 81],
+      [1, 80, 50, 4, 81, 51],
+      [4, 50, 22, 4, 51, 23],
+      [3, 36, 12, 8, 37, 13],
+      // 12
+      [2, 116, 92, 2, 117, 93],
+      [6, 58, 36, 2, 59, 37],
+      [4, 46, 20, 6, 47, 21],
+      [7, 42, 14, 4, 43, 15],
+      // 13
+      [4, 133, 107],
+      [8, 59, 37, 1, 60, 38],
+      [8, 44, 20, 4, 45, 21],
+      [12, 33, 11, 4, 34, 12],
+      // 14
+      [3, 145, 115, 1, 146, 116],
+      [4, 64, 40, 5, 65, 41],
+      [11, 36, 16, 5, 37, 17],
+      [11, 36, 12, 5, 37, 13],
+      // 15
+      [5, 109, 87, 1, 110, 88],
+      [5, 65, 41, 5, 66, 42],
+      [5, 54, 24, 7, 55, 25],
+      [11, 36, 12, 7, 37, 13],
+      // 16
+      [5, 122, 98, 1, 123, 99],
+      [7, 73, 45, 3, 74, 46],
+      [15, 43, 19, 2, 44, 20],
+      [3, 45, 15, 13, 46, 16],
+      // 17
+      [1, 135, 107, 5, 136, 108],
+      [10, 74, 46, 1, 75, 47],
+      [1, 50, 22, 15, 51, 23],
+      [2, 42, 14, 17, 43, 15],
+      // 18
+      [5, 150, 120, 1, 151, 121],
+      [9, 69, 43, 4, 70, 44],
+      [17, 50, 22, 1, 51, 23],
+      [2, 42, 14, 19, 43, 15],
+      // 19
+      [3, 141, 113, 4, 142, 114],
+      [3, 70, 44, 11, 71, 45],
+      [17, 47, 21, 4, 48, 22],
+      [9, 39, 13, 16, 40, 14],
+      // 20
+      [3, 135, 107, 5, 136, 108],
+      [3, 67, 41, 13, 68, 42],
+      [15, 54, 24, 5, 55, 25],
+      [15, 43, 15, 10, 44, 16],
+      // 21
+      [4, 144, 116, 4, 145, 117],
+      [17, 68, 42],
+      [17, 50, 22, 6, 51, 23],
+      [19, 46, 16, 6, 47, 17],
+      // 22
+      [2, 139, 111, 7, 140, 112],
+      [17, 74, 46],
+      [7, 54, 24, 16, 55, 25],
+      [34, 37, 13],
+      // 23
+      [4, 151, 121, 5, 152, 122],
+      [4, 75, 47, 14, 76, 48],
+      [11, 54, 24, 14, 55, 25],
+      [16, 45, 15, 14, 46, 16],
+      // 24
+      [6, 147, 117, 4, 148, 118],
+      [6, 73, 45, 14, 74, 46],
+      [11, 54, 24, 16, 55, 25],
+      [30, 46, 16, 2, 47, 17],
+      // 25
+      [8, 132, 106, 4, 133, 107],
+      [8, 75, 47, 13, 76, 48],
+      [7, 54, 24, 22, 55, 25],
+      [22, 45, 15, 13, 46, 16],
+      // 26
+      [10, 142, 114, 2, 143, 115],
+      [19, 74, 46, 4, 75, 47],
+      [28, 50, 22, 6, 51, 23],
+      [33, 46, 16, 4, 47, 17],
+      // 27
+      [8, 152, 122, 4, 153, 123],
+      [22, 73, 45, 3, 74, 46],
+      [8, 53, 23, 26, 54, 24],
+      [12, 45, 15, 28, 46, 16],
+      // 28
+      [3, 147, 117, 10, 148, 118],
+      [3, 73, 45, 23, 74, 46],
+      [4, 54, 24, 31, 55, 25],
+      [11, 45, 15, 31, 46, 16],
+      // 29
+      [7, 146, 116, 7, 147, 117],
+      [21, 73, 45, 7, 74, 46],
+      [1, 53, 23, 37, 54, 24],
+      [19, 45, 15, 26, 46, 16],
+      // 30
+      [5, 145, 115, 10, 146, 116],
+      [19, 75, 47, 10, 76, 48],
+      [15, 54, 24, 25, 55, 25],
+      [23, 45, 15, 25, 46, 16],
+      // 31
+      [13, 145, 115, 3, 146, 116],
+      [2, 74, 46, 29, 75, 47],
+      [42, 54, 24, 1, 55, 25],
+      [23, 45, 15, 28, 46, 16],
+      // 32
+      [17, 145, 115],
+      [10, 74, 46, 23, 75, 47],
+      [10, 54, 24, 35, 55, 25],
+      [19, 45, 15, 35, 46, 16],
+      // 33
+      [17, 145, 115, 1, 146, 116],
+      [14, 74, 46, 21, 75, 47],
+      [29, 54, 24, 19, 55, 25],
+      [11, 45, 15, 46, 46, 16],
+      // 34
+      [13, 145, 115, 6, 146, 116],
+      [14, 74, 46, 23, 75, 47],
+      [44, 54, 24, 7, 55, 25],
+      [59, 46, 16, 1, 47, 17],
+      // 35
+      [12, 151, 121, 7, 152, 122],
+      [12, 75, 47, 26, 76, 48],
+      [39, 54, 24, 14, 55, 25],
+      [22, 45, 15, 41, 46, 16],
+      // 36
+      [6, 151, 121, 14, 152, 122],
+      [6, 75, 47, 34, 76, 48],
+      [46, 54, 24, 10, 55, 25],
+      [2, 45, 15, 64, 46, 16],
+      // 37
+      [17, 152, 122, 4, 153, 123],
+      [29, 74, 46, 14, 75, 47],
+      [49, 54, 24, 10, 55, 25],
+      [24, 45, 15, 46, 46, 16],
+      // 38
+      [4, 152, 122, 18, 153, 123],
+      [13, 74, 46, 32, 75, 47],
+      [48, 54, 24, 14, 55, 25],
+      [42, 45, 15, 32, 46, 16],
+      // 39
+      [20, 147, 117, 4, 148, 118],
+      [40, 75, 47, 7, 76, 48],
+      [43, 54, 24, 22, 55, 25],
+      [10, 45, 15, 67, 46, 16],
+      // 40
+      [19, 148, 118, 6, 149, 119],
+      [18, 75, 47, 31, 76, 48],
+      [34, 54, 24, 34, 55, 25],
+      [20, 45, 15, 61, 46, 16]
+    ];
+    var qrRSBlock = function(totalCount, dataCount) {
+      var _this = {};
+      _this.totalCount = totalCount;
+      _this.dataCount = dataCount;
+      return _this;
+    };
+    var _this = {};
+    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
+      switch(errorCorrectionLevel) {
+      case QRErrorCorrectionLevel.L :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+      case QRErrorCorrectionLevel.M :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+      case QRErrorCorrectionLevel.Q :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+      case QRErrorCorrectionLevel.H :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+      default :
+        return undefined;
+      }
+    };
+    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
+      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
+      if (typeof rsBlock == 'undefined') {
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
+      }
+      var length = rsBlock.length / 3;
+      var list = [];
+      for (var i = 0; i < length; i += 1) {
+        var count = rsBlock[i * 3 + 0];
+        var totalCount = rsBlock[i * 3 + 1];
+        var dataCount = rsBlock[i * 3 + 2];
+        for (var j = 0; j < count; j += 1) {
+          list.push(qrRSBlock(totalCount, dataCount) );
+        }
+      }
+      return list;
+    };
+    return _this;
+  }();
+  //---------------------------------------------------------------------
+  // qrBitBuffer
+  //---------------------------------------------------------------------
+  var qrBitBuffer = function() {
+    var _buffer = [];
+    var _length = 0;
+    var _this = {};
+    _this.getBuffer = function() {
+      return _buffer;
+    };
+    _this.getAt = function(index) {
+      var bufIndex = Math.floor(index / 8);
+      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+    };
+    _this.put = function(num, length) {
+      for (var i = 0; i < length; i += 1) {
+        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+      }
+    };
+    _this.getLengthInBits = function() {
+      return _length;
+    };
+    _this.putBit = function(bit) {
+      var bufIndex = Math.floor(_length / 8);
+      if (_buffer.length <= bufIndex) {
+        _buffer.push(0);
+      }
+      if (bit) {
+        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
+      }
+      _length += 1;
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // qrNumber
+  //---------------------------------------------------------------------
+  var qrNumber = function(data) {
+    var _mode = QRMode.MODE_NUMBER;
+    var _data = data;
+    var _this = {};
+    _this.getMode = function() {
+      return _mode;
+    };
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+    _this.write = function(buffer) {
+      var data = _data;
+      var i = 0;
+      while (i + 2 < data.length) {
+        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
+        i += 3;
+      }
+      if (i < data.length) {
+        if (data.length - i == 1) {
+          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
+        } else if (data.length - i == 2) {
+          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
+        }
+      }
+    };
+    var strToNum = function(s) {
+      var num = 0;
+      for (var i = 0; i < s.length; i += 1) {
+        num = num * 10 + chatToNum(s.charAt(i) );
+      }
+      return num;
+    };
+    var chatToNum = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      }
+      throw 'illegal char :' + c;
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // qrAlphaNum
+  //---------------------------------------------------------------------
+  var qrAlphaNum = function(data) {
+    var _mode = QRMode.MODE_ALPHA_NUM;
+    var _data = data;
+    var _this = {};
+    _this.getMode = function() {
+      return _mode;
+    };
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+    _this.write = function(buffer) {
+      var s = _data;
+      var i = 0;
+      while (i + 1 < s.length) {
+        buffer.put(
+          getCode(s.charAt(i) ) * 45 +
+          getCode(s.charAt(i + 1) ), 11);
+        i += 2;
+      }
+      if (i < s.length) {
+        buffer.put(getCode(s.charAt(i) ), 6);
+      }
+    };
+    var getCode = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      } else if ('A' <= c && c <= 'Z') {
+        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      } else {
+        switch (c) {
+        case ' ' : return 36;
+        case '$' : return 37;
+        case '%' : return 38;
+        case '*' : return 39;
+        case '+' : return 40;
+        case '-' : return 41;
+        case '.' : return 42;
+        case '/' : return 43;
+        case ':' : return 44;
+        default :
+          throw 'illegal char :' + c;
+        }
+      }
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // qr8BitByte
+  //---------------------------------------------------------------------
+  var qr8BitByte = function(data) {
+    var _mode = QRMode.MODE_8BIT_BYTE;
+    var _data = data;
+    var _bytes = qrcode.stringToBytes(data);
+    var _this = {};
+    _this.getMode = function() {
+      return _mode;
+    };
+    _this.getLength = function(buffer) {
+      return _bytes.length;
+    };
+    _this.write = function(buffer) {
+      for (var i = 0; i < _bytes.length; i += 1) {
+        buffer.put(_bytes[i], 8);
+      }
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // qrKanji
+  //---------------------------------------------------------------------
+  var qrKanji = function(data) {
+    var _mode = QRMode.MODE_KANJI;
+    var _data = data;
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
+    !function(c, code) {
+      // self test for sjis support.
+      var test = stringToBytes(c);
+      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
+        throw 'sjis not supported.';
+      }
+    }('\u53cb', 0x9746);
+    var _bytes = stringToBytes(data);
+    var _this = {};
+    _this.getMode = function() {
+      return _mode;
+    };
+    _this.getLength = function(buffer) {
+      return ~~(_bytes.length / 2);
+    };
+    _this.write = function(buffer) {
+      var data = _bytes;
+      var i = 0;
+      while (i + 1 < data.length) {
+        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
+        if (0x8140 <= c && c <= 0x9FFC) {
+          c -= 0x8140;
+        } else if (0xE040 <= c && c <= 0xEBBF) {
+          c -= 0xC140;
+        } else {
+          throw 'illegal char at ' + (i + 1) + '/' + c;
+        }
+        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
+        buffer.put(c, 13);
+        i += 2;
+      }
+      if (i < data.length) {
+        throw 'illegal char at ' + (i + 1);
+      }
+    };
+    return _this;
+  };
+  //=====================================================================
+  // GIF Support etc.
+  //
+  //---------------------------------------------------------------------
+  // byteArrayOutputStream
+  //---------------------------------------------------------------------
+  var byteArrayOutputStream = function() {
+    var _bytes = [];
+    var _this = {};
+    _this.writeByte = function(b) {
+      _bytes.push(b & 0xff);
+    };
+    _this.writeShort = function(i) {
+      _this.writeByte(i);
+      _this.writeByte(i >>> 8);
+    };
+    _this.writeBytes = function(b, off, len) {
+      off = off || 0;
+      len = len || b.length;
+      for (var i = 0; i < len; i += 1) {
+        _this.writeByte(b[i + off]);
+      }
+    };
+    _this.writeString = function(s) {
+      for (var i = 0; i < s.length; i += 1) {
+        _this.writeByte(s.charCodeAt(i) );
+      }
+    };
+    _this.toByteArray = function() {
+      return _bytes;
+    };
+    _this.toString = function() {
+      var s = '';
+      s += '[';
+      for (var i = 0; i < _bytes.length; i += 1) {
+        if (i > 0) {
+          s += ',';
+        }
+        s += _bytes[i];
+      }
+      s += ']';
+      return s;
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // base64EncodeOutputStream
+  //---------------------------------------------------------------------
+  var base64EncodeOutputStream = function() {
+    var _buffer = 0;
+    var _buflen = 0;
+    var _length = 0;
+    var _base64 = '';
+    var _this = {};
+    var writeEncoded = function(b) {
+      _base64 += String.fromCharCode(encode(b & 0x3f) );
+    };
+    var encode = function(n) {
+      if (n < 0) {
+        // error.
+      } else if (n < 26) {
+        return 0x41 + n;
+      } else if (n < 52) {
+        return 0x61 + (n - 26);
+      } else if (n < 62) {
+        return 0x30 + (n - 52);
+      } else if (n == 62) {
+        return 0x2b;
+      } else if (n == 63) {
+        return 0x2f;
+      }
+      throw 'n:' + n;
+    };
+    _this.writeByte = function(n) {
+      _buffer = (_buffer << 8) | (n & 0xff);
+      _buflen += 8;
+      _length += 1;
+      while (_buflen >= 6) {
+        writeEncoded(_buffer >>> (_buflen - 6) );
+        _buflen -= 6;
+      }
+    };
+    _this.flush = function() {
+      if (_buflen > 0) {
+        writeEncoded(_buffer << (6 - _buflen) );
+        _buffer = 0;
+        _buflen = 0;
+      }
+      if (_length % 3 != 0) {
+        // padding
+        var padlen = 3 - _length % 3;
+        for (var i = 0; i < padlen; i += 1) {
+          _base64 += '=';
+        }
+      }
+    };
+    _this.toString = function() {
+      return _base64;
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // base64DecodeInputStream
+  //---------------------------------------------------------------------
+  var base64DecodeInputStream = function(str) {
+    var _str = str;
+    var _pos = 0;
+    var _buffer = 0;
+    var _buflen = 0;
+    var _this = {};
+    _this.read = function() {
+      while (_buflen < 8) {
+        if (_pos >= _str.length) {
+          if (_buflen == 0) {
+            return -1;
+          }
+          throw 'unexpected end of file./' + _buflen;
+        }
+        var c = _str.charAt(_pos);
+        _pos += 1;
+        if (c == '=') {
+          _buflen = 0;
+          return -1;
+        } else if (c.match(/^\s$/) ) {
+          // ignore if whitespace.
+          continue;
+        }
+        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
+        _buflen += 6;
+      }
+      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
+      _buflen -= 8;
+      return n;
+    };
+    var decode = function(c) {
+      if (0x41 <= c && c <= 0x5a) {
+        return c - 0x41;
+      } else if (0x61 <= c && c <= 0x7a) {
+        return c - 0x61 + 26;
+      } else if (0x30 <= c && c <= 0x39) {
+        return c - 0x30 + 52;
+      } else if (c == 0x2b) {
+        return 62;
+      } else if (c == 0x2f) {
+        return 63;
+      } else {
+        throw 'c:' + c;
+      }
+    };
+    return _this;
+  };
+  //---------------------------------------------------------------------
+  // gifImage (B/W)
+  //---------------------------------------------------------------------
+  var gifImage = function(width, height) {
+    var _width = width;
+    var _height = height;
+    var _data = new Array(width * height);
+    var _this = {};
+    _this.setPixel = function(x, y, pixel) {
+      _data[y * _width + x] = pixel;
+    };
+    _this.write = function(out) {
+      //---------------------------------
+      // GIF Signature
+      out.writeString('GIF87a');
+      //---------------------------------
+      // Screen Descriptor
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0x80); // 2bit
+      out.writeByte(0);
+      out.writeByte(0);
+      //---------------------------------
+      // Global Color Map
+      // black
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      // white
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      //---------------------------------
+      // Image Descriptor
+      out.writeString(',');
+      out.writeShort(0);
+      out.writeShort(0);
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0);
+      //---------------------------------
+      // Local Color Map
+      //---------------------------------
+      // Raster Data
+      var lzwMinCodeSize = 2;
+      var raster = getLZWRaster(lzwMinCodeSize);
+      out.writeByte(lzwMinCodeSize);
+      var offset = 0;
+      while (raster.length - offset > 255) {
+        out.writeByte(255);
+        out.writeBytes(raster, offset, 255);
+        offset += 255;
+      }
+      out.writeByte(raster.length - offset);
+      out.writeBytes(raster, offset, raster.length - offset);
+      out.writeByte(0x00);
+      //---------------------------------
+      // GIF Terminator
+      out.writeString(';');
+    };
+    var bitOutputStream = function(out) {
+      var _out = out;
+      var _bitLength = 0;
+      var _bitBuffer = 0;
+      var _this = {};
+      _this.write = function(data, length) {
+        if ( (data >>> length) != 0) {
+          throw 'length over';
+        }
+        while (_bitLength + length >= 8) {
+          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
+          length -= (8 - _bitLength);
+          data >>>= (8 - _bitLength);
+          _bitBuffer = 0;
+          _bitLength = 0;
+        }
+        _bitBuffer = (data << _bitLength) | _bitBuffer;
+        _bitLength = _bitLength + length;
+      };
+      _this.flush = function() {
+        if (_bitLength > 0) {
+          _out.writeByte(_bitBuffer);
+        }
+      };
+      return _this;
+    };
+    var getLZWRaster = function(lzwMinCodeSize) {
+      var clearCode = 1 << lzwMinCodeSize;
+      var endCode = (1 << lzwMinCodeSize) + 1;
+      var bitLength = lzwMinCodeSize + 1;
+      // Setup LZWTable
+      var table = lzwTable();
+      for (var i = 0; i < clearCode; i += 1) {
+        table.add(String.fromCharCode(i) );
+      }
+      table.add(String.fromCharCode(clearCode) );
+      table.add(String.fromCharCode(endCode) );
+      var byteOut = byteArrayOutputStream();
+      var bitOut = bitOutputStream(byteOut);
+      // clear code
+      bitOut.write(clearCode, bitLength);
+      var dataIndex = 0;
+      var s = String.fromCharCode(_data[dataIndex]);
+      dataIndex += 1;
+      while (dataIndex < _data.length) {
+        var c = String.fromCharCode(_data[dataIndex]);
+        dataIndex += 1;
+        if (table.contains(s + c) ) {
+          s = s + c;
+        } else {
+          bitOut.write(table.indexOf(s), bitLength);
+          if (table.size() < 0xfff) {
+            if (table.size() == (1 << bitLength) ) {
+              bitLength += 1;
+            }
+            table.add(s + c);
+          }
+          s = c;
+        }
+      }
+      bitOut.write(table.indexOf(s), bitLength);
+      // end code
+      bitOut.write(endCode, bitLength);
+      bitOut.flush();
+      return byteOut.toByteArray();
+    };
+    var lzwTable = function() {
+      var _map = {};
+      var _size = 0;
+      var _this = {};
+      _this.add = function(key) {
+        if (_this.contains(key) ) {
+          throw 'dup key:' + key;
+        }
+        _map[key] = _size;
+        _size += 1;
+      };
+      _this.size = function() {
+        return _size;
+      };
+      _this.indexOf = function(key) {
+        return _map[key];
+      };
+      _this.contains = function(key) {
+        return typeof _map[key] != 'undefined';
+      };
+      return _this;
+    };
+    return _this;
+  };
+  var createDataURL = function(width, height, getPixel) {
+    var gif = gifImage(width, height);
+    for (var y = 0; y < height; y += 1) {
+      for (var x = 0; x < width; x += 1) {
+        gif.setPixel(x, y, getPixel(x, y) );
+      }
+    }
+    var b = byteArrayOutputStream();
+    gif.write(b);
+    var base64 = base64EncodeOutputStream();
+    var bytes = b.toByteArray();
+    for (var i = 0; i < bytes.length; i += 1) {
+      base64.writeByte(bytes[i]);
+    }
+    base64.flush();
+    return 'data:image/gif;base64,' + base64;
+  };
+  //---------------------------------------------------------------------
+  // returns qrcode function.
+  return qrcode;
+}();
+!function() {
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+}();
+(function (factory) {
+  if (typeof define === 'function' && define.amd) {
+      define([], factory);
+  } else if (typeof exports === 'object') {
+      module.exports = factory();
+  }
+}(function () {
+    return qrcode;
+}));
+</script>
+<script>// Pure logic: no DOM, no YouTube. Tested in test/core.test.mjs.
+var Core = (function () {
+  var ID = /^[A-Za-z0-9_-]{11}$/;
+  var HOSTS = /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i;
+
+  // "90", "90s", "1m30s", "1h2m3s", "01:30" -> seconds
+  function parseTime(v) {
+    if (v == null || v === '') return 0;
+    v = String(v).trim();
+    if (/^\d+(\.\d+)?s?$/.test(v)) return Math.floor(parseFloat(v));
+    if (/^\d+(:\d{1,2}){1,2}$/.test(v)) {
+      return v.split(':').reduce(function (a, p) { return a * 60 + parseInt(p, 10); }, 0);
+    }
+    var m = v.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i);
+    if (m && (m[1] || m[2] || m[3])) return (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0);
+    return 0;
+  }
+
+  // One link -> {id, t} or null
+  function parseLink(text) {
+    if (!text) return null;
+    text = String(text).trim();
+    if (ID.test(text)) return { id: text, t: 0 };
+    if (!/^[a-z]+:\/\//i.test(text)) text = 'https://' + text;
+    var u;
+    try { u = new URL(text); } catch (e) { return null; }
+    if (!HOSTS.test(u.hostname)) return null;
+    var id = null;
+    var parts = u.pathname.split('/').filter(Boolean);
+    if (/youtu\.be$/i.test(u.hostname)) id = parts[0];
+    else if (u.searchParams.get('v')) id = u.searchParams.get('v');
+    else if (['shorts', 'embed', 'live', 'v', 'e'].indexOf(parts[0]) !== -1) id = parts[1];
+    else if (parts[0] === 'attribution_link' && u.searchParams.get('u')) return parseLink('https://www.youtube.com' + u.searchParams.get('u'));
+    if (!id || !ID.test(id)) return null;
+    var t = u.searchParams.get('t') || u.searchParams.get('start') || '';
+    if (!t && u.hash) { var h = u.hash.match(/t=([^&]+)/); if (h) t = h[1]; }
+    return { id: id, t: parseTime(t) };
+  }
+
+  // Any pasted text -> list of {id, t}, unique, in order
+  function findLinks(text) {
+    if (!text) return [];
+    var out = [], seen = {};
+    var tokens = String(text).match(/(?:https?:\/\/)?(?:[a-z0-9-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)\/[^\s<>"']+/gi) || [];
+    if (!tokens.length && ID.test(String(text).trim())) tokens = [String(text).trim()];
+    tokens.forEach(function (tok) {
+      var r = parseLink(tok.replace(/[).,;!?]+$/, ''));
+      if (r && !seen[r.id]) { seen[r.id] = 1; out.push(r); }
+    });
+    return out;
+  }
+
+  function fmt(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var ss = (s < 10 ? '0' : '') + s;
+    return h ? h + ':' + (m < 10 ? '0' : '') + m + ':' + ss : m + ':' + ss;
+  }
+
+  // "12 min left", "1 hr 5 min left", "Less than a minute left"
+  function left(t, dur) {
+    if (!dur) return '';
+    var r = Math.max(0, dur - (t || 0));
+    if (r < 60) return 'Less than a minute left';
+    var mins = Math.round(r / 60);
+    if (mins < 60) return mins + ' min left';
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return h + ' hr' + (m ? ' ' + m + ' min' : '') + ' left';
+  }
+
+  function pct(v) { return v && v.dur ? Math.min(100, Math.max(0, (v.t || 0) / v.dur * 100)) : 0; }
+
+  // Close enough to the end to count as watched
+  function isDone(t, dur) { return !!dur && dur > 0 && t >= dur - Math.min(20, dur * 0.05); }
+
+  // Where to start when resuming: a couple of seconds back for context
+  function resumeAt(v) { return v && !v.done && v.t > 5 ? Math.max(0, Math.floor(v.t) - 3) : 0; }
+
+  // When you last watched, in words
+  function ago(ts, now) {
+    if (!ts) return '';
+    now = now || Date.now();
+    var d = new Date(ts), n = new Date(now), s = (now - ts) / 1000;
+    if (s < 90) return 'just now';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    var day = function (x) { return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(); };
+    var days = Math.round((day(n) - day(d)) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return days + ' days ago';
+    if (days < 14) return 'last week';
+    if (days < 60) return Math.floor(days / 7) + ' weeks ago';
+    return Math.floor(days / 30) + ' months ago';
+  }
+
+  function sorted(videos) {
+    var list = Object.keys(videos || {}).map(function (k) { return videos[k]; });
+    var by = function (a, b) { return (b.updated || 0) - (a.updated || 0); };
+    return {
+      watching: list.filter(function (v) { return !v.done; }).sort(by),
+      finished: list.filter(function (v) { return v.done; }).sort(by)
+    };
+  }
+
+  // Newer edit wins, per video
+  function merge(local, incoming) {
+    var out = {}, k;
+    for (k in local) out[k] = local[k];
+    var added = 0, updated = 0;
+    for (k in incoming) {
+      var a = out[k], b = incoming[k];
+      if (!a) { out[k] = b; added++; }
+      else if ((b.updated || 0) > (a.updated || 0)) {
+        out[k] = Object.assign({}, a, b, { title: b.title || a.title, author: b.author || a.author });
+        updated++;
+      }
+    }
+    return { videos: out, added: added, updated: updated };
+  }
+
+  // Shelf -> short text for a link/QR. Titles dropped first if it gets long.
+  function b64e(s) {
+    var bytes = new TextEncoder().encode(s), bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64d(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = atob(s), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function encodeShelf(videos, max, titles) {
+    max = max || 2200;
+    var s = sorted(videos), list = s.watching.concat(s.finished);
+    function pack(items, titles) {
+      return b64e(JSON.stringify(items.map(function (v) {
+        var row = [v.id, Math.floor(v.t || 0), Math.floor(v.dur || 0), v.done ? 1 : 0, Math.floor((v.updated || 0) / 1000)];
+        if (titles) row.push((v.title || '').slice(0, 48));
+        return row;
+      })));
+    }
+    var out = pack(list, titles !== false);
+    if (out.length > max) out = pack(list, false);
+    while (out.length > max && list.length > 1) { list = list.slice(0, list.length - 1); out = pack(list, false); }
+    return out;
+  }
+  function decodeShelf(code) {
+    var rows = JSON.parse(b64d(code)), out = {};
+    if (!Array.isArray(rows)) throw new Error('bad');
+    rows.forEach(function (r) {
+      if (!Array.isArray(r) || !ID.test(r[0])) return;
+      out[r[0]] = { id: r[0], t: +r[1] || 0, dur: +r[2] || 0, done: !!r[3], updated: (+r[4] || 0) * 1000, title: r[5] || '', added: (+r[4] || 0) * 1000 };
+    });
+    return out;
+  }
+
+  return { parseTime: parseTime, parseLink: parseLink, findLinks: findLinks, fmt: fmt, left: left, pct: pct,
+    isDone: isDone, resumeAt: resumeAt, ago: ago, sorted: sorted, merge: merge, encodeShelf: encodeShelf, decodeShelf: decodeShelf };
+})();
+if (typeof module !== 'undefined') module.exports = Core;
+</script>
+<script>// App: storage, YouTube player, shelf, self-check, Send to iPhone.
+(function () {
+  var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1';
+  var $ = function (s) { return document.querySelector(s); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var reduced = function () { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+
+  // ---------- storage ----------
+  var canSave = (function () {
+    try { localStorage.setItem('resume.probe', '1'); var ok = localStorage.getItem('resume.probe') === '1'; localStorage.removeItem('resume.probe'); return ok; }
+    catch (e) { return false; }
+  })();
+  var mem = {};
+  function load(k, d) {
+    try { var s = canSave ? localStorage.getItem(k) : mem[k]; var v = s ? JSON.parse(s) : d; return v && typeof v === 'object' ? v : d; } catch (e) { return d; }
+  }
+  var lastSaveError = '';
+  function store(k, v) {
+    var s = JSON.stringify(v);
+    if (!canSave) { mem[k] = s; return false; }
+    try { localStorage.setItem(k, s); lastSaveError = ''; return true; }
+    catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
+  }
+  var videos = load(KEY, {});
+  var prefs = load(PREF, {});
+  var lastSavedAt = 0, lastCaptureAt = 0;
+  function save() { if (store(KEY, videos)) { lastSavedAt = Date.now(); pulse(); } updateDot(); }
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
+
+  // Another tab changed the shelf
+  window.addEventListener('storage', function (e) {
+    if (e.key === KEY) { videos = load(KEY, {}); render(); }
+  });
+
+  // ---------- titles and pictures ----------
+  function fetchTitle(id) {
+    if (!window.fetch) return;
+    var url = 'https://noembed.com/embed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id);
+    fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+      var v = videos[id];
+      if (!v || !j || j.error) return;
+      if (j.title && !v.title) v.title = j.title;
+      if (j.author_name && !v.author) v.author = j.author_name;
+      save(); render();
+    }).catch(function () {});
+  }
+  function thumb(id, big) { return 'https://i.ytimg.com/vi/' + id + '/' + (big ? 'maxresdefault' : 'mqdefault') + '.jpg'; }
+  // maxresdefault doesn't exist for every video; YouTube then sends a tiny 120px grey image
+  function fixPoster(img) {
+    var fallback = function () { var id = img.getAttribute('data-id'); if (id && img.src.indexOf('hqdefault') === -1) img.src = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'; };
+    img.onerror = fallback;
+    img.onload = function () { if (img.naturalWidth && img.naturalWidth <= 120) fallback(); };
+  }
+  function ytLink(v) { return 'https://www.youtube.com/watch?v=' + v.id + (v.t > 5 && !v.done ? '&t=' + Math.floor(v.t) + 's' : ''); }
+
+  // ---------- adding ----------
+  function add(text, opts) {
+    var shelf = String(text || '').match(/#shelf=([A-Za-z0-9_-]+)/);
+    if (shelf) { importShelf(shelf[1]); render(); return true; }
+    var found = Core.findLinks(text);
+    if (!found.length) {
+      toast(text && String(text).trim() ? "That doesn't look like a YouTube link. Copy the address from YouTube and paste it here." : 'Paste a YouTube link first.', 'warn');
+      return false;
+    }
+    var now = Date.now(), fresh = [];
+    found.forEach(function (f, i) {
+      var v = videos[f.id];
+      if (!v) {
+        v = videos[f.id] = { id: f.id, t: f.t || 0, dur: 0, title: '', author: '', added: now + i, updated: now + found.length - i, done: false };
+        fetchTitle(f.id); fresh.push(f.id);
+      } else {
+        v.updated = now + found.length - i;
+        if (f.t) { v.t = f.t; v.done = false; }
+      }
+    });
+    justAdded = fresh;
+    save(); render();
+    if (found.length === 1) { if (!opts || opts.play !== false) play(found[0].id); }
+    else toast('Added ' + found.length + ' videos to your shelf.');
+    return true;
+  }
+  var justAdded = [];
+  var isPhone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  var standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+
+  // ---------- player ----------
+  var player = null, playerReady = false, ytLoaded = false, ytFailed = false, current = null, pending = null, tick = null, lastErr = '';
+  // A spot is only trusted once this video is really playing near where we asked it to start
+  // (stops ads and the previous video's time from overwriting it)
+  var armed = false, sawPlaying = false, loadStart = 0, startTimer = null;
+  window.onYouTubeIframeAPIReady = function () {
+    ytLoaded = true; updateDot();
+    var vars = { rel: 0, playsinline: 1, modestbranding: 1, autoplay: 1 };
+    if (/^https?:$/.test(location.protocol)) vars.origin = location.origin;
+    player = new YT.Player('player', {
+      width: '100%', height: '100%', playerVars: vars,
+      events: {
+        onReady: function () { playerReady = true; if (pending) { var p = pending; pending = null; play(p); } },
+        onStateChange: onState,
+        onPlaybackRateChange: function (e) { prefs.rate = e.data; store(PREF, prefs); },
+        onError: onError
+      }
+    });
+  };
+  (function loadYT() {
+    var s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.onerror = function () { ytFailed = true; updateDot(); };
+    document.head.appendChild(s);
+    setTimeout(function () { if (!ytLoaded) { ytFailed = true; updateDot(); } }, 12000);
+  })();
+
+  function play(id) {
+    var v = videos[id]; if (!v) return;
+    if (current && current !== id) capture(true);
+    lastErr = '';
+    $('#playerError').hidden = true;
+    if (ytFailed && !playerReady) {
+      // No player: say so where they're looking, and offer YouTube itself
+      current = null; document.body.classList.remove('playing'); render();
+      showError("Can't reach YouTube from this page. Check your internet, or turn off any ad blocker or content blocker for this page, then reload.", v);
+      return;
+    }
+    current = id; armed = false; sawPlaying = false;
+    v.updated = Date.now(); save();
+    document.body.classList.add('playing');
+    render();
+    var hero = $('#hero');
+    if (hero.scrollIntoView && hero.getBoundingClientRect().top < 0) hero.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
+    if (!playerReady) { pending = id; hint('Loading the YouTube player…'); return; }
+    var start = Core.resumeAt(v);
+    if (v.done) { v.done = false; v.t = 0; save(); }
+    loadStart = start;
+    player.loadVideoById({ videoId: id, startSeconds: start });
+    if (prefs.rate && prefs.rate !== 1) { try { player.setPlaybackRate(prefs.rate); } catch (e) {} }
+    // Safari sometimes wants a tap on the video itself before it plays
+    clearTimeout(startTimer);
+    startTimer = setTimeout(function () { if (current === id && !sawPlaying) hint('Tap the video to start.'); }, 3000);
+  }
+  function hint(text) { $('#heroMeta').textContent = text; }
+  function capture(final) {
+    if (!player || !current || !playerReady || !videos[current]) return;
+    var v = videos[current], t, d;
+    try {
+      // Only trust the player once it is on this video
+      var vd = player.getVideoData && player.getVideoData();
+      if (vd && vd.video_id && vd.video_id !== current) return;
+      t = player.getCurrentTime(); d = player.getDuration();
+      if (vd) { if (vd.title && !v.title) v.title = vd.title; if (vd.author && !v.author) v.author = vd.author; }
+    } catch (e) { return; }
+    if (typeof t !== 'number' || isNaN(t)) return;
+    if (!armed) {
+      if (!sawPlaying || t < loadStart - 3 || t > loadStart + 60) return;
+      armed = true;
+    }
+    // A much shorter duration than before means an ad or another video is reporting
+    if (v.dur > 0 && d > 0 && d < v.dur * 0.9) return;
+    if (d > 0) v.dur = d;
+    // Ignore the 0 the player reports while a video loads
+    if (t < 1 && v.t > 5) return;
+    v.t = t;
+    v.updated = Date.now();
+    lastCaptureAt = Date.now();
+    save(); renderSoon();
+  }
+  function onState(e) {
+    var S = YT.PlayerState;
+    if (e.data === S.PLAYING) {
+      sawPlaying = true; clearTimeout(startTimer);
+      clearInterval(tick); tick = setInterval(capture, 5000);
+      if (prefs.rate && player.getPlaybackRate && player.getPlaybackRate() !== prefs.rate) { try { player.setPlaybackRate(prefs.rate); } catch (er) {} }
+      capture();
+    } else {
+      clearInterval(tick);
+      if (e.data === S.ENDED && current && videos[current] && armed) {
+        var v = videos[current]; v.t = v.dur || v.t; v.done = true; v.updated = Date.now();
+        current = null; document.body.classList.remove('playing');
+        save(); render();
+        toast('Finished. Moved to your Finished list.');
+      } else if (e.data === S.PAUSED) capture(true);
+    }
+  }
+  function onError(e) {
+    // The empty player can complain before anything is played; ignore that
+    if (!current) return;
+    var v = videos[current];
+    var msg = {
+      2: "That link doesn't point to a real video. Check you copied the whole address.",
+      5: "Your browser couldn't play this video. Try opening it on YouTube.",
+      100: 'This video was removed or made private by its owner.',
+      101: "This video's owner only lets it play on YouTube itself.",
+      150: "This video's owner only lets it play on YouTube itself.",
+      153: 'YouTube needs this page opened from its web address, not as a file.'
+    }[e.data] || 'YouTube had a problem playing this video (code ' + e.data + ').';
+    clearTimeout(startTimer);
+    showError(msg, e.data !== 153 ? v : null);
+  }
+  function showError(msg, v) {
+    lastErr = msg;
+    var html = '<span>' + esc(msg) + '</span>';
+    if (v) html += '<a href="' + esc(ytLink(v)) + '" target="_blank" rel="noopener">Open on YouTube' + (v.t > 5 && !v.done ? ' at ' + Core.fmt(v.t) : '') + '</a>';
+    var box = $('#playerError'); box.innerHTML = html; box.hidden = false;
+    updateDot();
+  }
+  // Save on the way out
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') capture(true); });
+  window.addEventListener('pagehide', function () { capture(true); });
+
+  function closeNow() {
+    capture(true);
+    try { player && player.pauseVideo(); } catch (e) {}
+    clearInterval(tick); current = null;
+    document.body.classList.remove('playing');
+    $('#playerError').hidden = true;
+    render();
+  }
+
+  // ---------- shelf ----------
+  var renderTimer = null;
+  function renderSoon() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); }
+  function featured(s) { return (current && videos[current]) || s.watching[0] || null; }
+  function leftHTML(v) {
+    if (v.dur) {
+      var r = Math.max(0, v.dur - (v.t || 0)), m = Math.round(r / 60);
+      var big = r < 60 ? '<1 min' : m < 60 ? m + ' min' : Math.floor(m / 60) + ' hr ' + (m % 60 ? (m % 60) + ' min' : '');
+      return '<b>' + esc(big.trim()) + '</b>left';
+    }
+    return v.t > 5 ? '<b>' + Core.fmt(v.t) + '</b>stopped' : '<b>New</b>';
+  }
+  function row(v) {
+    var p = Core.pct(v), fresh = justAdded.indexOf(v.id) !== -1;
+    var sub = v.done ? 'Finished ' + Core.ago(v.updated) : (v.author ? v.author + ' · ' : '') + (v.t > 5 ? 'stopped at ' + Core.fmt(v.t) : 'not started');
+    var label = (v.done ? 'Watch again: ' : v.t > 5 ? 'Resume from ' + Core.fmt(v.t) + ': ' : 'Play: ') + (v.title || 'YouTube video');
+    return '<li class="row' + (fresh ? ' fresh' : '') + '" data-id="' + esc(v.id) + '">' +
+      '<button class="row-main" type="button" data-act="play" aria-label="' + esc(label) + '">' +
+        '<span class="th"><img data-id="' + esc(v.id) + '" src="' + thumb(v.id) + '" alt="" loading="lazy" decoding="async"></span>' +
+        '<span class="row-text"><span class="row-title">' + esc(v.title || 'YouTube video') + '</span>' +
+        '<span class="row-sub">' + esc(sub) + '</span>' +
+        (v.done ? '' : '<span class="bar"><i style="width:' + p.toFixed(1) + '%"></i></span>') + '</span>' +
+        (v.done ? '<span class="ring" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3 6.3l2 2 4-4.6"/></svg></span>'
+          : '<span class="left">' + leftHTML(v) + '</span>') +
+      '</button>' +
+      '<span class="row-tools">' +
+        (v.done ? '' : '<button class="tool" type="button" data-act="done" title="Mark as finished" aria-label="Mark as finished"><svg viewBox="0 0 16 16"><path d="M3.5 8.4l3 3 6-6.8"/></svg></button>') +
+        '<button class="tool" type="button" data-act="remove" title="Remove from shelf" aria-label="Remove from shelf"><svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button>' +
+      '</span></li>';
+  }
+  var heroId = null;
+  function render() {
+    var s = Core.sorted(videos), f = featured(s), playing = !!current;
+    var any = s.watching.length + s.finished.length;
+    // header
+    $('#count').textContent = s.watching.length ? '· ' + s.watching.length + ' to finish' : any ? '· all caught up' : '';
+    // hero
+    $('#hero').hidden = !f;
+    $('#empty').hidden = !!any;
+    $('#caught').hidden = !(any && !f);
+    if (f) {
+      var img = $('#posterImg');
+      if (heroId !== f.id) { img.setAttribute('data-id', f.id); fixPoster(img); img.src = thumb(f.id, true); heroId = f.id; }
+      $('#poster').hidden = playing;
+      $('#poster').setAttribute('aria-label', (f.t > 5 ? 'Resume from ' + Core.fmt(f.t) : 'Play') + ': ' + (f.title || 'video'));
+      $('#chip').hidden = !(f.t > 5 && !f.done);
+      $('#chipTime').textContent = Core.fmt(f.t);
+      $('#heroBar').style.width = Core.pct(f).toFixed(2) + '%';
+      $('#heroTitle').textContent = f.title || 'YouTube video';
+      var meta = [];
+      if (f.author) meta.push(esc(f.author));
+      if (playing) meta.push(lastCaptureAt && armed && f.t > 1 ? 'Spot saved at <b>' + Core.fmt(f.t) + '</b>' : 'Saves your spot as you watch');
+      else {
+        if (f.dur) meta.push('<b>' + esc(Core.left(f.t, f.dur)) + '</b>');
+        if (f.t > 5) meta.push('you stopped here ' + esc(Core.ago(f.updated)));
+      }
+      $('#heroMeta').innerHTML = meta.join(' · ');
+      $('#resumeText').textContent = f.t > 5 ? 'Resume from ' + Core.fmt(f.t) : 'Play';
+      $('#heroYouTube').href = ytLink(f);
+    }
+    // lists
+    var rest = s.watching.filter(function (v) { return !f || v.id !== f.id; });
+    $('#watching').innerHTML = rest.map(row).join('');
+    $('#watchingWrap').hidden = !rest.length;
+    var total = rest.reduce(function (a, v) { return a + Math.max(0, (v.dur || 0) - (v.t || 0)); }, 0);
+    $('#watchingSum').textContent = rest.length + (rest.length === 1 ? ' video' : ' videos') + (total > 60 ? ' · ' + Core.left(0, total) : '');
+    $('#finished').innerHTML = s.finished.map(row).join('');
+    $('#finishedWrap').hidden = !s.finished.length;
+    $('#finishedCount').textContent = s.finished.length;
+    $('#sendBtn').disabled = !any;
+    Array.prototype.forEach.call(document.querySelectorAll('.row .th img'), function (im) {
+      im.onerror = function () { im.style.visibility = 'hidden'; };
+    });
+    justAdded = [];
+    updateFoot();
+  }
+  var undo = null;
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var li = b.closest('[data-id]'), id = li && li.getAttribute('data-id'), act = b.getAttribute('data-act');
+    var f = featured(Core.sorted(videos));
+    if (act === 'play' && id) play(id);
+    else if (act === 'play-featured' && f) play(f.id);
+    else if ((act === 'done' && id) || (act === 'done-featured' && f)) {
+      var did = id || f.id;
+      if (did === current) { capture(true); try { player.pauseVideo(); } catch (er) {} current = null; document.body.classList.remove('playing'); }
+      videos[did].done = true; videos[did].updated = Date.now(); save(); render(); toast('Moved to Finished.');
+    }
+    else if (act === 'remove' && id) {
+      undo = { id: id, v: videos[id] }; if (id === current) closeNow();
+      delete videos[id]; save(); render();
+      toast('Removed from your shelf.', '', { label: 'Undo', fn: function () { if (undo) { videos[undo.id] = undo.v; undo = null; save(); render(); } } });
+    }
+    else if (act === 'close') closeNow();
+    else if (act === 'check') openCheck();
+    else if (act === 'send') openSend();
+    else if (act === 'dismiss') { var d = b.closest('dialog'); if (d) d.close(); }
+    else if (act === 'copy') copyText($('#sendLink').value, $('#sendLink'));
+  });
+  // Click on the dimmed backdrop closes a dialog
+  Array.prototype.forEach.call(document.querySelectorAll('dialog'), function (d) {
+    d.addEventListener('click', function (e) {
+      if (e.target !== d) return;
+      var r = d.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close();
+    });
+  });
+
+  // ---------- paste ----------
+  var form = $('#addForm'), input = $('#paste'), addBtn = $('#addBtn');
+  function syncBtn() { addBtn.textContent = input.value.trim() ? 'Add' : 'Paste'; }
+  input.addEventListener('input', syncBtn);
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (input.value.trim()) { if (add(input.value)) input.value = ''; syncBtn(); return; }
+    // Empty box: read the clipboard (Safari shows a small Paste bubble to tap)
+    var touch = /iPhone|iPad|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent) && !matchMedia('(pointer: fine)').matches);
+    var fallback = function () { input.focus(); toast(touch ? 'Tap the box, then tap Paste.' : 'Press ⌘V to paste your link.'); };
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.readText) return fallback();
+      navigator.clipboard.readText().then(function (txt) { if (txt && txt.trim()) add(txt); else fallback(); }, fallback);
+    } catch (er) { fallback(); }
+  });
+  document.addEventListener('paste', function (e) {
+    var t = e.target, cd = e.clipboardData || window.clipboardData;
+    var txt = cd ? cd.getData('text') : '';
+    if (t && t.id === 'paste') {
+      if (Core.findLinks(txt).length || /#shelf=/.test(txt)) { e.preventDefault(); add(txt); t.value = ''; syncBtn(); }
+      return;
+    }
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) return;
+    if (txt) { e.preventDefault(); add(txt); }
+  });
+  document.addEventListener('keydown', function (e) {
+    var t = e.target, editable = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    // Safari only pastes into a text field, so move focus to the box first
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'v' || e.key === 'V') && !editable && !document.querySelector('dialog[open]')) input.focus({ preventScroll: true });
+    if (e.key === 'Escape' && !document.querySelector('dialog[open]') && current) closeNow();
+  });
+
+  // ---------- toast ----------
+  var toastTimer = null;
+  function toast(msg, kind, action) {
+    var t = $('#toast');
+    t.className = 'toast show' + (kind ? ' ' + kind : '');
+    t.innerHTML = '<span>' + esc(msg) + '</span>' + (action ? '<button type="button" class="toast-act">' + esc(action.label) + '</button>' : '');
+    if (action) t.querySelector('button').onclick = function () { action.fn(); t.className = 'toast'; };
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, action ? 6000 : 4000);
+  }
+
+  // ---------- self-check ----------
+  function checks() {
+    var out = [];
+    var web = /^https?:$/.test(location.protocol);
+    out.push(web ? { ok: 1, text: 'Opened from its web address' }
+      : { ok: 0, text: 'You opened the file directly. YouTube only plays when this page is opened from its web address, so use the link instead.' });
+    out.push(canSave && !lastSaveError ? { ok: 1, text: 'Saves your spots in this browser (a private window forgets them when it closes)' }
+      : !canSave ? { ok: 0, text: 'Your browser is blocking saving, so nothing will be remembered. In Safari, go to Settings, Privacy, and turn off "Block all cookies".' }
+      : { ok: 0, text: 'Saving just failed. Your browser storage may be full; remove a few finished videos.' });
+    out.push(navigator.onLine === false ? { ok: 0, text: "You're offline. Videos need the internet, but your shelf is safe." } : { ok: 1, text: 'Connected to the internet' });
+    out.push(ytLoaded ? { ok: 1, text: 'YouTube player is ready' }
+      : ytFailed ? { ok: 0, text: "Can't reach YouTube. Check your internet, or turn off any ad blocker or content blocker for this page, then reload." }
+      : { ok: 2, text: 'Still loading the YouTube player…' });
+    if (lastErr) out.push({ ok: 2, text: 'Last video: ' + lastErr });
+    if (current) {
+      var ago = lastCaptureAt && armed ? Math.round((Date.now() - lastCaptureAt) / 1000) : null;
+      var playingNow = false; try { playingNow = player && player.getPlayerState() === 1; } catch (e) {}
+      out.push(ago == null ? { ok: 2, text: 'Your spot saves a few seconds after the video starts' }
+        : playingNow && ago > 20 ? { ok: 0, text: "Your spot hasn't saved for " + ago + ' seconds. Reload the page; your last spot is kept.' }
+        : { ok: 1, text: 'Saved your spot ' + (ago < 3 ? 'just now' : ago + ' seconds ago') });
+    }
+    var n = Object.keys(videos).length;
+    out.push({ ok: 1, text: n + ' video' + (n === 1 ? '' : 's') + ' on your shelf, saved in this browser' });
+    return out;
+  }
+  function updateDot() {
+    var dot = $('#statusDot'); if (!dot) return;
+    var c = checks(), bad = c.filter(function (x) { return x.ok === 0; }), wait = c.some(function (x) { return x.ok === 2; });
+    var state = bad.length ? 'bad' : wait ? 'wait' : 'good';
+    dot.className = 'dot ' + state;
+    var label = bad.length ? 'Needs a look' : wait ? 'Getting ready' : current ? 'All good: saving your spot' : 'All good';
+    $('#statusText').textContent = label;
+    $('#statusBtn').setAttribute('aria-label', 'Self-check: ' + label + '. Show details.');
+    if ($('#checkDlg').open) fillCheck();
+    updateFoot();
+  }
+  function pulse() { var d = $('#statusDot'); if (!d || reduced()) return; d.classList.remove('pulse'); void d.offsetWidth; d.classList.add('pulse'); }
+  function updateFoot() {
+    var el = $('#lastSaved'); if (!el) return;
+    if (!lastSavedAt) { el.textContent = ''; return; }
+    var s = Math.round((Date.now() - lastSavedAt) / 1000);
+    el.textContent = 'Last saved ' + (s < 5 ? 'just now' : s < 60 ? s + ' seconds ago' : Core.ago(lastSavedAt));
+  }
+  function fillCheck() {
+    $('#checkList').innerHTML = checks().map(function (x) {
+      return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + '</span></li>';
+    }).join('');
+  }
+  function openDlg(d) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+  if (!window.HTMLDialogElement) document.addEventListener('click', function (e) { if (e.target.closest('[data-act="dismiss"]')) { var d = e.target.closest('dialog'); if (d) d.removeAttribute('open'); } });
+  function openCheck() { fillCheck(); openDlg($('#checkDlg')); }
+  setInterval(updateDot, 5000);
+  window.addEventListener('online', updateDot); window.addEventListener('offline', updateDot);
+
+  // ---------- Send to iPhone ----------
+  function openSend() {
+    capture(true);
+    var base = location.origin + location.pathname + '#shelf=';
+    var total = Object.keys(videos).length;
+    var full = Core.encodeShelf(videos), inLink = Object.keys(Core.decodeShelf(full)).length;
+    $('#sendLink').value = base + full;
+    var note = [];
+    if (!isPhone) {
+      var box = $('#qr');
+      try {
+        // The code leaves out titles and old videos so a camera can read it easily; the phone looks titles up
+        var small = Core.encodeShelf(videos, 600, false), inCode = Object.keys(Core.decodeShelf(small)).length;
+        var q = qrcode(0, 'L'); q.addData(base + small); q.make();
+        box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+        if (inCode < total) note.push('The code carries your ' + inCode + ' most recent videos. The link below carries ' + (inLink < total ? inLink : 'all ' + total) + '.');
+      } catch (e) { box.innerHTML = '<p class="qr-fail">Your shelf is too big for one code. Use Copy link and send it to yourself instead.</p>'; }
+    }
+    if (inLink < total && (isPhone || !note.length)) note.push('The link carries your ' + inLink + ' most recent videos.');
+    $('#qrNote').textContent = note.join(' ');
+    $('#qrNote').hidden = !note.length;
+    openDlg($('#sendDlg'));
+  }
+  function copyText(text, el) {
+    var manual = function () { el.focus(); el.select(); toast(isPhone ? 'Tap and hold the link to copy it.' : 'Press ⌘C to copy the selected link.'); };
+    try { navigator.clipboard.writeText(text).then(function () { toast(isPhone ? 'Link copied. Send it to your Mac (AirDrop or Messages) and open it there.' : 'Link copied. Send it to your iPhone and open it there.'); }, manual); }
+    catch (e) { manual(); }
+  }
+  function importFromHash() {
+    var m = location.hash.match(/^#shelf=([A-Za-z0-9_-]+)/);
+    if (!m) return;
+    importShelf(m[1]);
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
+  function importShelf(code) {
+    try {
+      var r = Core.merge(videos, Core.decodeShelf(code));
+      videos = r.videos; save();
+      Object.keys(videos).forEach(function (id) { if (!videos[id].title) fetchTitle(id); });
+      var n = r.added + r.updated;
+      toast(n ? 'Got your shelf: ' + r.added + ' new, ' + r.updated + ' updated.' : 'Your shelf was already up to date.');
+    } catch (e) { toast('That shelf link looks broken. Make a new one on your Mac with Send to iPhone.', 'warn'); }
+  }
+
+  // ---------- start ----------
+  if (isPhone) {
+    // On the phone the button sends the other way
+    $('#sendLabel').textContent = 'Send to Mac';
+    $('#sendH').textContent = 'Send to Mac';
+    $('#sendIntro').textContent = "Copy this link and open it on your Mac, for example with AirDrop or Messages. Your Mac's shelf picks up the spots you reached on this phone.";
+    $('#qr').hidden = true; $('#sendTip').hidden = true;
+    $('#copyLabel').textContent = 'Your shelf link';
+  }
+  if (standalone) $('#homeHint').hidden = false;
+  importFromHash();
+  render();
+  syncBtn();
+  updateDot();
+  // On a Mac the box is ready for ⌘V straight away (not on phones: it would pop up the keyboard)
+  try { if (matchMedia('(hover: hover) and (pointer: fine)').matches) input.focus({ preventScroll: true }); } catch (e) {}
+  if (!canSave) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Click the dot for how to fix it.', 'warn'); }, 600);
+  // Test hook
+  window.__resume = { get videos() { return videos; }, checks: checks, capture: capture, get current() { return current; } };
+})();
+</script>
+</body>
+</html>
