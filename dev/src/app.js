@@ -575,7 +575,8 @@
       onChange: function () { renderAudio(); renderSoon(); }
     });
     if (prefs.arate) engine.setRate(prefs.arate);
-    $('#audio').addEventListener('play', function () { clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
+    // A podcast starting ends the self-check's sound test (the engine then takes the lock-screen controls back)
+    $('#audio').addEventListener('play', function () { if (Native.tonePlaying) { Native.stopTone(); var tb = $('#toneBtn'); if (tb) tb.textContent = 'Test lock-screen sound'; } clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
     $('#audio').addEventListener('pause', function () { clearInterval(aTick); renderAudio(); });
   }
   function openAudio(e) {
@@ -1083,7 +1084,7 @@
       case 'yt-settings': Native.openSettings().catch(function () { toast("Open the iPhone's Settings app, scroll down to Shelf, and turn on Allow Cross-Website Tracking.", 'warn'); }); break;
       case 'phone-retry': b.textContent = 'Reopening…'; capture(true); if (engine) engine.capture(true); setTimeout(function () { location.reload(); }, 300); break; // a fresh start reads the phone's copy again and merges it
       case 'tone':
-        if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
+        if (Native.tonePlaying) { Native.stopTone(); if (engine) engine.session(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
         if (engine.state().playing) engine.pause();
         if (current) closeVideo();
         Native.playTone().then(function () { b.textContent = 'Stop the sound test'; fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },

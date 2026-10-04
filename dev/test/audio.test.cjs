@@ -108,6 +108,39 @@ const EP = { guid: 'ep213', url: 'https://example.com/213.mp3', title: 'Ep. 213:
   await eng.play(Object.assign({}, EP, { guid: 'ep214', url: 'https://example.com/214.mp3' }));
   assert.strictEqual(db.ep213.t, 20);
 
+  // Replaying a finished episode makes it unfinished again and starts from the top (audit item 4)
+  ({ el, eng, db, clock, session } = setup());
+  db.ep213 = { t: 3600, dur: 3600, done: true, updated: 1 };
+  el.meta(3600); el.currentTime = 3600;
+  await eng.play(EP);
+  assert.strictEqual(db.ep213.done, false, 'replay clears done');
+  assert.strictEqual(el.currentTime, 0, 'and seeks to the start');
+  el.run(60, clock); el.pause();
+  assert.strictEqual(db.ep213.done, false, 'a minute in, it is unfinished');
+  assert.ok(db.ep213.t >= 59 && db.ep213.t <= 61);
+  // ...and pressing play after it ended does the same
+  ({ el, eng, db, clock, session } = setup());
+  el.meta(3600); await eng.play(EP);
+  el.currentTime = 3600; el.paused = true; el.ended = true; el.fire('ended');
+  assert.strictEqual(db.ep213.done, true);
+  eng.toggle(); el.ended = false;
+  assert.strictEqual(db.ep213.done, false, 'play after the end = start again');
+  assert.strictEqual(el.currentTime, 0);
+
+  // The lock-screen controls come back to the podcast on every play (audit item 5) and follow seeks (item 9)
+  ({ el, eng, db, clock, session } = setup());
+  el.meta(3600); await eng.play(EP);
+  session.metadata = { title: 'Lock-screen sound test' }; session.handlers.pause = () => 'tone';
+  el.pause(); eng.toggle();
+  assert.strictEqual(session.metadata.title, EP.title, 'metadata restored on play');
+  assert.notStrictEqual(session.handlers.pause(), 'tone', 'pause handler is the podcast again');
+  eng.seek(1200); el.fire('seeked');
+  assert.strictEqual(session.pos.position, 1200, 'position published after a seek');
+  el.currentTime = 1500; el.pause();
+  assert.strictEqual(session.pos.position, 1500, 'and on pause');
+  session.metadata = { title: 'Lock-screen sound test' }; eng.session();
+  assert.strictEqual(session.metadata.title, EP.title, 'session() reinstalls it on demand');
+
   // Broken audio -> plain-words message
   ({ el, eng } = setup());
   el.meta(3600); await eng.play(EP);

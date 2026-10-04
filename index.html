@@ -1286,10 +1286,12 @@ var AudioEngine = (function () {
       if (ep && ep.guid !== episode.guid) capture(true);
       ep = episode; armed = false; stopReason = '';
       var r = rec();
-      startAt = from != null ? from : Core.resumeAt(r);
+      if (from == null && r && r.done) replay(); // playing a finished episode again starts it over, unfinished
+      startAt = from != null ? from : Core.resumeAt(rec());
       if (el.src !== episode.url) { el.src = episode.url; if (el.load) el.load(); }
       el.playbackRate = rate;
-      var seekStart = function () { try { if (startAt > 0) el.currentTime = startAt; } catch (e) {} };
+      // Seek even to 0, so an element left at the end of the same episode starts from the top
+      var seekStart = function () { try { if (startAt > 0 || (el.currentTime || 0) > 0) el.currentTime = startAt; } catch (e) {} };
       // play() straight away, inside the tap (Safari refuses it later); seeking before metadata is ignored on iOS, so seek once it arrives
       if (el.readyState >= 1) seekStart();
       else {
@@ -1301,7 +1303,14 @@ var AudioEngine = (function () {
       changed();
       return Promise.resolve(p).catch(function (e) { stopReason = 'Tap play to start (' + (e && e.name || 'blocked') + ').'; changed(); });
     }
-    function toggle() { if (!ep) return; if (el.paused) el.play(); else el.pause(); }
+    // A finished episode played again is no longer finished (capture keeps an existing done flag otherwise)
+    function replay() { var r = rec(); if (r && r.done) opts.save(ep.guid, Object.assign({}, r, { t: 0, done: false, updated: now() })); }
+    function toggle() {
+      if (!ep) return;
+      if (!el.paused) { el.pause(); return; }
+      if (el.ended) { replay(); armed = false; startAt = 0; try { el.currentTime = 0; } catch (e) {} } // play after the end = start again
+      setSession(); el.play();
+    }
     function pause() { if (ep && !el.paused) el.pause(); }
     function seek(t) {
       if (!ep) return;
@@ -1355,12 +1364,13 @@ var AudioEngine = (function () {
     // ----- Element events -----
     el.addEventListener('playing', function () {
       if (!armed && Math.abs((el.currentTime || 0) - startAt) < 15) armed = true;
+      setSession(); // take the lock-screen controls back (the self-check's sound test borrows them)
       if (ms) try { ms.playbackState = 'playing'; } catch (e) {}
       setPosition(); changed();
     });
     // After the deferred seek lands where we asked, the spot can be trusted
-    el.addEventListener('seeked', function () { if (!armed && !el.paused && Math.abs((el.currentTime || 0) - startAt) < 15) armed = true; });
-    el.addEventListener('pause', function () { capture(true); if (ms) try { ms.playbackState = 'paused'; } catch (e) {} changed(); });
+    el.addEventListener('seeked', function () { if (!armed && !el.paused && Math.abs((el.currentTime || 0) - startAt) < 15) armed = true; setPosition(); });
+    el.addEventListener('pause', function () { capture(true); if (ms) try { ms.playbackState = 'paused'; } catch (e) {} setPosition(); changed(); });
     // timeupdate keeps firing while the phone is locked, so the timer is checked here as well as by the UI's clock
     el.addEventListener('timeupdate', function () {
       check(false);
@@ -1369,7 +1379,7 @@ var AudioEngine = (function () {
     el.addEventListener('ended', function () {
       armed = true;
       if (ep) { var r = rec() || {}; opts.save(ep.guid, Object.assign({}, r, { t: el.duration || r.t || 0, dur: el.duration || r.dur || 0, done: true, updated: now(), url: ep.url, title: ep.title || '', podcast: ep.podcast || '' })); }
-      check(true); changed();
+      setPosition(); check(true); changed();
     });
     el.addEventListener('error', function () {
       stopReason = "Couldn't play this episode. The podcast's server didn't send audio; check your internet, or the link may have expired.";
@@ -1386,7 +1396,7 @@ var AudioEngine = (function () {
       };
     }
     return { play: play, toggle: toggle, pause: pause, seek: seek, seekBy: seekBy, setRate: setRate, setTimer: setTimer,
-      tick: function () { check(false); }, capture: capture, state: state, BACK: BACK, FWD: FWD };
+      tick: function () { check(false); }, capture: capture, state: state, session: function () { setSession(); setPosition(); }, BACK: BACK, FWD: FWD };
   }
   return { create: create };
 })();
@@ -2459,7 +2469,8 @@ if (typeof module !== 'undefined') module.exports = Courses;
       onChange: function () { renderAudio(); renderSoon(); }
     });
     if (prefs.arate) engine.setRate(prefs.arate);
-    $('#audio').addEventListener('play', function () { clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
+    // A podcast starting ends the self-check's sound test (the engine then takes the lock-screen controls back)
+    $('#audio').addEventListener('play', function () { if (Native.tonePlaying) { Native.stopTone(); var tb = $('#toneBtn'); if (tb) tb.textContent = 'Test lock-screen sound'; } clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
     $('#audio').addEventListener('pause', function () { clearInterval(aTick); renderAudio(); });
   }
   function openAudio(e) {
@@ -2967,7 +2978,7 @@ if (typeof module !== 'undefined') module.exports = Courses;
       case 'yt-settings': Native.openSettings().catch(function () { toast("Open the iPhone's Settings app, scroll down to Shelf, and turn on Allow Cross-Website Tracking.", 'warn'); }); break;
       case 'phone-retry': b.textContent = 'Reopening…'; capture(true); if (engine) engine.capture(true); setTimeout(function () { location.reload(); }, 300); break; // a fresh start reads the phone's copy again and merges it
       case 'tone':
-        if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
+        if (Native.tonePlaying) { Native.stopTone(); if (engine) engine.session(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
         if (engine.state().playing) engine.pause();
         if (current) closeVideo();
         Native.playTone().then(function () { b.textContent = 'Stop the sound test'; fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },
