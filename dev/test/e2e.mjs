@@ -198,6 +198,83 @@ const sb = await p.locator('#sendBtn').boundingBox();
 ok(sb && sb.y + sb.height <= 667, 'SE: self-check buttons reachable');
 await ctx.close();
 
+
+console.log('\n== Courses (Mehlman playlists)');
+({ ctx, p } = await appPage());
+await settle(p);
+const cinfo = await shelf(p, () => window.__shelf.courses.list().map((c) => { const pr = window.__shelf.courses.progress(c.id); return c.name + ':' + pr.done + '/' + pr.total + ':' + pr.state; }));
+ok(cinfo.join(' ') === 'Paeds:91/130:go OBGYN:60/60:done Ophthal:12/12:done Internal Med:0/150:new Pharm:0/80:new Family Med:0/40:new', 'C six playlists found and ticked from Mo\'s note: ' + cinfo.join(' '));
+ok(await shelf(p, () => window.__httpCalls.some((c) => c.method === 'POST' && /youtubei\/v1\/browse/.test(c.url))), 'C long playlists load past the first 100 (native POST)');
+ok(await shelf(p, () => { const c = window.__shelf.courses, ob = c.list()[1], pid = Object.keys(ob.pins)[0]; return c.items(ob.id).find((x) => x.id === pid).n; }) === 1607, 'C OBGYN 1607 carries the ‼ pin');
+ok(await p.locator('.band.c1 .courses .course').count() === 1 && /1 on the go/.test(await p.locator('.band.c1 .chd').textContent()), 'C Medicine band shows only the course on the go');
+ok(/91\/130/.test(await p.locator('.band.c1 .course .cn').textContent()) && /Next · 1115/.test(await p.locator('.band.c1 .course .cx').textContent()), 'C Paeds row: 91/130, next is 1115');
+await p.locator('.band.c1 .course .cr').click(); await p.waitForTimeout(150);
+ok(await p.locator('.course.open .ep').count() === 6 && (await p.locator('.course.open .ep.n .no').textContent()).includes('1115'), 'C expands to a short window around where you are (' + await p.locator('.course.open .ep').count() + ' rows)');
+await p.locator('.course.open .ep.n .tk').click(); await p.waitForTimeout(150);
+ok(/92\/130/.test(await p.locator('.band.c1 .course .cn').textContent()), 'C tapping a tick ticks it');
+await p.locator('.course.open [data-act="course-later"]').click(); await p.waitForTimeout(100);
+ok(await p.locator('.course.open .ep').count() === 16, 'C "more" reveals 10 more, not the whole list');
+// hold a later tick: everything above it is ticked, with Undo
+const tk = p.locator('.course.open .ep .tk').nth(10); await tk.evaluate((e) => e.scrollIntoView({ block: 'center' })); const tb = await tk.boundingBox();
+await p.mouse.move(tb.x + 10, tb.y + 10); await p.mouse.down(); await p.waitForTimeout(700); await p.mouse.up(); await p.waitForTimeout(200);
+const afterHold = await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done);
+ok(afterHold === 101 && /Ticked everything down to/.test(await p.locator('#toast').textContent()), 'C hold ticks everything above it (' + afterHold + ')');
+await p.locator('#toast button').click(); await p.waitForTimeout(150);
+ok(await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done) === 92, 'C Undo puts it back');
+// set place by episode number
+await p.locator('.course.open [data-act="course-place"]').click(); await p.waitForTimeout(100);
+await p.fill('#pl-PLpeds0000000000', '1203'); await p.press('#pl-PLpeds0000000000', 'Enter'); await p.waitForTimeout(150);
+ok(await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done) === 103 && /1203 is 103 of 130/.test(await p.locator('#toast').textContent()), 'C Set place 1203 ticks down to it in playlist order');
+// play next from the row, finish it, Next up
+await p.locator('.band.c1 .course .cgo').click(); await p.waitForTimeout(500);
+ok(/PAEDS · 104 OF 130/.test(await p.locator('#vCh').textContent()), 'C player says which course and where: ' + await p.locator('#vCh').textContent());
+ok(await p.locator('#vCourse').isVisible(), 'C player shows the course ruler');
+const firstId = await shelf(p, () => window.__shelf.current);
+await p.evaluate(() => window.__fake.seekTo(600)); await p.waitForTimeout(300);
+ok(await p.locator('#vNext').isVisible() && /Next up/i.test(await p.locator('#vNext').textContent()) && await shelf(p, () => window.__shelf.courses.isDone('PLpeds0000000000', window.__shelf.current)), 'C finishing ticks it and offers the next one');
+await p.locator('#vNext [data-act="ep-play"]').click(); await p.waitForTimeout(400);
+ok(await shelf(p, () => window.__shelf.current) !== firstId && /105 OF 130/.test(await p.locator('#vCh').textContent()), 'C Play next plays the next episode');
+await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(200);
+// Courses page and adding one
+await p.locator('.band.c1 .chd').click(); await p.waitForTimeout(150);
+ok((await p.locator('#page .sub-h').allTextContents()).map((x) => x.replace(/\d+/g, '').trim()).join(',') === 'On the go,Not started,Done', 'C Courses page groups: on the go, not started, done');
+await p.locator('#page .top [data-act="add-course"]').click(); await p.waitForTimeout(500);
+await p.fill('#courseInput', 'surg'); await p.waitForTimeout(150);
+ok(await p.locator('#coursePicks [data-pl]').count() === 1, 'C typing finds Mehlman\'s Surgery playlist');
+await p.locator('#coursePicks [data-pl]').click(); await p.locator('#courseGo').click(); await p.waitForTimeout(600);
+ok(/Added Surgery · 25 videos/.test(await p.locator('#courseMsg').textContent()), 'C added: ' + await p.locator('#courseMsg').textContent());
+await p.waitForTimeout(500);
+await p.evaluate(() => { window.__clip = 'https://www.youtube.com/playlist?list=PLs1pharm0000000'; });
+await p.locator('#pasteBtn').click(); await p.waitForTimeout(300);
+ok(await p.locator('#courseDlg[open]').count() === 1 && (await p.inputValue('#courseInput')).includes('PLs1pharm'), 'C pasting a playlist link opens Add course');
+await p.keyboard.press('Escape');
+await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(/Tracking 7 courses/.test(await p.locator('#checkList').textContent()), 'C self-check counts the courses');
+await p.keyboard.press('Escape');
+ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'C no sideways scroll');
+await p.waitForTimeout(500);
+const cprefs = await shelf(p, () => window.__prefs);
+await ctx.close();
+// ticks survive a relaunch (phone storage only)
+({ ctx, p } = await appPage({ prefs: cprefs }));
+await settle(p);
+const kept = await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done); ok(kept === 104, 'C ticks kept after closing the app (' + kept + ')');
+await ctx.close();
+// YouTube refuses the playlist: explained, ticks kept
+({ ctx, p } = await appPage({ prefs: cprefs, fakes: { plDown: true } }));
+await settle(p);
+await shelf(p, () => window.__shelf.courses.load('PLpeds0000000000', true)); await p.waitForTimeout(100);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(/Couldn't load Paeds/.test(await p.locator('#checkList').textContent()), 'C a playlist that won\'t load is named in the self-check');
+await ctx.close();
+// iPhone SE: the open course fits
+({ ctx, p } = await appPage({ ctxOpts: { viewport: { width: 375, height: 667 } } }));
+await settle(p);
+await p.locator('.band.c1 .course .cr').click(); await p.waitForTimeout(150);
+ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'SE: open course has no sideways scroll');
+await ctx.close();
+
 console.log('\n== Mac browser (no app)');
 const mctx = await browser.newContext({ viewport: { width: 1280, height: 820 }, permissions: ['clipboard-read', 'clipboard-write'] });
 await installFakes(mctx);

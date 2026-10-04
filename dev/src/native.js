@@ -50,6 +50,17 @@ var Native = (function () {
     });
   }
 
+  // A JSON POST (YouTube's "load more" for long playlists), same native route as httpGet
+  function httpPost(url, body, headers) {
+    var h = { 'User-Agent': SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9', 'Content-Type': 'application/json' };
+    for (var k in headers || {}) h[k] = headers[k];
+    return call('CapacitorHttp', 'request', { url: url, method: 'POST', headers: h, data: body, responseType: 'text' }).then(function (r) {
+      var d = r && r.data;
+      if (d != null && typeof d !== 'string') d = JSON.stringify(d);
+      return { status: (r && r.status) || 0, ok: r && r.status >= 200 && r.status < 300, text: d == null ? '' : d, unreadable: d == null };
+    });
+  }
+
   // Can the app read a podcast feed? (needs the shell's native networking: feeds don't allow browser reads)
   var feedStatus = { state: inApp ? 'wait' : 'web', text: '' };
   function testFeed() {
@@ -109,7 +120,7 @@ var Native = (function () {
     document.documentElement.classList.add('in-app');
     setTimeout(testFeed, 1500);
   }
-  return { inApp: inApp, call: call, httpGet: httpGet, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+  return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
 })();

@@ -9,6 +9,25 @@ export const CHANNELS = {
   '@BreakingPoints': { id: id('BreakingPoints'), name: 'Breaking Points', videos: [['Krystal and Saagar: Fed Cuts Rates Again', 1 * H], ['Full Show: Shutdown Week Two', 1 * D], ['Saagar on the Polling Mess', 2 * D]] }
 };
 const yt = Object.values(CHANNELS);
+// Mehlman's playlists: "HY USMLE Q #n - Topic". Paeds #1107 is the 91st of 130 (70%); OBGYN ends on #1607.
+const range = (from, n, step) => Array.from({ length: n }, (_, i) => from + i * step);
+export const PLAYLISTS = {
+  PLpeds0000000000: { title: 'HY USMLE Qs - Pediatrics', topic: 'Pediatrics', nums: range(387, 130, 8) },
+  PLobgyn000000000: { title: 'HY USMLE Qs - OBGYN', topic: 'OBGYN', nums: range(1430, 60, 3) },
+  PLoph00000000000: { title: 'Ophthalmology', topic: 'Ophthalmology', nums: range(200, 12, 5) },
+  PLim000000000000: { title: 'HY USMLE Qs - Internal Medicine', topic: 'Internal Medicine', nums: range(100, 150, 4) },
+  PLpharm000000000: { title: 'Step 2 CK Pharmacology Qs', topic: 'Pharmacology', nums: range(50, 80, 9) },
+  PLs1pharm0000000: { title: 'Step 1 Pharmacology', topic: 'Step 1 Pharm', nums: range(10, 30, 2) },
+  PLfm000000000000: { title: 'Family Medicine Qs', topic: 'Family Medicine', nums: range(700, 40, 3) },
+  PLsurg0000000000: { title: 'HY USMLE Qs - Surgery', topic: 'Surgery', nums: range(900, 25, 7) }
+};
+export const plVid = (pid, i) => pid.slice(2, 6) + String(i).padStart(6, '0') + 'q';
+function plPage(pid, k) {
+  const p = PLAYLISTS[pid];
+  const vids = p.nums.slice(k * 100, k * 100 + 100).map((n, j) => ({ playlistVideoRenderer: { videoId: plVid(pid, k * 100 + j), title: { runs: [{ text: 'HY USMLE Q #' + n + ' - ' + p.topic }] }, lengthSeconds: String(420 + (n % 9) * 40), isPlayable: true } }));
+  if ((k + 1) * 100 < p.nums.length) vids.push({ continuationItemRenderer: { continuationEndpoint: { continuationCommand: { token: pid + ':' + (k + 1) } } } });
+  return vids;
+}
 export const PODCASTS = {
   'https://feeds.megaphone.fm/finvshistory': { title: 'Fin vs History', eps: [['Ep. 212: The Shortest War in History', 3851, 6 * H], ['Ep. 211: The Great Emu War', 3420, 7 * D]] },
   'https://feeds.example.com/ezra': { title: 'The Ezra Klein Show', eps: [['Why the Housing Market Is Stuck', 3501, 20 * H], ['The Case for Boredom', 3810, 4 * D]] },
@@ -85,9 +104,9 @@ export const CAP = (seed, clip) => `window.__prefs = ${JSON.stringify(seed || {}
     window.Capacitor = { isNativePlatform: () => true, Plugins: {
       Preferences: { get: async ({ key }) => ({ value: key in window.__prefs ? window.__prefs[key] : null }), set: async ({ key, value }) => { window.__prefs[key] = value; } },
       Clipboard: { read: async () => ({ value: window.__clip, type: 'text/plain' }), write: async ({ string }) => { window.__clip = string; } },
-      CapacitorHttp: { request: async ({ url, method, headers }) => {
-        window.__httpCalls.push({ url: url, method: method, headers: headers });
-        var r = await webFetch(url);
+      CapacitorHttp: { request: async ({ url, method, headers, data }) => {
+        window.__httpCalls.push({ url: url, method: method, headers: headers, data: data });
+        var r = await webFetch(url, method === 'POST' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) } : undefined);
         var t = await r.text(), ct = r.headers.get('content-type') || '';
         return { status: r.status, url: url, headers: { 'content-type': ct }, data: /json/.test(ct) ? JSON.parse(t) : t };
       } } } };
@@ -106,6 +125,22 @@ export async function installFakes(ctx, opts = {}) {
       const ch = yt.find((c) => key.endsWith(c.id.slice(2)));
       if (!ch) return r.fulfill({ status: 404, headers: cors, body: '' });
       return r.fulfill({ contentType: 'application/atom+xml', headers: cors, body: ytFeed(ch, now, first(ch.id)) });
+    }
+    if (u.pathname === '/@MehlmanMedical/playlists') {
+      const data = { contents: Object.keys(PLAYLISTS).map((id) => ({ lockupViewModel: { contentId: id, contentType: 'LOCKUP_CONTENT_TYPE_PLAYLIST', metadata: { lockupMetadataViewModel: { title: { content: PLAYLISTS[id].title } } }, overlay: { text: PLAYLISTS[id].nums.length + ' videos' } } })) };
+      return r.fulfill({ contentType: 'text/html', headers: cors, body: '<html><script>var ytInitialData = ' + JSON.stringify(data) + ';</script></html>' });
+    }
+    if (u.pathname === '/playlist') {
+      const pid = u.searchParams.get('list');
+      if (!PLAYLISTS[pid] || opts.plDown) return r.fulfill({ status: opts.plDown ? 500 : 404, headers: cors, body: '' });
+      const data = { metadata: { playlistMetadataRenderer: { title: PLAYLISTS[pid].title } }, contents: plPage(pid, 0) };
+      return r.fulfill({ contentType: 'text/html', headers: cors, body: '<html><script>ytcfg.set({"INNERTUBE_CLIENT_VERSION":"2.20260901.01.00","INNERTUBE_API_KEY":"AIzaFAKEKEY"});</script><script>var ytInitialData = ' + JSON.stringify(data) + ';</script></html>' });
+    }
+    if (u.pathname === '/youtubei/v1/browse' && r.request().method() === 'POST') {
+      const tok = JSON.parse(r.request().postData() || '{}').continuation || '';
+      const [pid, k] = tok.split(':');
+      if (!PLAYLISTS[pid]) return r.fulfill({ status: 400, headers: cors, body: '{}' });
+      return r.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify({ onResponseReceivedActions: [{ appendContinuationItemsAction: { continuationItems: plPage(pid, +k) } }] }) });
     }
     const handle = decodeURIComponent(u.pathname.slice(1));
     if (CHANNELS[handle]) {

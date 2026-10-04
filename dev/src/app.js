@@ -96,7 +96,7 @@
   // ---------- Home ----------
   var renderTimer = null;
   function renderSoon() { clearTimeout(renderTimer); renderTimer = setTimeout(renderAll, 60); }
-  function renderAll() { renderHome(); if (stack.length) renderPage(); }
+  function renderAll() { keepTyping(function () { renderHome(); if (stack.length) renderPage(); }); }
   var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   function durText(e) {
@@ -136,7 +136,7 @@
       var srcs = lib.sources(sec.id).length;
       html += '<section class="band ' + bandClass(sec.id) + '" aria-label="' + esc(sec.name) + '">' +
         '<button type="button" class="hd" data-act="open-section" data-id="' + esc(sec.id) + '"><h2>' + esc(sec.name) + '</h2><span class="tm mono">' +
-        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>';
+        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>' + coursesStrip(sec.id);
       if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
       else if (!srcs && !feedsOn) html += '<p class="empty">Your channels show here in the Shelf app on your iPhone.</p>';
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
@@ -262,6 +262,8 @@
       html += '<div class="top band c0">' + eyebrow(shortDate(), vids.length + ' VIDEOS') + h1('Pasted') + '<p>Links you pasted from channels you don\'t follow. Finished ones stay at the bottom.</p></div>';
       if (!vids.length) html += '<p class="pnote">Nothing pasted yet.</p>';
       vids.forEach(function (e) { html += itemHTML(e, 'p') + '<button type="button" class="more" data-act="remove-video" data-id="' + esc(e.key) + '"><span class="mono">Remove ' + esc(e.title.slice(0, 40)) + '</span><span>×</span></button>'; });
+    } else if (v.name === 'courses') {
+      html += coursesPage(v);
     } else if (v.name === 'search') {
       html += '<div class="top band c2">' + eyebrow(shortDate(), prefs.apiKey ? 'GOOGLE KEY' : 'NO KEY NEEDED') + h1('Search') +
         '<form class="sform" id="sform"><input id="sq" type="search" enterkeyhint="search" autocomplete="off" placeholder="hyperkalemia, Emu War…" value="' + esc(v.q || '') + '" aria-label="Search YouTube"><button type="submit">Go</button></form></div>';
@@ -277,7 +279,7 @@
         }
       });
     }
-    pg.className = 'page' + ({ c1: ' d1', c2: ' d2' }[v.name === 'section' ? bandClass(v.id) : v.name === 'channel' && lib.source(v.id) ? bandClass(lib.source(v.id).section) : ''] || '');
+    pg.className = 'page' + ({ c1: ' d1', c2: ' d2' }[v.name === 'section' || v.name === 'courses' ? bandClass(v.id) : v.name === 'channel' && lib.source(v.id) ? bandClass(lib.source(v.id).section) : ''] || '');
     pg.innerHTML = html;
     fitAll(pg);
     if (v.name === 'search') {
@@ -319,7 +321,7 @@
     if (!feedsOn || refreshing) return Promise.resolve();
     refreshing = true; renderSoon();
     var first = lib.seed();
-    return first.then(function () { return lib.refreshAll(force, function () { renderSoon(); }); })
+    return first.then(function () { return Promise.all([lib.refreshAll(force, function () { renderSoon(); }), syncCourses(force)]); })
       .then(function () { refreshing = false; lib.saveCache(); lastRefresh = Date.now(); renderAll(); updateDot(); }, function () { refreshing = false; renderAll(); });
   }
   var lastRefresh = 0;
@@ -371,7 +373,8 @@
     lastErr = ''; $('#perr').hidden = true;
     v.updated = Date.now(); saveVideos();
     $('#vTitle').textContent = v.title || 'YouTube video';
-    $('#vCh').textContent = v.author || '';
+    $('#vCh').textContent = courseTag(v.id) || v.author || '';
+    $('#vNext').hidden = true; renderPlayerCourse(v.id);
     $('#ytLink').href = ytLink(v);
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
@@ -426,14 +429,18 @@
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (prefs.rate && player.getPlaybackRate && player.getPlaybackRate() !== prefs.rate) { try { player.setPlaybackRate(prefs.rate); } catch (er) {} }
       capture(); keepAwake(true);
-      var v = videos[current]; if (v) $('#vCh').textContent = (v.author ? v.author + ' · ' : '') + (wake ? 'screen stays on' : 'saving your spot');
+      var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake ? 'screen stays on' : 'saving your spot');
     } else {
       clearInterval(tick); keepAwake(false);
       if (e.data === S.ENDED && current && videos[current] && armed) {
         var w = videos[current]; w.t = w.dur || w.t; w.done = true; w.updated = Date.now();
-        if (vTimer && vTimer.mode === 'end') vTimer = null;
-        saveVideos(); closeVideo(true);
-        toast('Finished. It stays in its channel, marked as watched.');
+        var endTimer = vTimer && vTimer.mode === 'end', inCourse = courseOf(w.id);
+        if (endTimer) vTimer = null;
+        saveVideos();
+        if (inCourse) cs.tick(inCourse.course.id, w.id, true);
+        // In a course: offer the next episode instead of closing (unless the sleep timer said "end")
+        if (inCourse && !endTimer) { showNextUp(inCourse); renderAll(); }
+        else { closeVideo(true); toast(inCourse ? 'Finished and ticked. Sleep well.' : 'Finished. It stays in its channel, marked as watched.'); }
       } else if (e.data === S.PAUSED) capture(true);
     }
   }
@@ -460,6 +467,9 @@
   }
   function closeVideo(silent) {
     capture(true);
+    // Closed in the last few seconds (end screen): it counts as watched, and ticks its course
+    var cv = current && videos[current];
+    if (cv && !cv.done && Core.isDone(cv.t, cv.dur)) { var cw = courseOf(cv.id); if (cw) { cv.done = true; cv.t = cv.dur; saveVideos(); cs.tick(cw.course.id, cv.id, true); } }
     try { player && player.pauseVideo(); } catch (e) {}
     clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); keepAwake(false);
     current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
@@ -619,9 +629,11 @@
     text = String(text || '').trim();
     var shelf = text.match(/#shelf=([A-Za-z0-9_-]+)/);
     if (shelf) { importShelf(shelf[1]); renderAll(); return true; }
-    var found = Core.findLinks(text);
+    var found = Core.findLinks(text), pl = Courses.playlistId(text);
+    if (pl && !found.length) { openCourseAdd(text); return true; }
     if (found.length === 1) {
       openVideo({ id: found[0].id, t: found[0].t });
+      if (pl && cs && !cs.get(pl)) setTimeout(function () { toast('This video is in a playlist.', '', { label: 'Track it', fn: function () { openCourseAdd(text); } }); }, 600);
       return true;
     }
     if (found.length > 1) {
@@ -706,6 +718,283 @@
     } catch (err) { msg.textContent = err.message; msg.className = 'msgline err'; }
   });
 
+  // ---------- Courses (playlists ticked episode by episode) ----------
+  var cs = null, openC = null, cwin = {}, cgrid = {}, cplace = {}, confirmCourse = null;
+  function postJSON(url, body, headers) {
+    if (!Native.inApp) return Promise.reject(new Error('This needs the Shelf app on your iPhone.'));
+    return withTimeout(Native.httpPost(url, body, headers), 20000, 'No answer after 20 seconds.').then(function (r) {
+      if (!r.ok) throw new Error('YouTube said ' + r.status + '.');
+      return r.text;
+    });
+  }
+  function epLabel(x, i) { return x.n ? String(x.n) : String(i + 1); }
+  // "HY USMLE Q #1107 - Pediatrics" -> "Pediatrics"
+  function shortTitle(t) { var s = String(t || '').replace(/^.*?#\s*\d+\s*[-–—:|]*\s*/, '').trim(); return s || String(t || ''); }
+  // When every title shortens to the same words, the full title says more
+  var repCache = {};
+  function titleFor(c, x) {
+    var arr = cs.items(c.id), key = c.id + arr.length;
+    if (repCache[c.id] == null || repCache[c.id].key !== key) {
+      var seen = {}, n = 0; arr.forEach(function (y) { var s = shortTitle(y.title); if (!seen[s]) { seen[s] = 1; n++; } });
+      repCache[c.id] = { key: key, rep: arr.length > 3 && n < arr.length * 0.3 };
+    }
+    return repCache[c.id].rep ? x.title : shortTitle(x.title);
+  }
+  function spotOf(x) { var v = videos[x.id]; return v && !v.done && v.t > 5 ? Core.fmt(v.t) + ' / ' + Core.fmt(v.dur || x.dur) : x.dur ? Core.fmt(x.dur) : ''; }
+  function rulerHTML(c, pr, arr) {
+    var n = arr.length;
+    if (!n) return '<span class="rl" aria-hidden="true"><i></i></span>';
+    if (n <= 60) return '<span class="rl" aria-hidden="true">' + arr.map(function (x, i) { return '<i class="' + (cs.isDone(c.id, x.id) ? 'd' : '') + (i === pr.notch ? ' n' : '') + (c.pins[x.id] ? ' p' : '') + '"></i>'; }).join('') + '</span>';
+    var h = '', run = -1, pc = function (v) { return (v / n * 100).toFixed(2) + '%'; };
+    for (var i = 0; i <= n; i++) {
+      var d = i < n && cs.isDone(c.id, arr[i].id);
+      if (d && run < 0) run = i;
+      if (!d && run >= 0) { h += '<b style="left:' + pc(run) + ';width:' + pc(i - run) + '"></b>'; run = -1; }
+    }
+    arr.forEach(function (x, j) { if (c.pins[x.id]) h += '<span class="pk" style="left:' + pc(j + 0.5) + '"></span>'; });
+    if (pr.notch >= 0) h += '<span class="nk" style="left:' + pc(pr.notch + 0.5) + '"></span>';
+    return '<span class="rl dense" aria-hidden="true">' + h + '</span>';
+  }
+  function courseSub(c, pr, arr) {
+    var st = cs.status(c.id);
+    if (!arr.length) return st.loading || c.seed ? 'Loading episodes…' : !st.ok ? "Couldn't load it. Tap to see why." : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app on your iPhone';
+    if (pr.state === 'done') return 'Done · ' + pr.done + '/' + pr.total;
+    if (pr.state === 'new') return 'Not started · ' + pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '');
+    var nx = pr.next, sp = spotOf(nx);
+    return 'Next · ' + epLabel(nx, pr.notch) + ' · ' + shortTitle(nx.title) + (sp ? ' · ' + sp : '');
+  }
+  function courseRow(c) {
+    var arr = cs.items(c.id), pr = cs.progress(c.id), open = openC === c.id, nx = pr.next;
+    var h = '<div class="course ' + pr.state + (open ? ' open' : '') + '">' +
+      '<button type="button" class="cr" data-act="course-open" data-id="' + esc(c.id) + '" aria-expanded="' + open + '" aria-label="' + esc(c.name + ', ' + pr.done + ' of ' + pr.total + ' watched. ' + (open ? 'Close' : 'Open')) + '">' +
+      '<span class="cl">' + esc(c.name) + '</span>' + rulerHTML(c, pr, arr) + '<span class="cn mono">' + (arr.length ? pr.done + '/' + pr.total : '–') + '</span>' +
+      '<span class="cx mono">' + esc(courseSub(c, pr, arr)) + '</span></button>';
+    if (nx) h += '<button type="button" class="cgo" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '" aria-label="' + esc((pr.state === 'new' ? 'Start ' : 'Play next: ') + epLabel(nx, pr.notch)) + '">▶</button>';
+    else h += '<span class="cgo" aria-hidden="true">' + (pr.state === 'done' ? '✓' : '') + '</span>';
+    var pins = arr.map(function (x, i) { return c.pins[x.id] ? { x: x, i: i } : null; }).filter(Boolean);
+    if (pins.length && !open) h += '<span class="cpin mono"><span class="pin">‼</span> ' + esc(epLabel(pins[0].x, pins[0].i)) + ' · ' + esc(shortTitle(pins[0].x.title)) + (pins.length > 1 ? ' · +' + (pins.length - 1) : '') + '</span>';
+    if (open) h += courseBody(c, pr, arr);
+    return h + '</div>';
+  }
+  function courseBody(c, pr, arr) {
+    var st = cs.status(c.id), link = 'https://www.youtube.com/playlist?list=' + encodeURIComponent(c.id), h = '<div class="cbody">';
+    if (!st.ok && st.error) h += '<p class="cnote err">' + (/private or gone/.test(st.error) ? 'YouTube says this playlist is private or gone. Your ticks are kept.' : "Couldn't load this playlist from YouTube: " + esc(st.error) + ' Your ticks are safe.') +
+      ' <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Retry</button></p>';
+    if (st.partial) h += '<p class="cnote">YouTube sent the first ' + arr.length + ' of ' + st.partial + ' videos. <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Load the rest</button></p>';
+    if (c.note) h += '<p class="cnote">' + esc(c.note) + '</p>';
+    if (arr.length) {
+      if (cplace[c.id]) h += '<form class="cplace" data-id="' + esc(c.id) + '"><label for="pl-' + esc(c.id) + '">Where are you? Episode № from the title</label>' +
+        '<input id="pl-' + esc(c.id) + '" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="e.g. ' + esc(epLabel(arr[Math.max(0, pr.notch)] || arr[0], 0)) + '">' +
+        '<span class="row"><button type="submit" class="cbtn solid">Tick up to here</button><button type="button" class="cbtn" data-act="course-pin-no" data-id="' + esc(c.id) + '">Pin ‼</button></span></form>';
+      else if (pr.state === 'new') h += '<p class="cnote">Not started. Tap ▶ to start at the top, or Set place if you\'ve watched some on YouTube.</p>';
+      h += cgrid[c.id] ? gridHTML(c, pr, arr) : windowHTML(c, pr, arr);
+    }
+    h += '<div class="cedge">' + (arr.length ? '<button type="button" data-act="course-grid" data-id="' + esc(c.id) + '">' + (cgrid[c.id] ? 'List' : 'Grid · ' + arr.length) + '</button>' +
+      '<button type="button" data-act="course-place" data-id="' + esc(c.id) + '">Set place №</button>' : '') +
+      '<a href="' + esc(link) + '" target="_blank" rel="noopener">YouTube ↗</a>' +
+      '<button type="button" class="danger" data-act="course-remove" data-id="' + esc(c.id) + '">' + (confirmCourse === c.id ? 'Tap again to remove' : 'Remove') + '</button></div>';
+    return h + '</div>';
+  }
+  function windowHTML(c, pr, arr) {
+    var w = cwin[c.id] || (cwin[c.id] = { b: 2, a: 3 });
+    var center = pr.notch >= 0 ? pr.notch : arr.length - 1;
+    var from = Math.max(0, center - w.b), to = Math.min(arr.length - 1, center + w.a), h = '';
+    if (from > 0) h += '<button type="button" class="cmore" data-act="course-earlier" data-id="' + esc(c.id) + '">▲ ' + from + ' earlier</button>';
+    h += '<ul class="eps">';
+    for (var i = from; i <= to; i++) {
+      var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
+      h += '<li class="ep' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
+        '<button type="button" class="tk" data-act="ep-tick" data-hold="upto"' + da + ' aria-pressed="' + d + '" aria-label="' + esc((d ? 'Untick ' : 'Tick ') + lab + '. Hold to tick everything above it too.') + '"><span>' + (d ? '✓' : '') + '</span></button>' +
+        '<span class="no mono">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</span>' +
+        '<button type="button" class="et" data-act="ep-play" data-hold="pin"' + da + '>' + esc(titleFor(c, x)) + '</button>' +
+        '<span class="du mono">' + esc(spotOf(x)) + '</span></li>';
+    }
+    h += '</ul>';
+    if (to < arr.length - 1) h += '<button type="button" class="cmore" data-act="course-later" data-id="' + esc(c.id) + '">▼ ' + (arr.length - 1 - to) + ' more</button>';
+    return h;
+  }
+  function gridHTML(c, pr, arr) {
+    return '<p class="cnote">Tap to tick one. Hold to tick everything up to it.</p><div class="epgrid">' + arr.map(function (x, i) {
+      var d = cs.isDone(c.id, x.id), lab = epLabel(x, i);
+      return '<button type="button" class="' + (d ? 'd' : '') + (i === pr.notch ? ' n' : '') + (c.pins[x.id] ? ' p' : '') + '" data-act="ep-tick" data-hold="upto" data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '" aria-pressed="' + d + '" aria-label="' + esc(lab + ': ' + shortTitle(x.title)) + '">' + esc(lab) + '</button>';
+    }).join('') + '</div>';
+  }
+  // Courses shown on a section's band: the ones on the go, at most two
+  function coursesStrip(secId) {
+    if (!cs) return '';
+    var all = cs.list().filter(function (c) { return (c.section || 'med') === secId; });
+    if (!all.length) return '';
+    var go = all.filter(function (c) { var s = cs.progress(c.id).state; return s === 'go' || (s === 'empty' && (c.touched || (c.seed && c.seed.upTo))); })
+      .sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
+    if (openC && !go.some(function (c) { return c.id === openC; }) && all.some(function (c) { return c.id === openC; }) && !stack.length) go.unshift(cs.get(openC));
+    var h = '<div class="courses"><button type="button" class="chd" data-act="open-courses" data-id="' + esc(secId) + '"><span>Courses</span><span class="mono">' +
+      (go.length ? go.length + ' on the go' : all.length + ' · none on the go') + ' ›</span></button>';
+    go.slice(0, 2).forEach(function (c) { h += courseRow(c); });
+    return h + '</div>';
+  }
+  function coursesPage(v) {
+    var sec = lib.section(v.id) || lib.sections()[0], all = cs.list().filter(function (c) { return (c.section || 'med') === sec.id; }), h = '';
+    h += '<div class="top band ' + bandClass(sec.id) + '">' + eyebrow(sec.name.toUpperCase(), all.length + (all.length === 1 ? ' COURSE' : ' COURSES')) + h1('Courses') +
+      '<p>Playlists ticked episode by episode. Tap one to open it. Hold a tick to tick everything above it.</p>' +
+      '<div class="acts"><button type="button" class="btn" data-act="add-course" data-id="' + esc(sec.id) + '">+ Add course</button></div></div>';
+    if (sec.id === Courses.SEED.section) cs.misses.forEach(function (m) {
+      h += '<p class="pnote err">Couldn\'t find your ' + esc(m.name) + ' playlist on Mehlman\'s channel (' + esc(m.error) + '). <button type="button" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '">Fix</button></p>';
+    });
+    if (!feedsOn && !prefs.apiKey) h += '<p class="pnote">Episodes load in the Shelf app on your iPhone.</p>';
+    var groups = { go: [], new: [], done: [] };
+    all.forEach(function (c) { var s = cs.progress(c.id).state; (groups[s === 'empty' ? (c.touched || c.seed ? 'go' : 'new') : s] || groups.new).push(c); });
+    groups.go.sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
+    [['go', 'On the go'], ['new', 'Not started'], ['done', 'Done']].forEach(function (g) {
+      if (!groups[g[0]].length) return;
+      h += '<h2 class="sub-h"><span>' + g[1] + '</span><span class="mono">' + groups[g[0]].length + '</span></h2><div class="cgroup">' + groups[g[0]].map(courseRow).join('') + '</div>';
+    });
+    if (!all.length) h += '<p class="pnote">No courses yet. Paste a playlist link and it lands here.</p>';
+    h += '<button type="button" class="more" data-act="add-course" data-id="' + esc(sec.id) + '"><span>+ Add course</span><span class="mono">paste a playlist link</span></button>';
+    return h;
+  }
+  function openCourses(secId) { push({ name: 'courses', id: secId || 'med' }); }
+  // Re-render without losing what's being typed in a Set place box
+  function keepTyping(fn) {
+    var a = document.activeElement, id = a && a.id && /^pl-/.test(a.id) ? a.id : null, val = id ? a.value : '';
+    fn();
+    if (id) { var n = document.getElementById(id); if (n) { n.value = val; try { n.focus({ preventScroll: true }); } catch (e) {} } }
+  }
+  function syncCourses(force) {
+    if (!cs || !(feedsOn || prefs.apiKey)) return Promise.resolve();
+    return (feedsOn ? cs.seed() : Promise.resolve()).then(function () { return cs.loadAll(force, function () { renderSoon(); }); }).then(function () { renderSoon(); updateDot(); });
+  }
+  // Tick (or untick) one episode; the video's own saved spot agrees
+  function setTick(cid, vid, on) {
+    cs.tick(cid, vid, on);
+    var v = videos[vid];
+    if (v && on && !v.done) { v.done = true; v.t = v.dur || v.t; v.updated = Date.now(); saveVideos(); }
+    else if (v && !on && v.done) { v.done = false; v.t = 0; saveVideos(); }
+    renderAll();
+  }
+  function playEp(cid, vid) {
+    var c = cs.get(cid), x = c && cs.items(cid).filter(function (y) { return y.id === vid; })[0];
+    if (!x) return;
+    var src = lib.sources().filter(function (s) { return c.channel && s.name.toLowerCase() === c.channel.toLowerCase(); })[0];
+    cs.touch(cid);
+    openVideo({ id: vid, title: x.title, author: c.channel || '', channelId: src ? src.id : '', section: c.section, dur: x.dur });
+  }
+  function holdAct(el) {
+    var cid = el.getAttribute('data-id'), vid = el.getAttribute('data-v'), i = +el.getAttribute('data-i'), c = cs.get(cid);
+    if (!c) return;
+    var arr = cs.items(cid), x = arr[i], lab = x ? epLabel(x, i) : '';
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+    if (el.getAttribute('data-hold') === 'upto') {
+      var before = cs.tickUpTo(cid, i);
+      renderAll();
+      toast('Ticked everything down to ' + lab + ' (' + (i + 1) + ' of ' + arr.length + ').', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+    } else {
+      var on = !c.pins[vid];
+      cs.pin(cid, vid, on); renderAll();
+      toast(on ? 'Pinned ‼ ' + lab + '. It stays on ' + c.name + '\'s row.' : 'Unpinned ' + lab + '.');
+    }
+  }
+  // Press and hold: 'upto' on a tick, 'pin' on a title
+  var cHoldT = null, cHoldXY = null, cHeld = false, cSwallowUntil = 0;
+  document.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest && e.target.closest('[data-hold]'); if (!el) return;
+    cHoldXY = [e.clientX, e.clientY]; cHeld = false; clearTimeout(cHoldT);
+    cHoldT = setTimeout(function () { cHeld = true; cSwallowUntil = Infinity; holdAct(el); }, 500);
+  });
+  document.addEventListener('pointermove', function (e) { if (cHoldXY && Math.abs(e.clientX - cHoldXY[0]) + Math.abs(e.clientY - cHoldXY[1]) > 12) clearTimeout(cHoldT); });
+  ['pointerup', 'pointercancel'].forEach(function (t) { document.addEventListener(t, function () { clearTimeout(cHoldT); cHoldXY = null; if (cHeld) { cHeld = false; cSwallowUntil = Date.now() + 450; } }); });
+  document.addEventListener('contextmenu', function (e) { if (e.target.closest && e.target.closest('[data-hold]')) e.preventDefault(); });
+  // Set place: an episode number from the titles
+  document.addEventListener('submit', function (e) {
+    var f = e.target.closest && e.target.closest('.cplace'); if (!f) return;
+    e.preventDefault();
+    var cid = f.getAttribute('data-id'), c = cs.get(cid), n = parseInt(f.querySelector('input').value, 10);
+    if (!c || !n) { toast('Type the episode number from the video title, like 1107.', 'warn'); return; }
+    var hits = cs.findNumber(cid, n), arr = cs.items(cid);
+    if (!hits.length) { toast('No episode ' + n + ' in ' + c.name + '. Check the number in the video title.', 'warn'); return; }
+    var before = cs.tickUpTo(cid, hits[0]);
+    cplace[cid] = false; cwin[cid] = null;
+    renderAll();
+    toast(n + ' is ' + (hits[0] + 1) + ' of ' + arr.length + '. Ticked it and everything above it' + (hits.length > 1 ? ' (first of ' + hits.length + ')' : '') + '.', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+  });
+
+  // Add a course
+  var cAddSec = 'med', cFix = null, cAdding = false, chanLists = null;
+  function openCourseAdd(prefill, secId, fixName) {
+    cFix = fixName || null;
+    var secs = lib.sections();
+    cAddSec = secId && lib.section(secId) ? secId : lib.section('med') ? 'med' : secs[0].id;
+    $('#courseSec').innerHTML = secs.map(function (s) { return '<button type="button" data-act="course-sec" data-id="' + esc(s.id) + '" aria-pressed="' + (s.id === cAddSec) + '">' + esc(s.name) + '</button>'; }).join('');
+    $('#courseInput').value = prefill || '';
+    $('#courseName').value = fixName || ''; $('#courseName').removeAttribute('data-auto');
+    $('#courseMsg').textContent = feedsOn || prefs.apiKey ? '' : 'Adding courses works in the Shelf app on your iPhone.';
+    $('#courseMsg').className = 'msgline';
+    $('#courseH').textContent = fixName ? 'Find ' + fixName : 'Add a course';
+    openDlg($('#courseDlg'));
+    renderCoursePicks();
+    if (feedsOn && !chanLists) cs.channelPlaylists(Courses.SEED.channel).then(function (l) { chanLists = l; renderCoursePicks(); }, function () {});
+    if (!prefill && !isPhone) setTimeout(function () { $('#courseInput').focus(); }, 50);
+  }
+  function renderCoursePicks() {
+    var q = $('#courseInput').value.trim().toLowerCase(), box = $('#coursePicks');
+    if (!chanLists || Courses.playlistId(q) || /^https?:|youtu/.test(q)) { box.innerHTML = ''; return; }
+    var have = {}; cs.list().forEach(function (c) { have[c.id] = 1; });
+    var words = q.split(/\s+/).filter(Boolean);
+    var hits = chanLists.filter(function (p) { var t = p.title.toLowerCase(); return !have[p.id] && words.every(function (w) { return t.indexOf(w) >= 0; }); });
+    box.innerHTML = (hits.length ? '<span class="small">' + (q ? 'Mehlman playlists matching "' + esc(q) + '"' : 'From Mehlman Medical (type to narrow)') + '</span>' : q ? '<span class="small">No Mehlman playlist matches "' + esc(q) + '". Paste a link instead.</span>' : '') +
+      hits.slice(0, 4).map(function (p) { return '<button type="button" data-act="course-pick" data-pl="' + esc(p.id) + '" data-t="' + esc(p.title) + '" aria-pressed="false"><span>' + esc(p.title) + '</span><span class="mono">' + (p.count || '') + '</span></button>'; }).join('') +
+      (hits.length > 4 ? '<span class="small">+ ' + (hits.length - 4) + ' more. Type to narrow.</span>' : '');
+  }
+  $('#courseInput').addEventListener('input', renderCoursePicks);
+  $('#courseName').addEventListener('input', function () { this.removeAttribute('data-auto'); });
+  $('#courseForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (cAdding) return;
+    var val = $('#courseInput').value.trim(), msg = $('#courseMsg'), name = $('#courseName').value.trim();
+    var pid = Courses.playlistId(val);
+    if (!pid && chanLists && val) {
+      var only = Array.prototype.map.call(document.querySelectorAll('#coursePicks [data-pl]'), function (b) { return b.getAttribute('data-pl'); });
+      if (only.length === 1) pid = only[0];
+    }
+    if (!pid) { msg.textContent = val ? "That's not a playlist link. It should contain list=." : 'Paste a playlist link first.'; msg.className = 'msgline err'; return; }
+    cAdding = true; msg.textContent = 'Looking it up…'; msg.className = 'msgline'; $('#courseGo').disabled = true;
+    var fromChan = chanLists && chanLists.some(function (p) { return p.id === pid; });
+    cs.add(pid, { name: name || cFix || '', section: cAddSec, channel: fromChan ? 'Mehlman Medical' : '' }).then(function (c) {
+      cAdding = false; $('#courseGo').disabled = false;
+      if (cFix) cs.fixMiss(cFix, c);
+      var pr = cs.progress(c.id);
+      msg.textContent = 'Added ' + c.name + ' · ' + pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '') + '.'; msg.className = 'msgline ok';
+      openC = c.id; renderAll(); updateDot();
+      setTimeout(function () { if ($('#courseDlg').open) $('#courseDlg').close(); }, 900);
+    }, function (err) {
+      cAdding = false; $('#courseGo').disabled = false;
+      msg.textContent = (err && err.message) || "Couldn't add that."; msg.className = 'msgline err';
+    });
+  });
+
+  // In the player: which course this video is in, and what's next
+  function courseOf(vid) { return cs ? cs.where(vid) : null; }
+  function courseTag(vid) {
+    var w = courseOf(vid); if (!w) return '';
+    return w.course.name.toUpperCase() + ' · ' + (w.i + 1) + ' OF ' + cs.items(w.course.id).length;
+  }
+  function renderPlayerCourse(vid) {
+    var w = courseOf(vid), box = $('#vCourse');
+    if (!w) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = rulerHTML(w.course, cs.progress(w.course.id), cs.items(w.course.id));
+  }
+  function showNextUp(w) {
+    var c = w.course, arr = cs.items(c.id), nx = null, ni = -1;
+    for (var i = w.i + 1; i < arr.length; i++) if (!cs.isDone(c.id, arr[i].id)) { nx = arr[i]; ni = i; break; }
+    var box = $('#vNext'), pr = cs.progress(c.id);
+    if (nx) box.innerHTML = '<small>Next up · ' + esc(c.name) + '</small><b>' + esc(epLabel(nx, ni)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' · ' + Core.fmt(nx.dur) : '') + '</b>' +
+      '<div class="row2"><button type="button" class="btn solid" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '">Play next ▶</button><button type="button" class="btn" data-act="close-video">Done for now</button></div>';
+    else box.innerHTML = '<small>' + esc(c.name) + '</small><b>Course done · ' + pr.done + '/' + pr.total + '</b><div class="row2"><button type="button" class="btn solid" data-act="course-back" data-id="' + esc(c.section || 'med') + '">Back to courses</button></div>';
+    box.hidden = false;
+    renderPlayerCourse(w.course.id && arr[w.i] ? arr[w.i].id : '');
+    try { box.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {}
+  }
+
   // ---------- Clicks ----------
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]'); if (!b) return;
@@ -742,6 +1031,33 @@
         toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; saveVideos(); renderAll(); } });
         break;
       case 'close-video': closeVideo(); break;
+      case 'open-courses': openCourses(id); break;
+      case 'course-open':
+        openC = openC === id ? null : id; confirmCourse = null;
+        if (openC && !cs.items(id).length && !cs.status(id).loading && (feedsOn || prefs.apiKey)) cs.load(id, true).then(renderAll);
+        renderAll(); break;
+      case 'ep-play': if (Date.now() < cSwallowUntil) break; playEp(id, b.getAttribute('data-v')); break;
+      case 'ep-tick': if (Date.now() < cSwallowUntil) break; setTick(id, b.getAttribute('data-v'), !cs.isDone(id, b.getAttribute('data-v'))); break;
+      case 'course-earlier': case 'course-later': var cw2 = cwin[id] || (cwin[id] = { b: 2, a: 3 }); if (act === 'course-earlier') cw2.b += 10; else cw2.a += 10; renderAll(); break;
+      case 'course-grid': cgrid[id] = !cgrid[id]; renderAll(); break;
+      case 'course-place': cplace[id] = !cplace[id]; renderAll(); if (cplace[id]) setTimeout(function () { var inp = document.getElementById('pl-' + id); if (inp) inp.focus(); }, 30); break;
+      case 'course-pin-no':
+        var pf = b.closest('.cplace'), pn = parseInt(pf && pf.querySelector('input').value, 10), pc2 = cs.get(id), ph = pn ? cs.findNumber(id, pn) : [];
+        if (!ph.length) { toast(pn ? 'No episode ' + pn + ' in ' + pc2.name + '. Check the number in the video title.' : 'Type the episode number first, like 1607.', 'warn'); break; }
+        var pv = cs.items(id)[ph[0]].id, pon = !pc2.pins[pv]; cs.pin(id, pv, pon); cplace[id] = false; renderAll();
+        toast(pon ? 'Pinned ‼ ' + pn + '. It stays on ' + pc2.name + '\'s row.' : 'Unpinned ' + pn + '.'); break;
+      case 'course-remove':
+        if (confirmCourse !== id) { confirmCourse = id; renderAll(); break; }
+        cs.remove(id); confirmCourse = null; openC = null; renderAll(); toast('Removed. Its ticks come back if you add it again.'); break;
+      case 'course-retry': cs.load(id, true).then(function () { renderAll(); updateDot(); }); renderAll(); toast('Loading the playlist…'); break;
+      case 'course-back': closeVideo(); openCourses(id); break;
+      case 'add-course': openCourseAdd('', id, b.getAttribute('data-fix') || ''); break;
+      case 'course-sec': cAddSec = id; Array.prototype.forEach.call(document.querySelectorAll('#courseSec button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); break;
+      case 'course-pick':
+        $('#courseInput').value = 'https://www.youtube.com/playlist?list=' + b.getAttribute('data-pl');
+        if (!$('#courseName').value.trim() || $('#courseName').getAttribute('data-auto') === '1') { $('#courseName').value = Courses.shortName(b.getAttribute('data-t')); $('#courseName').setAttribute('data-auto', '1'); }
+        $('#coursePicks').innerHTML = '<span class="small">Picked: ' + esc(b.getAttribute('data-t')) + '. Tap Add.</span>'; break;
+      case 'course-paste': Native.readClipboard().then(function (t) { $('#courseInput').value = (t || '').trim(); renderCoursePicks(); }, function () { $('#courseInput').focus(); toast('Tap the box, then tap Paste.'); }); break;
       case 'v-toggle': try { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); } catch (er) {} break;
       case 'v-back': case 'v-fwd': try { player.seekTo(Math.max(0, player.getCurrentTime() + (act === 'v-back' ? -15 : 15)), true); videoTick(); } catch (er) {} break;
       case 'timer': if (held) { held = false; break; } setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
@@ -833,6 +1149,13 @@
         out.push({ ok: 0, text: "Couldn't find " + m.input + ' automatically. Open ' + (sec ? sec.name : 'its section') + ' and tap Fix next to it.' });
       });
     } else out.push({ ok: 1, text: 'Channels and new uploads load in the Shelf app on your iPhone; here you can paste and resume' });
+    if (cs && cs.list().length && (feedsOn || prefs.apiKey)) {
+      var cbad = cs.list().filter(function (c) { return !cs.status(c.id).ok; });
+      if (cs.busy) out.push({ ok: 2, text: 'Loading your courses…' });
+      else if (cbad.length) out.push({ ok: 0, text: "Couldn't load " + cbad.map(function (c) { return c.name; }).join(', ') + ' from YouTube. Open Courses and tap Retry; your ticks are safe.' });
+      else out.push({ ok: 1, text: 'Tracking ' + cs.list().length + (cs.list().length === 1 ? ' course' : ' courses') + ' episode by episode' });
+    }
+    if (cs && feedsOn) cs.misses.forEach(function (m) { out.push({ ok: 0, text: "Couldn't find your " + m.name + " playlist on Mehlman's channel. Open Courses and tap Fix next to it." }); });
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
@@ -890,13 +1213,14 @@
   var restored = false;
   function restoreFromPhone() {
     if (!Native.inApp) return Promise.resolve();
-    var keys = [KEY, PREF, AKEY, Library.KEY];
+    var keys = [KEY, PREF, AKEY, Library.KEY, Courses.KEY];
     return withTimeout(Promise.all(keys.map(Native.prefGet)), 2000, 'slow').then(function (r) {
       try {
         if (r[0]) { var local = load(KEY, {}), m = Core.merge(local, JSON.parse(r[0])); if (m.added || m.updated || !rawGet(KEY)) rawSet(KEY, JSON.stringify(m.videos), false); }
         if (r[1] && !rawGet(PREF)) rawSet(PREF, r[1], false);
         if (r[2]) { var la = load(AKEY, {}), pa = JSON.parse(r[2]); Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); rawSet(AKEY, JSON.stringify(la), false); }
         if (r[3] && !rawGet(Library.KEY)) rawSet(Library.KEY, r[3], false);
+        if (r[4]) { var lc = load(Courses.KEY, null), pc = JSON.parse(r[4]); if (!lc || (pc.saved || 0) > (lc.saved || 0)) rawSet(Courses.KEY, r[4], false); }
         restored = true;
       } catch (e) {}
     }, function () {});
@@ -908,9 +1232,16 @@
       save: function (k, v) { rawSet(k, v, k === Library.KEY); }, // the feed cache stays in the web view; the library itself is mirrored to the phone
       fetchText: fetchText
     });
+    cs = Courses.create({
+      load: rawGet,
+      save: function (k, v) { rawSet(k, v, k === Courses.KEY); }, // ticks go to the phone too; the episode lists stay here
+      fetchText: fetchText, postJSON: postJSON, now: function () { return Date.now(); },
+      apiKey: function () { return prefs.apiKey || ''; },
+      watched: function (vid) { return !!(videos[vid] && videos[vid].done); }
+    });
     // Keep the phone's copy complete even before anything changes
     // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
-    if (Native.inApp && restored) { if (Object.keys(videos).length) Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); }
+    if (Native.inApp && restored) { if (Object.keys(videos).length) Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); if (rawGet(Courses.KEY)) Native.prefSet(Courses.KEY, rawGet(Courses.KEY)); }
     buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a');
     initAudio();
     if (Native.inApp) $('#toneBtn').hidden = false;
@@ -928,7 +1259,7 @@
     refreshAll(false);
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture,
-      get current() { return current; }, get vTimer() { return vTimer; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get busy() { return refreshing || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   restoreFromPhone().then(boot);
 })();

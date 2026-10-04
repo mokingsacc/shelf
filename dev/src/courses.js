@@ -1,0 +1,402 @@
+// Courses: YouTube playlists tracked episode by episode (Mo's Mehlman Medical playlists).
+// No DOM. Storage and networking are passed in, so node tests can drive it (test/courses.test.cjs).
+var Courses = (function () {
+  var KEY = 'shelf.v2.courses';        // names, ticks, pins: small, mirrored to the phone
+  var IKEY = 'shelf.v2.courses.items'; // episode lists: kept in the web view only, fetched again if lost
+  var TTL = 12 * 3600e3;
+  var MAX_PAGES = 40;                  // 100 episodes a page
+  var CONSENT = 'SOCS=CAI; CONSENT=YES+1';
+  // A desktop identity, so YouTube sends its full page (the phone one is shaped differently)
+  var DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
+  var YT_HEADERS = { Cookie: CONSENT, 'User-Agent': DESKTOP };
+  var API = 'https://www.googleapis.com/youtube/v3/';
+
+  // Mo's playlists (his note, 4 Oct 2026), found on the channel's Playlists page by name.
+  // upTo: everything in the playlist's own order down to the video whose title holds this number. pct: his "70% complete", the fallback.
+  var SEED = { channel: '@MehlmanMedical', section: 'med', courses: [
+    { name: 'Paeds', match: 'pediatric|paediatric|\\bpeds\\b|\\bpaeds\\b', upTo: 1107, pct: 70 },
+    { name: 'OBGYN', match: 'ob\\s*[/&-]?\\s*gyn|obstetric|gyn(a|e)?ecolog|women', all: true, pin: 1607 },
+    { name: 'Ophthal', match: 'oph?thal|\\beyes?\\b', all: true },
+    { name: 'Internal Med', match: 'internal\\s*med|\\bim\\b' },
+    { name: 'Pharm', match: 'pharm' },
+    { name: 'Family Med', match: 'family\\s*med|primary\\s*care|\\bfm\\b' }
+  ] };
+
+  // ----- Reading YouTube pages -----
+  // The JSON object that starts at s[i], or null
+  function jsonAt(s, i) {
+    if (s[i] !== '{') return null;
+    var depth = 0, inStr = false, escp = false;
+    for (var j = i; j < s.length; j++) {
+      var c = s[j];
+      if (inStr) { if (escp) escp = false; else if (c === '\\') escp = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}' && --depth === 0) { try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { return null; } }
+    }
+    return null;
+  }
+  // ytInitialData from a page (desktop or phone shape), or a plain JSON reply
+  function initialData(html) {
+    html = String(html || '');
+    var m = html.match(/(?:var\s+ytInitialData|window\[["']ytInitialData["']\]|ytInitialData)\s*=\s*(['{])/);
+    if (m) {
+      var at = m.index + m[0].length - 1;
+      if (m[1] === '{') return jsonAt(html, at);
+      var end = html.indexOf("';", at + 1);
+      if (end < 0) return null;
+      var raw = html.slice(at + 1, end).replace(/\\x([0-9a-f]{2})/gi, function (x, h) { return String.fromCharCode(parseInt(h, 16)); }).replace(/\\\\/g, '\\');
+      try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+    var t = html.trim();
+    if (t[0] === '{') { try { return JSON.parse(t); } catch (e) { return null; } }
+    return null;
+  }
+  function walk(o, fn, d) {
+    d = d || 0;
+    if (!o || typeof o !== 'object' || d > 80) return;
+    if (Array.isArray(o)) { for (var i = 0; i < o.length; i++) walk(o[i], fn, d + 1); return; }
+    for (var k in o) { if (fn(k, o[k]) !== false) walk(o[k], fn, d + 1); }
+  }
+  function txt(t) {
+    if (!t) return '';
+    if (typeof t === 'string') return t;
+    if (t.simpleText) return t.simpleText;
+    if (t.runs) return t.runs.map(function (r) { return r.text || ''; }).join('');
+    if (t.content) return t.content;
+    return '';
+  }
+  function countIn(o) {
+    var n = 0;
+    walk(o, function (k, v) { if (!n && typeof v === 'string') { var m = v.match(/^\s*([\d,]+)\s+(videos?|episodes?|lessons?)\b/i); if (m) n = parseInt(m[1].replace(/,/g, ''), 10); } });
+    return n;
+  }
+  var GONE = /^\[(private|deleted) video\]$/i;
+  // Episodes on a playlist page (or a "load more" reply), the token for the next lot, and the playlist's name
+  function readVideos(data) {
+    var out = { items: [], token: '', title: '', count: 0 };
+    walk(data, function (k, v) {
+      if (k === 'playlistVideoRenderer' && v && v.videoId) {
+        var t = txt(v.title);
+        if (!GONE.test(t) && v.isPlayable !== false) out.items.push({ id: v.videoId, title: t, dur: parseInt(v.lengthSeconds, 10) || 0 });
+        return false;
+      }
+      if (k === 'lockupViewModel' && v && v.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO' && v.contentId) {
+        var md = v.metadata && v.metadata.lockupMetadataViewModel;
+        out.items.push({ id: v.contentId, title: txt(md && md.title), dur: 0 });
+        return false;
+      }
+      if (k === 'continuationItemRenderer') {
+        walk(v, function (k2, v2) { if (k2 === 'continuationCommand' && v2 && v2.token) out.token = v2.token; });
+        return false;
+      }
+      if (k === 'playlistMetadataRenderer' && v && v.title && !out.title) out.title = txt(v.title);
+      if (k === 'playlistHeaderRenderer' && v) { if (!out.title) out.title = txt(v.title); if (!out.count) out.count = countIn(v.numVideosText || v.stats); }
+      if (k === 'pageHeaderViewModel' && v && !out.title) { var tt = v.title && v.title.dynamicTextViewModel && v.title.dynamicTextViewModel.text; if (tt) out.title = txt(tt); if (!out.count) out.count = countIn(v.metadata); }
+    });
+    return out;
+  }
+  // Playlists on a channel's Playlists page
+  function readPlaylists(data) {
+    var out = [], seen = {}, token = '';
+    function push(id, title, count) { if (id && !seen[id] && /^(PL|OL|UU|FL)/.test(id)) { seen[id] = 1; out.push({ id: id, title: title, count: count || 0 }); } }
+    walk(data, function (k, v) {
+      if ((k === 'gridPlaylistRenderer' || k === 'playlistRenderer') && v && v.playlistId) {
+        push(v.playlistId, txt(v.title), parseInt(String(v.videoCount || txt(v.videoCountText) || txt(v.videoCountShortText) || '').replace(/,/g, ''), 10));
+        return false;
+      }
+      if (k === 'lockupViewModel' && v && v.contentType === 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
+        var md = v.metadata && v.metadata.lockupMetadataViewModel;
+        push(v.contentId, txt(md && md.title), countIn(v));
+        return false;
+      }
+      if (k === 'continuationItemRenderer') { walk(v, function (k2, v2) { if (k2 === 'continuationCommand' && v2 && v2.token) token = v2.token; }); return false; }
+    });
+    return { items: out, token: token };
+  }
+  function clientInfo(html) {
+    return {
+      ver: (String(html).match(/"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"/) || String(html).match(/"clientVersion"\s*:\s*"(2\.[\d.]+)"/) || [])[1] || '2.20250101.00.00',
+      key: (String(html).match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/) || [])[1] || ''
+    };
+  }
+
+  // ----- Episode numbers -----
+  // "HY USMLE Q #1107 - Pediatrics" -> 1107. Mehlman numbers his episodes in the title.
+  function epNumber(title) {
+    title = String(title || '');
+    var m = title.match(/#\s*(\d{1,5})\b/) || title.match(/\b(?:ep(?:isode)?|q|no)\.?\s*(\d{1,5})\b/i) || title.match(/№\s*(\d{1,5})/);
+    if (m) return parseInt(m[1], 10);
+    m = title.match(/(?:^|[^\d:.])(\d{2,5})(?![\d:.])/);
+    if (!m) return 0;
+    var n = parseInt(m[1], 10);
+    return n >= 1900 && n <= 2099 ? 0 : n; // a year, not an episode
+  }
+  // Courses keep YouTube's playlist order ('list', what Mo watches down). 'asc'/'desc' sort by title number when nearly all have one.
+  function ordered(items, dir) {
+    var list = items.map(function (x, i) { return { x: x, i: i, n: x.n }; });
+    var numbered = list.filter(function (o) { return o.n; }).length;
+    if (dir === 'list' || numbered < Math.max(1, list.length * 0.8)) return items.slice();
+    var s = dir === 'desc' ? -1 : 1;
+    return list.sort(function (a, b) { return a.n && b.n ? s * (a.n - b.n) || a.i - b.i : a.n ? -1 : b.n ? 1 : a.i - b.i; }).map(function (o) { return o.x; });
+  }
+  // A playlist link (or bare id) -> its id
+  function playlistId(text) {
+    text = String(text || '').trim();
+    if (/^(PL|OL|UU|FL)[A-Za-z0-9_-]{10,}$/.test(text)) return text;
+    var m = text.match(/[?&]list=((?:PL|OL|UU|FL)[A-Za-z0-9_-]{10,})/);
+    return m ? m[1] : '';
+  }
+  // "HY USMLE Qs - Pediatrics | Mehlman Medical" -> "Pediatrics"
+  function shortName(title) {
+    var t = String(title || '').replace(/mehlman\s*medical|mehlman|\bHY\b|USMLE|step\s*[123]\s*(ck)?|\bCK\b|\bQ'?s\b|questions|playlist|podcast|shelf|review|nbme/gi, ' ')
+      .replace(/[|:–—#()\[\]-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return (t || String(title || 'Course').trim()).slice(0, 14).trim() || 'Course';
+  }
+  function fmtHours(sec) { var h = sec / 3600; return h >= 1 ? Math.round(h) + ' h' : Math.max(1, Math.round(sec / 60)) + ' min'; }
+
+  // io: { load(key), save(key, string), fetchText(url, headers), postJSON(url, body, headers) -> Promise<string>, now(), apiKey(), watched(videoId) -> bool }
+  function create(io) {
+    var now = io.now || Date.now;
+    var state = read(), cache = readCache(), busy = {}, order = {}, index = {};
+
+    function read() {
+      var s = null;
+      try { s = JSON.parse(io.load(KEY) || 'null'); } catch (e) { s = null; }
+      if (!s || typeof s.courses !== 'object') s = { courses: {}, found: false, misses: [] };
+      return s;
+    }
+    function readCache() { try { return JSON.parse(io.load(IKEY) || 'null') || {}; } catch (e) { return {}; } }
+    function save() { state.saved = now(); io.save(KEY, JSON.stringify(state)); }
+    function saveCache() { try { io.save(IKEY, JSON.stringify(cache)); } catch (e) {} }
+
+    function list() { return Object.keys(state.courses).map(function (k) { return state.courses[k]; }).sort(function (a, b) { return a.added - b.added; }); }
+    function get(id) { return state.courses[id] || null; }
+    function items(id) {
+      var c = get(id), ch = cache[id];
+      if (!c || !ch || !ch.items) return [];
+      var key = c.order + '|' + ch.fetched;
+      if (!order[id] || order[id].key !== key) {
+        var arr = ordered(ch.items, c.order), ix = {};
+        arr.forEach(function (x, i) { ix[x.id] = i; });
+        order[id] = { key: key, arr: arr }; index[id] = ix;
+      }
+      return order[id].arr;
+    }
+    function status(id) { var ch = cache[id]; return { loading: !!busy[id], fetched: ch ? ch.fetched : 0, ok: ch ? ch.ok !== false : true, error: ch && ch.error || '', partial: ch && ch.partial || 0 }; }
+
+    // ----- Ticks -----
+    function isDone(c, vid) { var t = c.ticks[vid]; return t === 1 || (t !== 0 && !!(io.watched && io.watched(vid))); }
+    function progress(id) {
+      var c = get(id), arr = items(id), done = 0, last = -1, secs = 0;
+      if (!c) return null;
+      arr.forEach(function (x, i) { if (isDone(c, x.id)) { done++; last = i; } secs += x.dur || 0; });
+      var notch = arr.length && last < arr.length - 1 ? last + 1 : -1;
+      var st = !arr.length ? 'empty' : done === arr.length ? 'done' : done || c.touched ? 'go' : 'new';
+      return { total: arr.length, done: done, notch: notch, next: notch >= 0 ? arr[notch] : null, state: st, secs: secs, hours: secs ? fmtHours(secs) : '' };
+    }
+    function where(vid) {
+      var out = null;
+      list().forEach(function (c) { items(c.id); if (!out && index[c.id] && index[c.id][vid] != null) out = { course: c, i: index[c.id][vid] }; });
+      return out;
+    }
+    function touch(c) { c.touched = now(); }
+    function tick(id, vid, on) {
+      var c = get(id); if (!c) return;
+      c.ticks[vid] = on ? 1 : 0; touch(c); save();
+    }
+    // Everything up to and including position i; returns what was there, for Undo
+    function tickUpTo(id, i) {
+      var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
+      var before = Object.assign({}, c.ticks);
+      for (var j = 0; j <= i; j++) c.ticks[arr[j].id] = 1;
+      touch(c); save();
+      return before;
+    }
+    function restore(id, ticks) { var c = get(id); if (!c || !ticks) return; c.ticks = ticks; save(); }
+    function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; save(); }
+    // Episode number from the titles -> positions (first match first)
+    function findNumber(id, n) {
+      var arr = items(id), hits = [];
+      arr.forEach(function (x, i) { if (x.n === n) hits.push(i); });
+      return hits;
+    }
+    function touchCourse(id) { var c = get(id); if (c) { touch(c); save(); } }
+    function rename(id, name) { var c = get(id); name = String(name || '').trim().slice(0, 14); if (!c || !name) return false; c.name = name; save(); return true; }
+    function remove(id) { if (!state.courses[id]) return false; state.removed = state.removed || {}; state.removed[id] = state.courses[id].ticks; delete state.courses[id]; save(); return true; }
+
+    // ----- Loading a playlist -----
+    function fromPage(pid) {
+      return io.fetchText('https://www.youtube.com/playlist?list=' + pid, YT_HEADERS).then(function (html) {
+        var data = initialData(html);
+        if (!data) throw new Error(/consent\.(youtube|google)\.com/i.test(html) ? 'YouTube showed its cookie page. Try again in a minute.' : "YouTube's page came back in a shape Shelf can't read.");
+        var first = readVideos(data), ci = clientInfo(html), all = first.items.slice(), pages = 1, partial = 0;
+        if (!all.length && /"alerts"[\s\S]{0,400}(private|does not exist|unavailable)/i.test(html)) throw new Error('YouTube says this playlist is private or gone.');
+        function more(token) {
+          if (!token || pages >= MAX_PAGES || !io.postJSON) return Promise.resolve();
+          pages++;
+          return io.postJSON('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false' + (ci.key ? '&key=' + ci.key : ''),
+            { context: { client: { clientName: 'WEB', clientVersion: ci.ver, hl: 'en', gl: 'GB' } }, continuation: token },
+            { 'Content-Type': 'application/json', 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': ci.ver, Origin: 'https://www.youtube.com', Cookie: CONSENT, 'User-Agent': DESKTOP })
+            .then(function (t) { var r = readVideos(initialData(t) || {}); all = all.concat(r.items); return r.items.length ? more(r.token) : null; },
+              function () { partial = all.length; });
+        }
+        return more(first.token).then(function () { return { title: first.title, items: all, partial: partial && first.count > all.length ? first.count : 0 }; });
+      });
+    }
+    function fromApi(pid, key) {
+      var all = [], title = '';
+      function page(tok, n) {
+        return io.fetchText(API + 'playlistItems?part=snippet&maxResults=50&playlistId=' + pid + '&key=' + encodeURIComponent(key) + (tok ? '&pageToken=' + tok : '')).then(function (t) {
+          var j = JSON.parse(t);
+          (j.items || []).forEach(function (it) { var sn = it.snippet || {}, v = sn.resourceId && sn.resourceId.videoId; if (v && !GONE.test('[' + String(sn.title).replace(/^\[|\]$/g, '') + ']')) all.push({ id: v, title: sn.title, dur: 0 }); });
+          return j.nextPageToken && n < 80 ? page(j.nextPageToken, n + 1) : null;
+        });
+      }
+      return io.fetchText(API + 'playlists?part=snippet&id=' + pid + '&key=' + encodeURIComponent(key)).then(function (t) {
+        var j = JSON.parse(t); title = j.items && j.items[0] && j.items[0].snippet.title || '';
+        return page('', 0);
+      }).then(function () { return { title: title, items: all, partial: 0 }; });
+    }
+    function fetchList(pid) {
+      var key = io.apiKey && io.apiKey();
+      return key ? fromApi(pid, key).catch(function () { return fromPage(pid); }) : fromPage(pid);
+    }
+    function load(id, force) {
+      var c = get(id), ch = cache[id];
+      if (!c) return Promise.reject(new Error('gone'));
+      if (busy[id]) return busy[id];
+      if (!force && ch && ch.ok !== false && ch.items && now() - ch.fetched < TTL) return Promise.resolve(c);
+      busy[id] = fetchList(id).then(function (r) {
+        var seen = {}, its = [];
+        r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; x.n = epNumber(x.title); its.push(x); } });
+        if (!its.length) throw new Error('This playlist has no videos Shelf can play.');
+        cache[id] = { fetched: now(), ok: true, items: its, partial: r.partial };
+        if (r.title) c.title = r.title;
+        applySeed(c);
+        saveCache(); save();
+        delete busy[id]; return c;
+      }).catch(function (e) {
+        cache[id] = Object.assign({}, ch || { items: null }, { fetched: now(), ok: false, error: e && e.message || 'failed' });
+        delete busy[id]; return c;
+      });
+      return busy[id];
+    }
+    // Mo's note, applied once the episodes are known
+    function applySeed(c) {
+      var s = c.seed; if (!s) return;
+      delete c.seed;
+      var arr = items(c.id);
+      if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
+      if (s.upTo) {
+        var at = findNumber(c.id, s.upTo)[0];
+        if (at != null) { for (var j = 0; j <= at; j++) c.ticks[arr[j].id] = 1; c.note = ''; }
+        else if (s.pct) {
+          var k = Math.round(arr.length * s.pct / 100);
+          for (var q = 0; q < k; q++) c.ticks[arr[q].id] = 1;
+          c.note = "Couldn't find episode " + s.upTo + ' in this playlist, so the first ' + s.pct + '% are ticked. Check where you are.';
+        }
+        touch(c);
+      }
+      if (s.pin) { var p = findNumber(c.id, s.pin)[0]; if (p != null) c.pins[arr[p].id] = 1; }
+    }
+
+    // ----- Adding -----
+    function addCourse(pid, info) {
+      var prior = state.removed && state.removed[pid];
+      var c = state.courses[pid] = state.courses[pid] || {
+        id: pid, name: info.name || 'Course', title: info.title || '', channel: info.channel || '', section: info.section || 'med',
+        added: now(), touched: 0, ticks: prior || {}, pins: {}, order: 'list'
+      };
+      if (info.seed) c.seed = info.seed;
+      if (prior) delete state.removed[pid];
+      save(); return c;
+    }
+    // A pasted link -> a loaded course. Resolves to the course; rejects with a plain-words reason.
+    function add(input, opts) {
+      opts = opts || {};
+      var pid = playlistId(input);
+      if (!pid) return Promise.reject(new Error("That's not a playlist link. It should contain list=."));
+      if (get(pid)) return Promise.reject(new Error('Already on your shelf as ' + get(pid).name + '.'));
+      return fetchList(pid).then(function (r) {
+        var c = addCourse(pid, { name: opts.name || shortName(r.title), title: r.title, section: opts.section, channel: opts.channel });
+        var seen = {}, its = [];
+        r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; x.n = epNumber(x.title); its.push(x); } });
+        cache[pid] = { fetched: now(), ok: true, items: its, partial: r.partial };
+        saveCache(); save();
+        return c;
+      });
+    }
+
+    // ----- Channel playlists (for finding Mo's, and for the Add list) -----
+    var chanCache = {};
+    function channelPlaylists(handle) {
+      if (chanCache[handle]) return Promise.resolve(chanCache[handle]);
+      return io.fetchText('https://www.youtube.com/' + handle + '/playlists', YT_HEADERS).then(function (html) {
+        var data = initialData(html);
+        if (!data) throw new Error("Couldn't read " + handle + "'s playlists page.");
+        var r = readPlaylists(data), ci = clientInfo(html), all = r.items.slice(), pages = 1;
+        function more(token) {
+          if (!token || pages >= 5 || !io.postJSON) return Promise.resolve();
+          pages++;
+          return io.postJSON('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false' + (ci.key ? '&key=' + ci.key : ''),
+            { context: { client: { clientName: 'WEB', clientVersion: ci.ver, hl: 'en', gl: 'GB' } }, continuation: token },
+            { 'Content-Type': 'application/json', 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': ci.ver, Origin: 'https://www.youtube.com', Cookie: CONSENT, 'User-Agent': DESKTOP })
+            .then(function (t) { var x = readPlaylists(initialData(t) || {}); var seen = {}; all.forEach(function (p) { seen[p.id] = 1; }); x.items.forEach(function (p) { if (!seen[p.id]) all.push(p); }); return x.items.length ? more(x.token) : null; }, function () {});
+        }
+        return more(r.token).then(function () { chanCache[handle] = all; return all; });
+      });
+    }
+    // Best playlist for a name: Step 2 / question playlists first, then the biggest
+    function pick(all, re) {
+      var rx = new RegExp(re, 'i');
+      var hits = all.filter(function (p) { return rx.test(p.title); });
+      var score = function (p) { return (/step\s*2|\bck\b|shelf/i.test(p.title) ? 4 : 0) + (/step\s*1/i.test(p.title) ? -4 : 0) + (/\bq'?s?\b|question|qbank|hy\b/i.test(p.title) ? 2 : 0); };
+      hits.sort(function (a, b) { return score(b) - score(a) || (b.count || 0) - (a.count || 0); });
+      return hits[0] || null;
+    }
+    // First run in the app: find Mo's six playlists. Later runs retry only the misses.
+    function seed() {
+      var todo = SEED.courses.filter(function (s) {
+        return !list().some(function (c) { return c.seedName === s.name; }) && (!state.found || (state.misses || []).some(function (m) { return m.name === s.name; }));
+      });
+      if (!todo.length) return Promise.resolve([]);
+      return channelPlaylists(SEED.channel).then(function (all) {
+        var misses = [];
+        todo.forEach(function (s) {
+          var p = pick(all, s.match);
+          if (!p || get(p.id)) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
+          var c = addCourse(p.id, { name: s.name, title: p.title, channel: 'Mehlman Medical', section: SEED.section, seed: { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin } });
+          c.seedName = s.name;
+        });
+        state.found = true; state.misses = misses; save();
+        return misses;
+      }, function (e) {
+        state.misses = todo.map(function (s) { return { name: s.name, error: e && e.message || 'failed' }; });
+        save(); return state.misses;
+      });
+    }
+    // A miss fixed by hand (pasted link) clears it
+    function fixMiss(name, c) { c.seedName = name; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
+    function loadAll(force, onEach) {
+      var ids = list().map(function (c) { return c.id; }), i = 0;
+      function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }
+      return Promise.all([next(), next()]);
+    }
+    // The phone's copy and this one: keep the newer
+    function merge(phoneJson) {
+      try { var p = JSON.parse(phoneJson); if (p && p.courses && (p.saved || 0) > (state.saved || 0)) { state = p; order = {}; index = {}; save(); return true; } } catch (e) {}
+      return false;
+    }
+
+    return {
+      list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
+      tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, rename: rename, remove: remove,
+      load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists, merge: merge,
+      get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
+    };
+  }
+  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, epNumber: epNumber, ordered: ordered, playlistId: playlistId, shortName: shortName,
+    initialData: initialData, readVideos: readVideos, readPlaylists: readPlaylists, fmtHours: fmtHours };
+})();
+if (typeof module !== 'undefined') module.exports = Courses;

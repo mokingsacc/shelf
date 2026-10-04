@@ -21,7 +21,7 @@
    Dark mode is the same sheet with the lights turned down. */
 :root{
   --paper:#fff; --ink:#0c0c10; --grey:#6c6c74; --rule:#0c0c10; --soft:#f1f1f3; --line2:#d9d9de;
-  --yel:#ffe41a; --cob:#1a35d6; --blk:#0c0c10; --bad:#d6311a; --ok:#178a3a;
+  --yel:#ffe41a; --cob:#1a35d6; --blk:#0c0c10; --bad:#d6311a; --ok:#178a3a; --pin:#d6311a;
   --b1-bg:var(--yel); --b1-fg:#0c0c10; --b1-tag-bg:#0c0c10; --b1-tag-fg:var(--yel);
   --b2-bg:var(--cob); --b2-fg:#fff;    --b2-tag-bg:#fff;    --b2-tag-fg:var(--cob);
   --b3-bg:var(--blk); --b3-fg:#fff;    --b3-tag-bg:#fff;    --b3-tag-fg:#0c0c10;
@@ -33,7 +33,7 @@
   --g:18px; --foot:64px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --paper:#08080c; --ink:#c9c9d6; --grey:#6a6a7a; --rule:#2a2a36; --soft:#111118; --line2:#22222c;
+  --paper:#08080c; --ink:#c9c9d6; --grey:#6a6a7a; --rule:#2a2a36; --soft:#111118; --line2:#22222c; --pin:#ff6a52;
   --b1-bg:#15140a; --b1-fg:#d9cb4a; --b1-tag-bg:#d9cb4a; --b1-tag-fg:#15140a;
   --b2-bg:#0b0f2e; --b2-fg:#9fb0ff; --b2-tag-bg:#9fb0ff; --b2-tag-fg:#0b0f2e;
   --b3-bg:#101016; --b3-fg:#b9b9c6; --b3-tag-bg:#b9b9c6; --b3-tag-fg:#101016;
@@ -42,7 +42,7 @@
   --pl-bg:#06060a; --pl-fg:#c9c9d6; --pl-dim:#1b1b24; --pl-mute:#5c5c6b; --pl-hi:#c9c9d6;
   color-scheme:dark}}
 :root[data-theme="dark"]{
-  --paper:#08080c; --ink:#c9c9d6; --grey:#6a6a7a; --rule:#2a2a36; --soft:#111118; --line2:#22222c;
+  --paper:#08080c; --ink:#c9c9d6; --grey:#6a6a7a; --rule:#2a2a36; --soft:#111118; --line2:#22222c; --pin:#ff6a52;
   --b1-bg:#15140a; --b1-fg:#d9cb4a; --b1-tag-bg:#d9cb4a; --b1-tag-fg:#15140a;
   --b2-bg:#0b0f2e; --b2-fg:#9fb0ff; --b2-tag-bg:#9fb0ff; --b2-tag-fg:#0b0f2e;
   --b3-bg:#101016; --b3-fg:#b9b9c6; --b3-tag-bg:#b9b9c6; --b3-tag-fg:#101016;
@@ -83,11 +83,11 @@ a{color:inherit}
 .band .hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;width:100%}
 .band .hd h2{margin:0;font-size:46px;line-height:.9;font-weight:900;font-stretch:125%;letter-spacing:-.035em;text-transform:uppercase;white-space:nowrap;overflow:hidden;min-width:0;flex:1}
 .band .hd .tm{font-size:12px;font-weight:600;white-space:nowrap}
-.band ul{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
-.band li>button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;font-size:14px;line-height:1.2;align-items:baseline;border-top:2px solid currentColor;padding-top:7px;width:100%;min-height:44px}
-.band li b{font-weight:700}
-.band li .src{opacity:.85}
-.band li .n{font-size:12px;font-weight:600}
+.band>ul{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
+.band>ul>li>button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;font-size:14px;line-height:1.2;align-items:baseline;border-top:2px solid currentColor;padding-top:7px;width:100%;min-height:44px}
+.band>ul>li b{font-weight:700}
+.band>ul>li .src{opacity:.85}
+.band>ul>li .n{font-size:12px;font-weight:600}
 .band .empty{margin:10px 0 0;font-size:14px;border-top:2px solid currentColor;padding-top:8px;opacity:.85}
 .band .empty button{text-decoration:underline;text-underline-offset:3px;font-weight:700}
 .nw{display:inline-block;background:var(--tb,var(--ink));color:var(--tf,var(--paper));padding:0 5px;font-size:10px;font-weight:800;letter-spacing:.1em;margin-right:6px;vertical-align:1px;font-family:var(--font)}
@@ -161,6 +161,79 @@ body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-
 .d1{--duo:var(--duo1);--blend:multiply}.d2{--duo:var(--duo2);--blend:screen}
 .sform button{padding:0 16px;background:var(--ink);color:var(--paper);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 .item .addch{margin-top:10px}
+
+/* ---------- Courses: playlists ticked episode by episode ---------- */
+.courses{margin-top:12px;border-top:4px solid currentColor}
+.courses .chd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;width:100%;padding:8px 0 6px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;min-height:40px}
+.courses .chd .mono{font-weight:600;letter-spacing:0;text-transform:none;font-size:12px}
+.cgroup{--bg:var(--paper);--fg:var(--ink);color:var(--fg);padding:0 var(--g)}
+.course{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:0 10px;border-top:2px solid currentColor;padding:8px 0}
+.cgroup .course:first-child{border-top:0}
+.course .cr{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:5px 10px;align-items:center;min-height:44px;width:100%;min-width:0}
+.course .cl{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.course .cn{font-size:12px;font-weight:600}
+.course .cx{grid-column:1/-1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85}
+.course .cgo{width:44px;height:44px;background:var(--fg);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px;align-self:start}
+.course.done .cgo{background:none;color:inherit;border:2px solid currentColor;font-family:var(--mono)}
+.course.done .cr .cl,.course.done .cr .rl{opacity:.6}
+.course .cpin{grid-column:1/-1;font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pin{color:var(--pin);font-weight:800}
+.rl{position:relative;height:8px;display:flex;gap:1px;align-items:stretch;min-width:0}
+.rl i{flex:1;background:color-mix(in srgb,currentColor 22%,transparent);position:relative}
+.rl i.d{background:currentColor}
+.rl i.n{background:none;box-shadow:inset 0 0 0 1.5px currentColor}
+.rl i.n::before{content:"";position:absolute;left:50%;top:-5px;width:2px;height:5px;margin-left:-1px;background:currentColor}
+.rl i.p::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:2px;background:var(--pin)}
+.rl.dense{display:block;background:color-mix(in srgb,currentColor 22%,transparent)}
+.rl.dense b{position:absolute;top:0;bottom:0;background:currentColor}
+.rl.dense .nk{position:absolute;top:-5px;bottom:-1px;width:4px;margin-left:-2px;background:var(--bg,var(--paper));border:1.5px solid currentColor}
+.rl.dense .pk{position:absolute;bottom:-5px;height:3px;width:4px;margin-left:-2px;background:var(--pin)}
+.cbody{grid-column:1/-1;margin-top:8px;min-width:0}
+.cnote{margin:6px 0;font-size:13px;line-height:1.35}
+.cnote.err{color:var(--pin)}
+.cnote button,.cnote a{font-weight:800;text-decoration:underline;text-underline-offset:3px;color:inherit}
+.cplace{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;margin:4px 0 10px}
+.cplace label{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.cplace input{font:600 17px var(--mono);border:2px solid currentColor;background:transparent;color:inherit;padding:9px 10px;min-width:0;width:100%;border-radius:0;-webkit-appearance:none}
+.cplace input::placeholder{color:inherit;opacity:.5}
+.cplace .row{display:flex;gap:6px;flex-wrap:wrap}
+.cbtn{min-height:40px;padding:0 12px;border:2px solid currentColor;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.cbtn.solid{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.eps{list-style:none;margin:0;padding:0}
+.ep{display:grid;grid-template-columns:44px auto minmax(0,1fr) auto;gap:8px;align-items:center;border-top:1px solid color-mix(in srgb,currentColor 35%,transparent);min-height:50px}
+.ep .tk{width:44px;height:44px;display:flex;align-items:center;justify-content:center}
+.ep .tk span{width:26px;height:26px;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font:700 14px var(--mono)}
+.ep.d .tk span{background:var(--fg);color:var(--bg)}
+.ep .no{font:600 12px var(--mono);white-space:nowrap}
+.ep .et{font-size:14px;font-weight:700;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding:7px 0;min-height:44px;overflow-wrap:anywhere}
+.ep .du{font:400 11px var(--mono);opacity:.8;white-space:nowrap}
+.ep.d .no,.ep.d .et,.ep.d .du{opacity:.5}
+.ep.n{border-top:3px solid currentColor}
+.ep.n .et{font-weight:900}
+.ep.n .no::before{content:"▸ "}
+[data-hold]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.cmore{display:block;width:100%;min-height:40px;font:600 12px var(--mono);border-top:1px solid color-mix(in srgb,currentColor 35%,transparent)}
+.epgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin:6px 0}
+.epgrid button{aspect-ratio:1;min-height:40px;border:2px solid currentColor;font:600 11px var(--mono);display:flex;align-items:center;justify-content:center;position:relative;text-align:center;overflow:hidden}
+.epgrid button.d{background:var(--fg);color:var(--bg)}
+.epgrid button.n{border-width:4px}
+.epgrid button.p::after{content:"";position:absolute;right:0;top:0;border:5px solid var(--pin);border-left-color:transparent;border-bottom-color:transparent}
+.cedge{display:flex;flex-wrap:wrap;gap:0 16px;border-top:2px solid currentColor;margin-top:4px}
+.cedge button,.cedge a{min-height:40px;display:inline-flex;align-items:center;font:600 12px var(--mono);text-decoration:underline;text-underline-offset:3px;color:inherit}
+.cedge .danger{color:var(--pin)}
+.cpicks{display:flex;flex-direction:column}
+.cpicks button{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:2px solid var(--line2);min-height:44px;font-size:14px;font-weight:700;width:100%}
+.cpicks button .mono{font-weight:400;color:var(--grey)}
+.cpicks button[aria-pressed="true"]{box-shadow:inset 4px 0 0 var(--ink);padding-left:10px}
+/* in the player */
+.vcourse{display:block;margin:12px var(--g) 0;color:var(--pl-hi)}
+.vcourse .rl{height:5px}
+.nextup{margin:20px var(--g) 0;border-top:4px solid var(--pl-hi);padding-top:10px}
+.nextup small{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pl-hi)}
+.nextup b{display:block;font-size:20px;font-weight:800;margin-top:6px;line-height:1.1;letter-spacing:-.01em;overflow-wrap:anywhere}
+.nextup .row2{margin-top:12px}
+.nextup .btn{color:var(--pl-fg)}
+.nextup .btn.solid{background:var(--pl-hi);color:var(--pl-bg);border-color:var(--pl-hi)}
 
 /* ---------- Video player sheet ---------- */
 .sheet{position:fixed;inset:0;z-index:40;background:var(--pl-bg);color:var(--pl-fg);display:flex;flex-direction:column;overflow-y:auto;transform:translateY(100%);visibility:hidden;transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility 0s .28s}
@@ -288,6 +361,8 @@ body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,
   <div class="vid"><div id="player"></div><div class="perr" id="perr" hidden></div></div>
   <div class="info"><div class="ch" id="vCh"></div><h2 id="vTitle"></h2></div>
   <button type="button" class="scrub" id="vScrub" aria-label="Seek"><span class="line"><i id="vLine"></i></span><span class="nums mono"><span id="vT">0:00</span><span id="vLeft"></span></span></button>
+  <div class="vcourse" id="vCourse" hidden></div>
+  <div class="nextup" id="vNext" hidden></div>
   <div class="tmr">
     <div class="lab"><span>Sleep timer</span><span class="mono" id="vStops"></span></div>
     <div class="seg" id="vSeg" role="group" aria-label="Sleep timer"></div>
@@ -325,6 +400,22 @@ body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,
     <div class="picks" id="addPicks" role="group" aria-label="Section"></div>
     <div class="msgline" id="addMsg" role="status"></div>
     <div class="row2"><button type="submit" class="btn solid" id="addGo">Add</button><button type="button" class="btn" id="addPaste" data-act="add-paste">Paste</button></div>
+  </form>
+</dialog>
+
+<dialog id="courseDlg" aria-labelledby="courseH">
+  <div class="dh"><h2 id="courseH">Add a course</h2><button type="button" data-act="dismiss" aria-label="Close">×</button></div>
+  <form class="db" id="courseForm">
+    <p>Paste a YouTube playlist link, or type a few letters to find one of Mehlman's. Shelf tracks it episode by episode.</p>
+    <input class="field" id="courseInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="youtube.com/playlist?list=…" aria-label="Playlist link or name">
+    <div class="cpicks" id="coursePicks"></div>
+    <label for="courseName">Short name</label>
+    <input class="field" id="courseName" type="text" autocomplete="off" maxlength="14" placeholder="e.g. Surgery">
+    <p class="small">The label on its ruler. Leave it empty to use the playlist's name.</p>
+    <label>Put it in</label>
+    <div class="picks" id="courseSec" role="group" aria-label="Section"></div>
+    <div class="msgline" id="courseMsg" role="status"></div>
+    <div class="row2"><button type="submit" class="btn solid" id="courseGo">Add</button><button type="button" class="btn" data-act="course-paste">Paste</button></div>
   </form>
 </dialog>
 
@@ -590,6 +681,17 @@ var Native = (function () {
     });
   }
 
+  // A JSON POST (YouTube's "load more" for long playlists), same native route as httpGet
+  function httpPost(url, body, headers) {
+    var h = { 'User-Agent': SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9', 'Content-Type': 'application/json' };
+    for (var k in headers || {}) h[k] = headers[k];
+    return call('CapacitorHttp', 'request', { url: url, method: 'POST', headers: h, data: body, responseType: 'text' }).then(function (r) {
+      var d = r && r.data;
+      if (d != null && typeof d !== 'string') d = JSON.stringify(d);
+      return { status: (r && r.status) || 0, ok: r && r.status >= 200 && r.status < 300, text: d == null ? '' : d, unreadable: d == null };
+    });
+  }
+
   // Can the app read a podcast feed? (needs the shell's native networking: feeds don't allow browser reads)
   var feedStatus = { state: inApp ? 'wait' : 'web', text: '' };
   function testFeed() {
@@ -649,7 +751,7 @@ var Native = (function () {
     document.documentElement.classList.add('in-app');
     setTimeout(testFeed, 1500);
   }
-  return { inApp: inApp, call: call, httpGet: httpGet, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+  return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
 })();
@@ -1312,6 +1414,409 @@ var Search = (function () {
 })();
 if (typeof module !== 'undefined') module.exports = Search;
 </script>
+<script>// Courses: YouTube playlists tracked episode by episode (Mo's Mehlman Medical playlists).
+// No DOM. Storage and networking are passed in, so node tests can drive it (test/courses.test.cjs).
+var Courses = (function () {
+  var KEY = 'shelf.v2.courses';        // names, ticks, pins: small, mirrored to the phone
+  var IKEY = 'shelf.v2.courses.items'; // episode lists: kept in the web view only, fetched again if lost
+  var TTL = 12 * 3600e3;
+  var MAX_PAGES = 40;                  // 100 episodes a page
+  var CONSENT = 'SOCS=CAI; CONSENT=YES+1';
+  // A desktop identity, so YouTube sends its full page (the phone one is shaped differently)
+  var DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
+  var YT_HEADERS = { Cookie: CONSENT, 'User-Agent': DESKTOP };
+  var API = 'https://www.googleapis.com/youtube/v3/';
+
+  // Mo's playlists (his note, 4 Oct 2026), found on the channel's Playlists page by name.
+  // upTo: everything in the playlist's own order down to the video whose title holds this number. pct: his "70% complete", the fallback.
+  var SEED = { channel: '@MehlmanMedical', section: 'med', courses: [
+    { name: 'Paeds', match: 'pediatric|paediatric|\\bpeds\\b|\\bpaeds\\b', upTo: 1107, pct: 70 },
+    { name: 'OBGYN', match: 'ob\\s*[/&-]?\\s*gyn|obstetric|gyn(a|e)?ecolog|women', all: true, pin: 1607 },
+    { name: 'Ophthal', match: 'oph?thal|\\beyes?\\b', all: true },
+    { name: 'Internal Med', match: 'internal\\s*med|\\bim\\b' },
+    { name: 'Pharm', match: 'pharm' },
+    { name: 'Family Med', match: 'family\\s*med|primary\\s*care|\\bfm\\b' }
+  ] };
+
+  // ----- Reading YouTube pages -----
+  // The JSON object that starts at s[i], or null
+  function jsonAt(s, i) {
+    if (s[i] !== '{') return null;
+    var depth = 0, inStr = false, escp = false;
+    for (var j = i; j < s.length; j++) {
+      var c = s[j];
+      if (inStr) { if (escp) escp = false; else if (c === '\\') escp = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}' && --depth === 0) { try { return JSON.parse(s.slice(i, j + 1)); } catch (e) { return null; } }
+    }
+    return null;
+  }
+  // ytInitialData from a page (desktop or phone shape), or a plain JSON reply
+  function initialData(html) {
+    html = String(html || '');
+    var m = html.match(/(?:var\s+ytInitialData|window\[["']ytInitialData["']\]|ytInitialData)\s*=\s*(['{])/);
+    if (m) {
+      var at = m.index + m[0].length - 1;
+      if (m[1] === '{') return jsonAt(html, at);
+      var end = html.indexOf("';", at + 1);
+      if (end < 0) return null;
+      var raw = html.slice(at + 1, end).replace(/\\x([0-9a-f]{2})/gi, function (x, h) { return String.fromCharCode(parseInt(h, 16)); }).replace(/\\\\/g, '\\');
+      try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+    var t = html.trim();
+    if (t[0] === '{') { try { return JSON.parse(t); } catch (e) { return null; } }
+    return null;
+  }
+  function walk(o, fn, d) {
+    d = d || 0;
+    if (!o || typeof o !== 'object' || d > 80) return;
+    if (Array.isArray(o)) { for (var i = 0; i < o.length; i++) walk(o[i], fn, d + 1); return; }
+    for (var k in o) { if (fn(k, o[k]) !== false) walk(o[k], fn, d + 1); }
+  }
+  function txt(t) {
+    if (!t) return '';
+    if (typeof t === 'string') return t;
+    if (t.simpleText) return t.simpleText;
+    if (t.runs) return t.runs.map(function (r) { return r.text || ''; }).join('');
+    if (t.content) return t.content;
+    return '';
+  }
+  function countIn(o) {
+    var n = 0;
+    walk(o, function (k, v) { if (!n && typeof v === 'string') { var m = v.match(/^\s*([\d,]+)\s+(videos?|episodes?|lessons?)\b/i); if (m) n = parseInt(m[1].replace(/,/g, ''), 10); } });
+    return n;
+  }
+  var GONE = /^\[(private|deleted) video\]$/i;
+  // Episodes on a playlist page (or a "load more" reply), the token for the next lot, and the playlist's name
+  function readVideos(data) {
+    var out = { items: [], token: '', title: '', count: 0 };
+    walk(data, function (k, v) {
+      if (k === 'playlistVideoRenderer' && v && v.videoId) {
+        var t = txt(v.title);
+        if (!GONE.test(t) && v.isPlayable !== false) out.items.push({ id: v.videoId, title: t, dur: parseInt(v.lengthSeconds, 10) || 0 });
+        return false;
+      }
+      if (k === 'lockupViewModel' && v && v.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO' && v.contentId) {
+        var md = v.metadata && v.metadata.lockupMetadataViewModel;
+        out.items.push({ id: v.contentId, title: txt(md && md.title), dur: 0 });
+        return false;
+      }
+      if (k === 'continuationItemRenderer') {
+        walk(v, function (k2, v2) { if (k2 === 'continuationCommand' && v2 && v2.token) out.token = v2.token; });
+        return false;
+      }
+      if (k === 'playlistMetadataRenderer' && v && v.title && !out.title) out.title = txt(v.title);
+      if (k === 'playlistHeaderRenderer' && v) { if (!out.title) out.title = txt(v.title); if (!out.count) out.count = countIn(v.numVideosText || v.stats); }
+      if (k === 'pageHeaderViewModel' && v && !out.title) { var tt = v.title && v.title.dynamicTextViewModel && v.title.dynamicTextViewModel.text; if (tt) out.title = txt(tt); if (!out.count) out.count = countIn(v.metadata); }
+    });
+    return out;
+  }
+  // Playlists on a channel's Playlists page
+  function readPlaylists(data) {
+    var out = [], seen = {}, token = '';
+    function push(id, title, count) { if (id && !seen[id] && /^(PL|OL|UU|FL)/.test(id)) { seen[id] = 1; out.push({ id: id, title: title, count: count || 0 }); } }
+    walk(data, function (k, v) {
+      if ((k === 'gridPlaylistRenderer' || k === 'playlistRenderer') && v && v.playlistId) {
+        push(v.playlistId, txt(v.title), parseInt(String(v.videoCount || txt(v.videoCountText) || txt(v.videoCountShortText) || '').replace(/,/g, ''), 10));
+        return false;
+      }
+      if (k === 'lockupViewModel' && v && v.contentType === 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
+        var md = v.metadata && v.metadata.lockupMetadataViewModel;
+        push(v.contentId, txt(md && md.title), countIn(v));
+        return false;
+      }
+      if (k === 'continuationItemRenderer') { walk(v, function (k2, v2) { if (k2 === 'continuationCommand' && v2 && v2.token) token = v2.token; }); return false; }
+    });
+    return { items: out, token: token };
+  }
+  function clientInfo(html) {
+    return {
+      ver: (String(html).match(/"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"/) || String(html).match(/"clientVersion"\s*:\s*"(2\.[\d.]+)"/) || [])[1] || '2.20250101.00.00',
+      key: (String(html).match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/) || [])[1] || ''
+    };
+  }
+
+  // ----- Episode numbers -----
+  // "HY USMLE Q #1107 - Pediatrics" -> 1107. Mehlman numbers his episodes in the title.
+  function epNumber(title) {
+    title = String(title || '');
+    var m = title.match(/#\s*(\d{1,5})\b/) || title.match(/\b(?:ep(?:isode)?|q|no)\.?\s*(\d{1,5})\b/i) || title.match(/№\s*(\d{1,5})/);
+    if (m) return parseInt(m[1], 10);
+    m = title.match(/(?:^|[^\d:.])(\d{2,5})(?![\d:.])/);
+    if (!m) return 0;
+    var n = parseInt(m[1], 10);
+    return n >= 1900 && n <= 2099 ? 0 : n; // a year, not an episode
+  }
+  // Courses keep YouTube's playlist order ('list', what Mo watches down). 'asc'/'desc' sort by title number when nearly all have one.
+  function ordered(items, dir) {
+    var list = items.map(function (x, i) { return { x: x, i: i, n: x.n }; });
+    var numbered = list.filter(function (o) { return o.n; }).length;
+    if (dir === 'list' || numbered < Math.max(1, list.length * 0.8)) return items.slice();
+    var s = dir === 'desc' ? -1 : 1;
+    return list.sort(function (a, b) { return a.n && b.n ? s * (a.n - b.n) || a.i - b.i : a.n ? -1 : b.n ? 1 : a.i - b.i; }).map(function (o) { return o.x; });
+  }
+  // A playlist link (or bare id) -> its id
+  function playlistId(text) {
+    text = String(text || '').trim();
+    if (/^(PL|OL|UU|FL)[A-Za-z0-9_-]{10,}$/.test(text)) return text;
+    var m = text.match(/[?&]list=((?:PL|OL|UU|FL)[A-Za-z0-9_-]{10,})/);
+    return m ? m[1] : '';
+  }
+  // "HY USMLE Qs - Pediatrics | Mehlman Medical" -> "Pediatrics"
+  function shortName(title) {
+    var t = String(title || '').replace(/mehlman\s*medical|mehlman|\bHY\b|USMLE|step\s*[123]\s*(ck)?|\bCK\b|\bQ'?s\b|questions|playlist|podcast|shelf|review|nbme/gi, ' ')
+      .replace(/[|:–—#()\[\]-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return (t || String(title || 'Course').trim()).slice(0, 14).trim() || 'Course';
+  }
+  function fmtHours(sec) { var h = sec / 3600; return h >= 1 ? Math.round(h) + ' h' : Math.max(1, Math.round(sec / 60)) + ' min'; }
+
+  // io: { load(key), save(key, string), fetchText(url, headers), postJSON(url, body, headers) -> Promise<string>, now(), apiKey(), watched(videoId) -> bool }
+  function create(io) {
+    var now = io.now || Date.now;
+    var state = read(), cache = readCache(), busy = {}, order = {}, index = {};
+
+    function read() {
+      var s = null;
+      try { s = JSON.parse(io.load(KEY) || 'null'); } catch (e) { s = null; }
+      if (!s || typeof s.courses !== 'object') s = { courses: {}, found: false, misses: [] };
+      return s;
+    }
+    function readCache() { try { return JSON.parse(io.load(IKEY) || 'null') || {}; } catch (e) { return {}; } }
+    function save() { state.saved = now(); io.save(KEY, JSON.stringify(state)); }
+    function saveCache() { try { io.save(IKEY, JSON.stringify(cache)); } catch (e) {} }
+
+    function list() { return Object.keys(state.courses).map(function (k) { return state.courses[k]; }).sort(function (a, b) { return a.added - b.added; }); }
+    function get(id) { return state.courses[id] || null; }
+    function items(id) {
+      var c = get(id), ch = cache[id];
+      if (!c || !ch || !ch.items) return [];
+      var key = c.order + '|' + ch.fetched;
+      if (!order[id] || order[id].key !== key) {
+        var arr = ordered(ch.items, c.order), ix = {};
+        arr.forEach(function (x, i) { ix[x.id] = i; });
+        order[id] = { key: key, arr: arr }; index[id] = ix;
+      }
+      return order[id].arr;
+    }
+    function status(id) { var ch = cache[id]; return { loading: !!busy[id], fetched: ch ? ch.fetched : 0, ok: ch ? ch.ok !== false : true, error: ch && ch.error || '', partial: ch && ch.partial || 0 }; }
+
+    // ----- Ticks -----
+    function isDone(c, vid) { var t = c.ticks[vid]; return t === 1 || (t !== 0 && !!(io.watched && io.watched(vid))); }
+    function progress(id) {
+      var c = get(id), arr = items(id), done = 0, last = -1, secs = 0;
+      if (!c) return null;
+      arr.forEach(function (x, i) { if (isDone(c, x.id)) { done++; last = i; } secs += x.dur || 0; });
+      var notch = arr.length && last < arr.length - 1 ? last + 1 : -1;
+      var st = !arr.length ? 'empty' : done === arr.length ? 'done' : done || c.touched ? 'go' : 'new';
+      return { total: arr.length, done: done, notch: notch, next: notch >= 0 ? arr[notch] : null, state: st, secs: secs, hours: secs ? fmtHours(secs) : '' };
+    }
+    function where(vid) {
+      var out = null;
+      list().forEach(function (c) { items(c.id); if (!out && index[c.id] && index[c.id][vid] != null) out = { course: c, i: index[c.id][vid] }; });
+      return out;
+    }
+    function touch(c) { c.touched = now(); }
+    function tick(id, vid, on) {
+      var c = get(id); if (!c) return;
+      c.ticks[vid] = on ? 1 : 0; touch(c); save();
+    }
+    // Everything up to and including position i; returns what was there, for Undo
+    function tickUpTo(id, i) {
+      var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
+      var before = Object.assign({}, c.ticks);
+      for (var j = 0; j <= i; j++) c.ticks[arr[j].id] = 1;
+      touch(c); save();
+      return before;
+    }
+    function restore(id, ticks) { var c = get(id); if (!c || !ticks) return; c.ticks = ticks; save(); }
+    function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; save(); }
+    // Episode number from the titles -> positions (first match first)
+    function findNumber(id, n) {
+      var arr = items(id), hits = [];
+      arr.forEach(function (x, i) { if (x.n === n) hits.push(i); });
+      return hits;
+    }
+    function touchCourse(id) { var c = get(id); if (c) { touch(c); save(); } }
+    function rename(id, name) { var c = get(id); name = String(name || '').trim().slice(0, 14); if (!c || !name) return false; c.name = name; save(); return true; }
+    function remove(id) { if (!state.courses[id]) return false; state.removed = state.removed || {}; state.removed[id] = state.courses[id].ticks; delete state.courses[id]; save(); return true; }
+
+    // ----- Loading a playlist -----
+    function fromPage(pid) {
+      return io.fetchText('https://www.youtube.com/playlist?list=' + pid, YT_HEADERS).then(function (html) {
+        var data = initialData(html);
+        if (!data) throw new Error(/consent\.(youtube|google)\.com/i.test(html) ? 'YouTube showed its cookie page. Try again in a minute.' : "YouTube's page came back in a shape Shelf can't read.");
+        var first = readVideos(data), ci = clientInfo(html), all = first.items.slice(), pages = 1, partial = 0;
+        if (!all.length && /"alerts"[\s\S]{0,400}(private|does not exist|unavailable)/i.test(html)) throw new Error('YouTube says this playlist is private or gone.');
+        function more(token) {
+          if (!token || pages >= MAX_PAGES || !io.postJSON) return Promise.resolve();
+          pages++;
+          return io.postJSON('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false' + (ci.key ? '&key=' + ci.key : ''),
+            { context: { client: { clientName: 'WEB', clientVersion: ci.ver, hl: 'en', gl: 'GB' } }, continuation: token },
+            { 'Content-Type': 'application/json', 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': ci.ver, Origin: 'https://www.youtube.com', Cookie: CONSENT, 'User-Agent': DESKTOP })
+            .then(function (t) { var r = readVideos(initialData(t) || {}); all = all.concat(r.items); return r.items.length ? more(r.token) : null; },
+              function () { partial = all.length; });
+        }
+        return more(first.token).then(function () { return { title: first.title, items: all, partial: partial && first.count > all.length ? first.count : 0 }; });
+      });
+    }
+    function fromApi(pid, key) {
+      var all = [], title = '';
+      function page(tok, n) {
+        return io.fetchText(API + 'playlistItems?part=snippet&maxResults=50&playlistId=' + pid + '&key=' + encodeURIComponent(key) + (tok ? '&pageToken=' + tok : '')).then(function (t) {
+          var j = JSON.parse(t);
+          (j.items || []).forEach(function (it) { var sn = it.snippet || {}, v = sn.resourceId && sn.resourceId.videoId; if (v && !GONE.test('[' + String(sn.title).replace(/^\[|\]$/g, '') + ']')) all.push({ id: v, title: sn.title, dur: 0 }); });
+          return j.nextPageToken && n < 80 ? page(j.nextPageToken, n + 1) : null;
+        });
+      }
+      return io.fetchText(API + 'playlists?part=snippet&id=' + pid + '&key=' + encodeURIComponent(key)).then(function (t) {
+        var j = JSON.parse(t); title = j.items && j.items[0] && j.items[0].snippet.title || '';
+        return page('', 0);
+      }).then(function () { return { title: title, items: all, partial: 0 }; });
+    }
+    function fetchList(pid) {
+      var key = io.apiKey && io.apiKey();
+      return key ? fromApi(pid, key).catch(function () { return fromPage(pid); }) : fromPage(pid);
+    }
+    function load(id, force) {
+      var c = get(id), ch = cache[id];
+      if (!c) return Promise.reject(new Error('gone'));
+      if (busy[id]) return busy[id];
+      if (!force && ch && ch.ok !== false && ch.items && now() - ch.fetched < TTL) return Promise.resolve(c);
+      busy[id] = fetchList(id).then(function (r) {
+        var seen = {}, its = [];
+        r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; x.n = epNumber(x.title); its.push(x); } });
+        if (!its.length) throw new Error('This playlist has no videos Shelf can play.');
+        cache[id] = { fetched: now(), ok: true, items: its, partial: r.partial };
+        if (r.title) c.title = r.title;
+        applySeed(c);
+        saveCache(); save();
+        delete busy[id]; return c;
+      }).catch(function (e) {
+        cache[id] = Object.assign({}, ch || { items: null }, { fetched: now(), ok: false, error: e && e.message || 'failed' });
+        delete busy[id]; return c;
+      });
+      return busy[id];
+    }
+    // Mo's note, applied once the episodes are known
+    function applySeed(c) {
+      var s = c.seed; if (!s) return;
+      delete c.seed;
+      var arr = items(c.id);
+      if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
+      if (s.upTo) {
+        var at = findNumber(c.id, s.upTo)[0];
+        if (at != null) { for (var j = 0; j <= at; j++) c.ticks[arr[j].id] = 1; c.note = ''; }
+        else if (s.pct) {
+          var k = Math.round(arr.length * s.pct / 100);
+          for (var q = 0; q < k; q++) c.ticks[arr[q].id] = 1;
+          c.note = "Couldn't find episode " + s.upTo + ' in this playlist, so the first ' + s.pct + '% are ticked. Check where you are.';
+        }
+        touch(c);
+      }
+      if (s.pin) { var p = findNumber(c.id, s.pin)[0]; if (p != null) c.pins[arr[p].id] = 1; }
+    }
+
+    // ----- Adding -----
+    function addCourse(pid, info) {
+      var prior = state.removed && state.removed[pid];
+      var c = state.courses[pid] = state.courses[pid] || {
+        id: pid, name: info.name || 'Course', title: info.title || '', channel: info.channel || '', section: info.section || 'med',
+        added: now(), touched: 0, ticks: prior || {}, pins: {}, order: 'list'
+      };
+      if (info.seed) c.seed = info.seed;
+      if (prior) delete state.removed[pid];
+      save(); return c;
+    }
+    // A pasted link -> a loaded course. Resolves to the course; rejects with a plain-words reason.
+    function add(input, opts) {
+      opts = opts || {};
+      var pid = playlistId(input);
+      if (!pid) return Promise.reject(new Error("That's not a playlist link. It should contain list=."));
+      if (get(pid)) return Promise.reject(new Error('Already on your shelf as ' + get(pid).name + '.'));
+      return fetchList(pid).then(function (r) {
+        var c = addCourse(pid, { name: opts.name || shortName(r.title), title: r.title, section: opts.section, channel: opts.channel });
+        var seen = {}, its = [];
+        r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; x.n = epNumber(x.title); its.push(x); } });
+        cache[pid] = { fetched: now(), ok: true, items: its, partial: r.partial };
+        saveCache(); save();
+        return c;
+      });
+    }
+
+    // ----- Channel playlists (for finding Mo's, and for the Add list) -----
+    var chanCache = {};
+    function channelPlaylists(handle) {
+      if (chanCache[handle]) return Promise.resolve(chanCache[handle]);
+      return io.fetchText('https://www.youtube.com/' + handle + '/playlists', YT_HEADERS).then(function (html) {
+        var data = initialData(html);
+        if (!data) throw new Error("Couldn't read " + handle + "'s playlists page.");
+        var r = readPlaylists(data), ci = clientInfo(html), all = r.items.slice(), pages = 1;
+        function more(token) {
+          if (!token || pages >= 5 || !io.postJSON) return Promise.resolve();
+          pages++;
+          return io.postJSON('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false' + (ci.key ? '&key=' + ci.key : ''),
+            { context: { client: { clientName: 'WEB', clientVersion: ci.ver, hl: 'en', gl: 'GB' } }, continuation: token },
+            { 'Content-Type': 'application/json', 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': ci.ver, Origin: 'https://www.youtube.com', Cookie: CONSENT, 'User-Agent': DESKTOP })
+            .then(function (t) { var x = readPlaylists(initialData(t) || {}); var seen = {}; all.forEach(function (p) { seen[p.id] = 1; }); x.items.forEach(function (p) { if (!seen[p.id]) all.push(p); }); return x.items.length ? more(x.token) : null; }, function () {});
+        }
+        return more(r.token).then(function () { chanCache[handle] = all; return all; });
+      });
+    }
+    // Best playlist for a name: Step 2 / question playlists first, then the biggest
+    function pick(all, re) {
+      var rx = new RegExp(re, 'i');
+      var hits = all.filter(function (p) { return rx.test(p.title); });
+      var score = function (p) { return (/step\s*2|\bck\b|shelf/i.test(p.title) ? 4 : 0) + (/step\s*1/i.test(p.title) ? -4 : 0) + (/\bq'?s?\b|question|qbank|hy\b/i.test(p.title) ? 2 : 0); };
+      hits.sort(function (a, b) { return score(b) - score(a) || (b.count || 0) - (a.count || 0); });
+      return hits[0] || null;
+    }
+    // First run in the app: find Mo's six playlists. Later runs retry only the misses.
+    function seed() {
+      var todo = SEED.courses.filter(function (s) {
+        return !list().some(function (c) { return c.seedName === s.name; }) && (!state.found || (state.misses || []).some(function (m) { return m.name === s.name; }));
+      });
+      if (!todo.length) return Promise.resolve([]);
+      return channelPlaylists(SEED.channel).then(function (all) {
+        var misses = [];
+        todo.forEach(function (s) {
+          var p = pick(all, s.match);
+          if (!p || get(p.id)) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
+          var c = addCourse(p.id, { name: s.name, title: p.title, channel: 'Mehlman Medical', section: SEED.section, seed: { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin } });
+          c.seedName = s.name;
+        });
+        state.found = true; state.misses = misses; save();
+        return misses;
+      }, function (e) {
+        state.misses = todo.map(function (s) { return { name: s.name, error: e && e.message || 'failed' }; });
+        save(); return state.misses;
+      });
+    }
+    // A miss fixed by hand (pasted link) clears it
+    function fixMiss(name, c) { c.seedName = name; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
+    function loadAll(force, onEach) {
+      var ids = list().map(function (c) { return c.id; }), i = 0;
+      function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }
+      return Promise.all([next(), next()]);
+    }
+    // The phone's copy and this one: keep the newer
+    function merge(phoneJson) {
+      try { var p = JSON.parse(phoneJson); if (p && p.courses && (p.saved || 0) > (state.saved || 0)) { state = p; order = {}; index = {}; save(); return true; } } catch (e) {}
+      return false;
+    }
+
+    return {
+      list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
+      tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, rename: rename, remove: remove,
+      load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists, merge: merge,
+      get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
+    };
+  }
+  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, epNumber: epNumber, ordered: ordered, playlistId: playlistId, shortName: shortName,
+    initialData: initialData, readVideos: readVideos, readPlaylists: readPlaylists, fmtHours: fmtHours };
+})();
+if (typeof module !== 'undefined') module.exports = Courses;
+</script>
 <script>// Shelf v2 (Day Sheet): Home bands, section/channel/search pages, YouTube player, night player, self-check.
 (function () {
   var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1', AKEY = 'shelf.v2.audio';
@@ -1410,7 +1915,7 @@ if (typeof module !== 'undefined') module.exports = Search;
   // ---------- Home ----------
   var renderTimer = null;
   function renderSoon() { clearTimeout(renderTimer); renderTimer = setTimeout(renderAll, 60); }
-  function renderAll() { renderHome(); if (stack.length) renderPage(); }
+  function renderAll() { keepTyping(function () { renderHome(); if (stack.length) renderPage(); }); }
   var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   function durText(e) {
@@ -1450,7 +1955,7 @@ if (typeof module !== 'undefined') module.exports = Search;
       var srcs = lib.sources(sec.id).length;
       html += '<section class="band ' + bandClass(sec.id) + '" aria-label="' + esc(sec.name) + '">' +
         '<button type="button" class="hd" data-act="open-section" data-id="' + esc(sec.id) + '"><h2>' + esc(sec.name) + '</h2><span class="tm mono">' +
-        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>';
+        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>' + coursesStrip(sec.id);
       if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
       else if (!srcs && !feedsOn) html += '<p class="empty">Your channels show here in the Shelf app on your iPhone.</p>';
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
@@ -1576,6 +2081,8 @@ if (typeof module !== 'undefined') module.exports = Search;
       html += '<div class="top band c0">' + eyebrow(shortDate(), vids.length + ' VIDEOS') + h1('Pasted') + '<p>Links you pasted from channels you don\'t follow. Finished ones stay at the bottom.</p></div>';
       if (!vids.length) html += '<p class="pnote">Nothing pasted yet.</p>';
       vids.forEach(function (e) { html += itemHTML(e, 'p') + '<button type="button" class="more" data-act="remove-video" data-id="' + esc(e.key) + '"><span class="mono">Remove ' + esc(e.title.slice(0, 40)) + '</span><span>×</span></button>'; });
+    } else if (v.name === 'courses') {
+      html += coursesPage(v);
     } else if (v.name === 'search') {
       html += '<div class="top band c2">' + eyebrow(shortDate(), prefs.apiKey ? 'GOOGLE KEY' : 'NO KEY NEEDED') + h1('Search') +
         '<form class="sform" id="sform"><input id="sq" type="search" enterkeyhint="search" autocomplete="off" placeholder="hyperkalemia, Emu War…" value="' + esc(v.q || '') + '" aria-label="Search YouTube"><button type="submit">Go</button></form></div>';
@@ -1591,7 +2098,7 @@ if (typeof module !== 'undefined') module.exports = Search;
         }
       });
     }
-    pg.className = 'page' + ({ c1: ' d1', c2: ' d2' }[v.name === 'section' ? bandClass(v.id) : v.name === 'channel' && lib.source(v.id) ? bandClass(lib.source(v.id).section) : ''] || '');
+    pg.className = 'page' + ({ c1: ' d1', c2: ' d2' }[v.name === 'section' || v.name === 'courses' ? bandClass(v.id) : v.name === 'channel' && lib.source(v.id) ? bandClass(lib.source(v.id).section) : ''] || '');
     pg.innerHTML = html;
     fitAll(pg);
     if (v.name === 'search') {
@@ -1633,7 +2140,7 @@ if (typeof module !== 'undefined') module.exports = Search;
     if (!feedsOn || refreshing) return Promise.resolve();
     refreshing = true; renderSoon();
     var first = lib.seed();
-    return first.then(function () { return lib.refreshAll(force, function () { renderSoon(); }); })
+    return first.then(function () { return Promise.all([lib.refreshAll(force, function () { renderSoon(); }), syncCourses(force)]); })
       .then(function () { refreshing = false; lib.saveCache(); lastRefresh = Date.now(); renderAll(); updateDot(); }, function () { refreshing = false; renderAll(); });
   }
   var lastRefresh = 0;
@@ -1685,7 +2192,8 @@ if (typeof module !== 'undefined') module.exports = Search;
     lastErr = ''; $('#perr').hidden = true;
     v.updated = Date.now(); saveVideos();
     $('#vTitle').textContent = v.title || 'YouTube video';
-    $('#vCh').textContent = v.author || '';
+    $('#vCh').textContent = courseTag(v.id) || v.author || '';
+    $('#vNext').hidden = true; renderPlayerCourse(v.id);
     $('#ytLink').href = ytLink(v);
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
@@ -1740,14 +2248,18 @@ if (typeof module !== 'undefined') module.exports = Search;
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (prefs.rate && player.getPlaybackRate && player.getPlaybackRate() !== prefs.rate) { try { player.setPlaybackRate(prefs.rate); } catch (er) {} }
       capture(); keepAwake(true);
-      var v = videos[current]; if (v) $('#vCh').textContent = (v.author ? v.author + ' · ' : '') + (wake ? 'screen stays on' : 'saving your spot');
+      var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake ? 'screen stays on' : 'saving your spot');
     } else {
       clearInterval(tick); keepAwake(false);
       if (e.data === S.ENDED && current && videos[current] && armed) {
         var w = videos[current]; w.t = w.dur || w.t; w.done = true; w.updated = Date.now();
-        if (vTimer && vTimer.mode === 'end') vTimer = null;
-        saveVideos(); closeVideo(true);
-        toast('Finished. It stays in its channel, marked as watched.');
+        var endTimer = vTimer && vTimer.mode === 'end', inCourse = courseOf(w.id);
+        if (endTimer) vTimer = null;
+        saveVideos();
+        if (inCourse) cs.tick(inCourse.course.id, w.id, true);
+        // In a course: offer the next episode instead of closing (unless the sleep timer said "end")
+        if (inCourse && !endTimer) { showNextUp(inCourse); renderAll(); }
+        else { closeVideo(true); toast(inCourse ? 'Finished and ticked. Sleep well.' : 'Finished. It stays in its channel, marked as watched.'); }
       } else if (e.data === S.PAUSED) capture(true);
     }
   }
@@ -1774,6 +2286,9 @@ if (typeof module !== 'undefined') module.exports = Search;
   }
   function closeVideo(silent) {
     capture(true);
+    // Closed in the last few seconds (end screen): it counts as watched, and ticks its course
+    var cv = current && videos[current];
+    if (cv && !cv.done && Core.isDone(cv.t, cv.dur)) { var cw = courseOf(cv.id); if (cw) { cv.done = true; cv.t = cv.dur; saveVideos(); cs.tick(cw.course.id, cv.id, true); } }
     try { player && player.pauseVideo(); } catch (e) {}
     clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); keepAwake(false);
     current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
@@ -1933,9 +2448,11 @@ if (typeof module !== 'undefined') module.exports = Search;
     text = String(text || '').trim();
     var shelf = text.match(/#shelf=([A-Za-z0-9_-]+)/);
     if (shelf) { importShelf(shelf[1]); renderAll(); return true; }
-    var found = Core.findLinks(text);
+    var found = Core.findLinks(text), pl = Courses.playlistId(text);
+    if (pl && !found.length) { openCourseAdd(text); return true; }
     if (found.length === 1) {
       openVideo({ id: found[0].id, t: found[0].t });
+      if (pl && cs && !cs.get(pl)) setTimeout(function () { toast('This video is in a playlist.', '', { label: 'Track it', fn: function () { openCourseAdd(text); } }); }, 600);
       return true;
     }
     if (found.length > 1) {
@@ -2020,6 +2537,283 @@ if (typeof module !== 'undefined') module.exports = Search;
     } catch (err) { msg.textContent = err.message; msg.className = 'msgline err'; }
   });
 
+  // ---------- Courses (playlists ticked episode by episode) ----------
+  var cs = null, openC = null, cwin = {}, cgrid = {}, cplace = {}, confirmCourse = null;
+  function postJSON(url, body, headers) {
+    if (!Native.inApp) return Promise.reject(new Error('This needs the Shelf app on your iPhone.'));
+    return withTimeout(Native.httpPost(url, body, headers), 20000, 'No answer after 20 seconds.').then(function (r) {
+      if (!r.ok) throw new Error('YouTube said ' + r.status + '.');
+      return r.text;
+    });
+  }
+  function epLabel(x, i) { return x.n ? String(x.n) : String(i + 1); }
+  // "HY USMLE Q #1107 - Pediatrics" -> "Pediatrics"
+  function shortTitle(t) { var s = String(t || '').replace(/^.*?#\s*\d+\s*[-–—:|]*\s*/, '').trim(); return s || String(t || ''); }
+  // When every title shortens to the same words, the full title says more
+  var repCache = {};
+  function titleFor(c, x) {
+    var arr = cs.items(c.id), key = c.id + arr.length;
+    if (repCache[c.id] == null || repCache[c.id].key !== key) {
+      var seen = {}, n = 0; arr.forEach(function (y) { var s = shortTitle(y.title); if (!seen[s]) { seen[s] = 1; n++; } });
+      repCache[c.id] = { key: key, rep: arr.length > 3 && n < arr.length * 0.3 };
+    }
+    return repCache[c.id].rep ? x.title : shortTitle(x.title);
+  }
+  function spotOf(x) { var v = videos[x.id]; return v && !v.done && v.t > 5 ? Core.fmt(v.t) + ' / ' + Core.fmt(v.dur || x.dur) : x.dur ? Core.fmt(x.dur) : ''; }
+  function rulerHTML(c, pr, arr) {
+    var n = arr.length;
+    if (!n) return '<span class="rl" aria-hidden="true"><i></i></span>';
+    if (n <= 60) return '<span class="rl" aria-hidden="true">' + arr.map(function (x, i) { return '<i class="' + (cs.isDone(c.id, x.id) ? 'd' : '') + (i === pr.notch ? ' n' : '') + (c.pins[x.id] ? ' p' : '') + '"></i>'; }).join('') + '</span>';
+    var h = '', run = -1, pc = function (v) { return (v / n * 100).toFixed(2) + '%'; };
+    for (var i = 0; i <= n; i++) {
+      var d = i < n && cs.isDone(c.id, arr[i].id);
+      if (d && run < 0) run = i;
+      if (!d && run >= 0) { h += '<b style="left:' + pc(run) + ';width:' + pc(i - run) + '"></b>'; run = -1; }
+    }
+    arr.forEach(function (x, j) { if (c.pins[x.id]) h += '<span class="pk" style="left:' + pc(j + 0.5) + '"></span>'; });
+    if (pr.notch >= 0) h += '<span class="nk" style="left:' + pc(pr.notch + 0.5) + '"></span>';
+    return '<span class="rl dense" aria-hidden="true">' + h + '</span>';
+  }
+  function courseSub(c, pr, arr) {
+    var st = cs.status(c.id);
+    if (!arr.length) return st.loading || c.seed ? 'Loading episodes…' : !st.ok ? "Couldn't load it. Tap to see why." : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app on your iPhone';
+    if (pr.state === 'done') return 'Done · ' + pr.done + '/' + pr.total;
+    if (pr.state === 'new') return 'Not started · ' + pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '');
+    var nx = pr.next, sp = spotOf(nx);
+    return 'Next · ' + epLabel(nx, pr.notch) + ' · ' + shortTitle(nx.title) + (sp ? ' · ' + sp : '');
+  }
+  function courseRow(c) {
+    var arr = cs.items(c.id), pr = cs.progress(c.id), open = openC === c.id, nx = pr.next;
+    var h = '<div class="course ' + pr.state + (open ? ' open' : '') + '">' +
+      '<button type="button" class="cr" data-act="course-open" data-id="' + esc(c.id) + '" aria-expanded="' + open + '" aria-label="' + esc(c.name + ', ' + pr.done + ' of ' + pr.total + ' watched. ' + (open ? 'Close' : 'Open')) + '">' +
+      '<span class="cl">' + esc(c.name) + '</span>' + rulerHTML(c, pr, arr) + '<span class="cn mono">' + (arr.length ? pr.done + '/' + pr.total : '–') + '</span>' +
+      '<span class="cx mono">' + esc(courseSub(c, pr, arr)) + '</span></button>';
+    if (nx) h += '<button type="button" class="cgo" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '" aria-label="' + esc((pr.state === 'new' ? 'Start ' : 'Play next: ') + epLabel(nx, pr.notch)) + '">▶</button>';
+    else h += '<span class="cgo" aria-hidden="true">' + (pr.state === 'done' ? '✓' : '') + '</span>';
+    var pins = arr.map(function (x, i) { return c.pins[x.id] ? { x: x, i: i } : null; }).filter(Boolean);
+    if (pins.length && !open) h += '<span class="cpin mono"><span class="pin">‼</span> ' + esc(epLabel(pins[0].x, pins[0].i)) + ' · ' + esc(shortTitle(pins[0].x.title)) + (pins.length > 1 ? ' · +' + (pins.length - 1) : '') + '</span>';
+    if (open) h += courseBody(c, pr, arr);
+    return h + '</div>';
+  }
+  function courseBody(c, pr, arr) {
+    var st = cs.status(c.id), link = 'https://www.youtube.com/playlist?list=' + encodeURIComponent(c.id), h = '<div class="cbody">';
+    if (!st.ok && st.error) h += '<p class="cnote err">' + (/private or gone/.test(st.error) ? 'YouTube says this playlist is private or gone. Your ticks are kept.' : "Couldn't load this playlist from YouTube: " + esc(st.error) + ' Your ticks are safe.') +
+      ' <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Retry</button></p>';
+    if (st.partial) h += '<p class="cnote">YouTube sent the first ' + arr.length + ' of ' + st.partial + ' videos. <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Load the rest</button></p>';
+    if (c.note) h += '<p class="cnote">' + esc(c.note) + '</p>';
+    if (arr.length) {
+      if (cplace[c.id]) h += '<form class="cplace" data-id="' + esc(c.id) + '"><label for="pl-' + esc(c.id) + '">Where are you? Episode № from the title</label>' +
+        '<input id="pl-' + esc(c.id) + '" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="e.g. ' + esc(epLabel(arr[Math.max(0, pr.notch)] || arr[0], 0)) + '">' +
+        '<span class="row"><button type="submit" class="cbtn solid">Tick up to here</button><button type="button" class="cbtn" data-act="course-pin-no" data-id="' + esc(c.id) + '">Pin ‼</button></span></form>';
+      else if (pr.state === 'new') h += '<p class="cnote">Not started. Tap ▶ to start at the top, or Set place if you\'ve watched some on YouTube.</p>';
+      h += cgrid[c.id] ? gridHTML(c, pr, arr) : windowHTML(c, pr, arr);
+    }
+    h += '<div class="cedge">' + (arr.length ? '<button type="button" data-act="course-grid" data-id="' + esc(c.id) + '">' + (cgrid[c.id] ? 'List' : 'Grid · ' + arr.length) + '</button>' +
+      '<button type="button" data-act="course-place" data-id="' + esc(c.id) + '">Set place №</button>' : '') +
+      '<a href="' + esc(link) + '" target="_blank" rel="noopener">YouTube ↗</a>' +
+      '<button type="button" class="danger" data-act="course-remove" data-id="' + esc(c.id) + '">' + (confirmCourse === c.id ? 'Tap again to remove' : 'Remove') + '</button></div>';
+    return h + '</div>';
+  }
+  function windowHTML(c, pr, arr) {
+    var w = cwin[c.id] || (cwin[c.id] = { b: 2, a: 3 });
+    var center = pr.notch >= 0 ? pr.notch : arr.length - 1;
+    var from = Math.max(0, center - w.b), to = Math.min(arr.length - 1, center + w.a), h = '';
+    if (from > 0) h += '<button type="button" class="cmore" data-act="course-earlier" data-id="' + esc(c.id) + '">▲ ' + from + ' earlier</button>';
+    h += '<ul class="eps">';
+    for (var i = from; i <= to; i++) {
+      var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
+      h += '<li class="ep' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
+        '<button type="button" class="tk" data-act="ep-tick" data-hold="upto"' + da + ' aria-pressed="' + d + '" aria-label="' + esc((d ? 'Untick ' : 'Tick ') + lab + '. Hold to tick everything above it too.') + '"><span>' + (d ? '✓' : '') + '</span></button>' +
+        '<span class="no mono">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</span>' +
+        '<button type="button" class="et" data-act="ep-play" data-hold="pin"' + da + '>' + esc(titleFor(c, x)) + '</button>' +
+        '<span class="du mono">' + esc(spotOf(x)) + '</span></li>';
+    }
+    h += '</ul>';
+    if (to < arr.length - 1) h += '<button type="button" class="cmore" data-act="course-later" data-id="' + esc(c.id) + '">▼ ' + (arr.length - 1 - to) + ' more</button>';
+    return h;
+  }
+  function gridHTML(c, pr, arr) {
+    return '<p class="cnote">Tap to tick one. Hold to tick everything up to it.</p><div class="epgrid">' + arr.map(function (x, i) {
+      var d = cs.isDone(c.id, x.id), lab = epLabel(x, i);
+      return '<button type="button" class="' + (d ? 'd' : '') + (i === pr.notch ? ' n' : '') + (c.pins[x.id] ? ' p' : '') + '" data-act="ep-tick" data-hold="upto" data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '" aria-pressed="' + d + '" aria-label="' + esc(lab + ': ' + shortTitle(x.title)) + '">' + esc(lab) + '</button>';
+    }).join('') + '</div>';
+  }
+  // Courses shown on a section's band: the ones on the go, at most two
+  function coursesStrip(secId) {
+    if (!cs) return '';
+    var all = cs.list().filter(function (c) { return (c.section || 'med') === secId; });
+    if (!all.length) return '';
+    var go = all.filter(function (c) { var s = cs.progress(c.id).state; return s === 'go' || (s === 'empty' && (c.touched || (c.seed && c.seed.upTo))); })
+      .sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
+    if (openC && !go.some(function (c) { return c.id === openC; }) && all.some(function (c) { return c.id === openC; }) && !stack.length) go.unshift(cs.get(openC));
+    var h = '<div class="courses"><button type="button" class="chd" data-act="open-courses" data-id="' + esc(secId) + '"><span>Courses</span><span class="mono">' +
+      (go.length ? go.length + ' on the go' : all.length + ' · none on the go') + ' ›</span></button>';
+    go.slice(0, 2).forEach(function (c) { h += courseRow(c); });
+    return h + '</div>';
+  }
+  function coursesPage(v) {
+    var sec = lib.section(v.id) || lib.sections()[0], all = cs.list().filter(function (c) { return (c.section || 'med') === sec.id; }), h = '';
+    h += '<div class="top band ' + bandClass(sec.id) + '">' + eyebrow(sec.name.toUpperCase(), all.length + (all.length === 1 ? ' COURSE' : ' COURSES')) + h1('Courses') +
+      '<p>Playlists ticked episode by episode. Tap one to open it. Hold a tick to tick everything above it.</p>' +
+      '<div class="acts"><button type="button" class="btn" data-act="add-course" data-id="' + esc(sec.id) + '">+ Add course</button></div></div>';
+    if (sec.id === Courses.SEED.section) cs.misses.forEach(function (m) {
+      h += '<p class="pnote err">Couldn\'t find your ' + esc(m.name) + ' playlist on Mehlman\'s channel (' + esc(m.error) + '). <button type="button" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '">Fix</button></p>';
+    });
+    if (!feedsOn && !prefs.apiKey) h += '<p class="pnote">Episodes load in the Shelf app on your iPhone.</p>';
+    var groups = { go: [], new: [], done: [] };
+    all.forEach(function (c) { var s = cs.progress(c.id).state; (groups[s === 'empty' ? (c.touched || c.seed ? 'go' : 'new') : s] || groups.new).push(c); });
+    groups.go.sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
+    [['go', 'On the go'], ['new', 'Not started'], ['done', 'Done']].forEach(function (g) {
+      if (!groups[g[0]].length) return;
+      h += '<h2 class="sub-h"><span>' + g[1] + '</span><span class="mono">' + groups[g[0]].length + '</span></h2><div class="cgroup">' + groups[g[0]].map(courseRow).join('') + '</div>';
+    });
+    if (!all.length) h += '<p class="pnote">No courses yet. Paste a playlist link and it lands here.</p>';
+    h += '<button type="button" class="more" data-act="add-course" data-id="' + esc(sec.id) + '"><span>+ Add course</span><span class="mono">paste a playlist link</span></button>';
+    return h;
+  }
+  function openCourses(secId) { push({ name: 'courses', id: secId || 'med' }); }
+  // Re-render without losing what's being typed in a Set place box
+  function keepTyping(fn) {
+    var a = document.activeElement, id = a && a.id && /^pl-/.test(a.id) ? a.id : null, val = id ? a.value : '';
+    fn();
+    if (id) { var n = document.getElementById(id); if (n) { n.value = val; try { n.focus({ preventScroll: true }); } catch (e) {} } }
+  }
+  function syncCourses(force) {
+    if (!cs || !(feedsOn || prefs.apiKey)) return Promise.resolve();
+    return (feedsOn ? cs.seed() : Promise.resolve()).then(function () { return cs.loadAll(force, function () { renderSoon(); }); }).then(function () { renderSoon(); updateDot(); });
+  }
+  // Tick (or untick) one episode; the video's own saved spot agrees
+  function setTick(cid, vid, on) {
+    cs.tick(cid, vid, on);
+    var v = videos[vid];
+    if (v && on && !v.done) { v.done = true; v.t = v.dur || v.t; v.updated = Date.now(); saveVideos(); }
+    else if (v && !on && v.done) { v.done = false; v.t = 0; saveVideos(); }
+    renderAll();
+  }
+  function playEp(cid, vid) {
+    var c = cs.get(cid), x = c && cs.items(cid).filter(function (y) { return y.id === vid; })[0];
+    if (!x) return;
+    var src = lib.sources().filter(function (s) { return c.channel && s.name.toLowerCase() === c.channel.toLowerCase(); })[0];
+    cs.touch(cid);
+    openVideo({ id: vid, title: x.title, author: c.channel || '', channelId: src ? src.id : '', section: c.section, dur: x.dur });
+  }
+  function holdAct(el) {
+    var cid = el.getAttribute('data-id'), vid = el.getAttribute('data-v'), i = +el.getAttribute('data-i'), c = cs.get(cid);
+    if (!c) return;
+    var arr = cs.items(cid), x = arr[i], lab = x ? epLabel(x, i) : '';
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+    if (el.getAttribute('data-hold') === 'upto') {
+      var before = cs.tickUpTo(cid, i);
+      renderAll();
+      toast('Ticked everything down to ' + lab + ' (' + (i + 1) + ' of ' + arr.length + ').', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+    } else {
+      var on = !c.pins[vid];
+      cs.pin(cid, vid, on); renderAll();
+      toast(on ? 'Pinned ‼ ' + lab + '. It stays on ' + c.name + '\'s row.' : 'Unpinned ' + lab + '.');
+    }
+  }
+  // Press and hold: 'upto' on a tick, 'pin' on a title
+  var cHoldT = null, cHoldXY = null, cHeld = false, cSwallowUntil = 0;
+  document.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest && e.target.closest('[data-hold]'); if (!el) return;
+    cHoldXY = [e.clientX, e.clientY]; cHeld = false; clearTimeout(cHoldT);
+    cHoldT = setTimeout(function () { cHeld = true; cSwallowUntil = Infinity; holdAct(el); }, 500);
+  });
+  document.addEventListener('pointermove', function (e) { if (cHoldXY && Math.abs(e.clientX - cHoldXY[0]) + Math.abs(e.clientY - cHoldXY[1]) > 12) clearTimeout(cHoldT); });
+  ['pointerup', 'pointercancel'].forEach(function (t) { document.addEventListener(t, function () { clearTimeout(cHoldT); cHoldXY = null; if (cHeld) { cHeld = false; cSwallowUntil = Date.now() + 450; } }); });
+  document.addEventListener('contextmenu', function (e) { if (e.target.closest && e.target.closest('[data-hold]')) e.preventDefault(); });
+  // Set place: an episode number from the titles
+  document.addEventListener('submit', function (e) {
+    var f = e.target.closest && e.target.closest('.cplace'); if (!f) return;
+    e.preventDefault();
+    var cid = f.getAttribute('data-id'), c = cs.get(cid), n = parseInt(f.querySelector('input').value, 10);
+    if (!c || !n) { toast('Type the episode number from the video title, like 1107.', 'warn'); return; }
+    var hits = cs.findNumber(cid, n), arr = cs.items(cid);
+    if (!hits.length) { toast('No episode ' + n + ' in ' + c.name + '. Check the number in the video title.', 'warn'); return; }
+    var before = cs.tickUpTo(cid, hits[0]);
+    cplace[cid] = false; cwin[cid] = null;
+    renderAll();
+    toast(n + ' is ' + (hits[0] + 1) + ' of ' + arr.length + '. Ticked it and everything above it' + (hits.length > 1 ? ' (first of ' + hits.length + ')' : '') + '.', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+  });
+
+  // Add a course
+  var cAddSec = 'med', cFix = null, cAdding = false, chanLists = null;
+  function openCourseAdd(prefill, secId, fixName) {
+    cFix = fixName || null;
+    var secs = lib.sections();
+    cAddSec = secId && lib.section(secId) ? secId : lib.section('med') ? 'med' : secs[0].id;
+    $('#courseSec').innerHTML = secs.map(function (s) { return '<button type="button" data-act="course-sec" data-id="' + esc(s.id) + '" aria-pressed="' + (s.id === cAddSec) + '">' + esc(s.name) + '</button>'; }).join('');
+    $('#courseInput').value = prefill || '';
+    $('#courseName').value = fixName || ''; $('#courseName').removeAttribute('data-auto');
+    $('#courseMsg').textContent = feedsOn || prefs.apiKey ? '' : 'Adding courses works in the Shelf app on your iPhone.';
+    $('#courseMsg').className = 'msgline';
+    $('#courseH').textContent = fixName ? 'Find ' + fixName : 'Add a course';
+    openDlg($('#courseDlg'));
+    renderCoursePicks();
+    if (feedsOn && !chanLists) cs.channelPlaylists(Courses.SEED.channel).then(function (l) { chanLists = l; renderCoursePicks(); }, function () {});
+    if (!prefill && !isPhone) setTimeout(function () { $('#courseInput').focus(); }, 50);
+  }
+  function renderCoursePicks() {
+    var q = $('#courseInput').value.trim().toLowerCase(), box = $('#coursePicks');
+    if (!chanLists || Courses.playlistId(q) || /^https?:|youtu/.test(q)) { box.innerHTML = ''; return; }
+    var have = {}; cs.list().forEach(function (c) { have[c.id] = 1; });
+    var words = q.split(/\s+/).filter(Boolean);
+    var hits = chanLists.filter(function (p) { var t = p.title.toLowerCase(); return !have[p.id] && words.every(function (w) { return t.indexOf(w) >= 0; }); });
+    box.innerHTML = (hits.length ? '<span class="small">' + (q ? 'Mehlman playlists matching "' + esc(q) + '"' : 'From Mehlman Medical (type to narrow)') + '</span>' : q ? '<span class="small">No Mehlman playlist matches "' + esc(q) + '". Paste a link instead.</span>' : '') +
+      hits.slice(0, 4).map(function (p) { return '<button type="button" data-act="course-pick" data-pl="' + esc(p.id) + '" data-t="' + esc(p.title) + '" aria-pressed="false"><span>' + esc(p.title) + '</span><span class="mono">' + (p.count || '') + '</span></button>'; }).join('') +
+      (hits.length > 4 ? '<span class="small">+ ' + (hits.length - 4) + ' more. Type to narrow.</span>' : '');
+  }
+  $('#courseInput').addEventListener('input', renderCoursePicks);
+  $('#courseName').addEventListener('input', function () { this.removeAttribute('data-auto'); });
+  $('#courseForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (cAdding) return;
+    var val = $('#courseInput').value.trim(), msg = $('#courseMsg'), name = $('#courseName').value.trim();
+    var pid = Courses.playlistId(val);
+    if (!pid && chanLists && val) {
+      var only = Array.prototype.map.call(document.querySelectorAll('#coursePicks [data-pl]'), function (b) { return b.getAttribute('data-pl'); });
+      if (only.length === 1) pid = only[0];
+    }
+    if (!pid) { msg.textContent = val ? "That's not a playlist link. It should contain list=." : 'Paste a playlist link first.'; msg.className = 'msgline err'; return; }
+    cAdding = true; msg.textContent = 'Looking it up…'; msg.className = 'msgline'; $('#courseGo').disabled = true;
+    var fromChan = chanLists && chanLists.some(function (p) { return p.id === pid; });
+    cs.add(pid, { name: name || cFix || '', section: cAddSec, channel: fromChan ? 'Mehlman Medical' : '' }).then(function (c) {
+      cAdding = false; $('#courseGo').disabled = false;
+      if (cFix) cs.fixMiss(cFix, c);
+      var pr = cs.progress(c.id);
+      msg.textContent = 'Added ' + c.name + ' · ' + pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '') + '.'; msg.className = 'msgline ok';
+      openC = c.id; renderAll(); updateDot();
+      setTimeout(function () { if ($('#courseDlg').open) $('#courseDlg').close(); }, 900);
+    }, function (err) {
+      cAdding = false; $('#courseGo').disabled = false;
+      msg.textContent = (err && err.message) || "Couldn't add that."; msg.className = 'msgline err';
+    });
+  });
+
+  // In the player: which course this video is in, and what's next
+  function courseOf(vid) { return cs ? cs.where(vid) : null; }
+  function courseTag(vid) {
+    var w = courseOf(vid); if (!w) return '';
+    return w.course.name.toUpperCase() + ' · ' + (w.i + 1) + ' OF ' + cs.items(w.course.id).length;
+  }
+  function renderPlayerCourse(vid) {
+    var w = courseOf(vid), box = $('#vCourse');
+    if (!w) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = rulerHTML(w.course, cs.progress(w.course.id), cs.items(w.course.id));
+  }
+  function showNextUp(w) {
+    var c = w.course, arr = cs.items(c.id), nx = null, ni = -1;
+    for (var i = w.i + 1; i < arr.length; i++) if (!cs.isDone(c.id, arr[i].id)) { nx = arr[i]; ni = i; break; }
+    var box = $('#vNext'), pr = cs.progress(c.id);
+    if (nx) box.innerHTML = '<small>Next up · ' + esc(c.name) + '</small><b>' + esc(epLabel(nx, ni)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' · ' + Core.fmt(nx.dur) : '') + '</b>' +
+      '<div class="row2"><button type="button" class="btn solid" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '">Play next ▶</button><button type="button" class="btn" data-act="close-video">Done for now</button></div>';
+    else box.innerHTML = '<small>' + esc(c.name) + '</small><b>Course done · ' + pr.done + '/' + pr.total + '</b><div class="row2"><button type="button" class="btn solid" data-act="course-back" data-id="' + esc(c.section || 'med') + '">Back to courses</button></div>';
+    box.hidden = false;
+    renderPlayerCourse(w.course.id && arr[w.i] ? arr[w.i].id : '');
+    try { box.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {}
+  }
+
   // ---------- Clicks ----------
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]'); if (!b) return;
@@ -2056,6 +2850,33 @@ if (typeof module !== 'undefined') module.exports = Search;
         toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; saveVideos(); renderAll(); } });
         break;
       case 'close-video': closeVideo(); break;
+      case 'open-courses': openCourses(id); break;
+      case 'course-open':
+        openC = openC === id ? null : id; confirmCourse = null;
+        if (openC && !cs.items(id).length && !cs.status(id).loading && (feedsOn || prefs.apiKey)) cs.load(id, true).then(renderAll);
+        renderAll(); break;
+      case 'ep-play': if (Date.now() < cSwallowUntil) break; playEp(id, b.getAttribute('data-v')); break;
+      case 'ep-tick': if (Date.now() < cSwallowUntil) break; setTick(id, b.getAttribute('data-v'), !cs.isDone(id, b.getAttribute('data-v'))); break;
+      case 'course-earlier': case 'course-later': var cw2 = cwin[id] || (cwin[id] = { b: 2, a: 3 }); if (act === 'course-earlier') cw2.b += 10; else cw2.a += 10; renderAll(); break;
+      case 'course-grid': cgrid[id] = !cgrid[id]; renderAll(); break;
+      case 'course-place': cplace[id] = !cplace[id]; renderAll(); if (cplace[id]) setTimeout(function () { var inp = document.getElementById('pl-' + id); if (inp) inp.focus(); }, 30); break;
+      case 'course-pin-no':
+        var pf = b.closest('.cplace'), pn = parseInt(pf && pf.querySelector('input').value, 10), pc2 = cs.get(id), ph = pn ? cs.findNumber(id, pn) : [];
+        if (!ph.length) { toast(pn ? 'No episode ' + pn + ' in ' + pc2.name + '. Check the number in the video title.' : 'Type the episode number first, like 1607.', 'warn'); break; }
+        var pv = cs.items(id)[ph[0]].id, pon = !pc2.pins[pv]; cs.pin(id, pv, pon); cplace[id] = false; renderAll();
+        toast(pon ? 'Pinned ‼ ' + pn + '. It stays on ' + pc2.name + '\'s row.' : 'Unpinned ' + pn + '.'); break;
+      case 'course-remove':
+        if (confirmCourse !== id) { confirmCourse = id; renderAll(); break; }
+        cs.remove(id); confirmCourse = null; openC = null; renderAll(); toast('Removed. Its ticks come back if you add it again.'); break;
+      case 'course-retry': cs.load(id, true).then(function () { renderAll(); updateDot(); }); renderAll(); toast('Loading the playlist…'); break;
+      case 'course-back': closeVideo(); openCourses(id); break;
+      case 'add-course': openCourseAdd('', id, b.getAttribute('data-fix') || ''); break;
+      case 'course-sec': cAddSec = id; Array.prototype.forEach.call(document.querySelectorAll('#courseSec button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); break;
+      case 'course-pick':
+        $('#courseInput').value = 'https://www.youtube.com/playlist?list=' + b.getAttribute('data-pl');
+        if (!$('#courseName').value.trim() || $('#courseName').getAttribute('data-auto') === '1') { $('#courseName').value = Courses.shortName(b.getAttribute('data-t')); $('#courseName').setAttribute('data-auto', '1'); }
+        $('#coursePicks').innerHTML = '<span class="small">Picked: ' + esc(b.getAttribute('data-t')) + '. Tap Add.</span>'; break;
+      case 'course-paste': Native.readClipboard().then(function (t) { $('#courseInput').value = (t || '').trim(); renderCoursePicks(); }, function () { $('#courseInput').focus(); toast('Tap the box, then tap Paste.'); }); break;
       case 'v-toggle': try { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); } catch (er) {} break;
       case 'v-back': case 'v-fwd': try { player.seekTo(Math.max(0, player.getCurrentTime() + (act === 'v-back' ? -15 : 15)), true); videoTick(); } catch (er) {} break;
       case 'timer': if (held) { held = false; break; } setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
@@ -2147,6 +2968,13 @@ if (typeof module !== 'undefined') module.exports = Search;
         out.push({ ok: 0, text: "Couldn't find " + m.input + ' automatically. Open ' + (sec ? sec.name : 'its section') + ' and tap Fix next to it.' });
       });
     } else out.push({ ok: 1, text: 'Channels and new uploads load in the Shelf app on your iPhone; here you can paste and resume' });
+    if (cs && cs.list().length && (feedsOn || prefs.apiKey)) {
+      var cbad = cs.list().filter(function (c) { return !cs.status(c.id).ok; });
+      if (cs.busy) out.push({ ok: 2, text: 'Loading your courses…' });
+      else if (cbad.length) out.push({ ok: 0, text: "Couldn't load " + cbad.map(function (c) { return c.name; }).join(', ') + ' from YouTube. Open Courses and tap Retry; your ticks are safe.' });
+      else out.push({ ok: 1, text: 'Tracking ' + cs.list().length + (cs.list().length === 1 ? ' course' : ' courses') + ' episode by episode' });
+    }
+    if (cs && feedsOn) cs.misses.forEach(function (m) { out.push({ ok: 0, text: "Couldn't find your " + m.name + " playlist on Mehlman's channel. Open Courses and tap Fix next to it." }); });
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
@@ -2204,13 +3032,14 @@ if (typeof module !== 'undefined') module.exports = Search;
   var restored = false;
   function restoreFromPhone() {
     if (!Native.inApp) return Promise.resolve();
-    var keys = [KEY, PREF, AKEY, Library.KEY];
+    var keys = [KEY, PREF, AKEY, Library.KEY, Courses.KEY];
     return withTimeout(Promise.all(keys.map(Native.prefGet)), 2000, 'slow').then(function (r) {
       try {
         if (r[0]) { var local = load(KEY, {}), m = Core.merge(local, JSON.parse(r[0])); if (m.added || m.updated || !rawGet(KEY)) rawSet(KEY, JSON.stringify(m.videos), false); }
         if (r[1] && !rawGet(PREF)) rawSet(PREF, r[1], false);
         if (r[2]) { var la = load(AKEY, {}), pa = JSON.parse(r[2]); Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); rawSet(AKEY, JSON.stringify(la), false); }
         if (r[3] && !rawGet(Library.KEY)) rawSet(Library.KEY, r[3], false);
+        if (r[4]) { var lc = load(Courses.KEY, null), pc = JSON.parse(r[4]); if (!lc || (pc.saved || 0) > (lc.saved || 0)) rawSet(Courses.KEY, r[4], false); }
         restored = true;
       } catch (e) {}
     }, function () {});
@@ -2222,9 +3051,16 @@ if (typeof module !== 'undefined') module.exports = Search;
       save: function (k, v) { rawSet(k, v, k === Library.KEY); }, // the feed cache stays in the web view; the library itself is mirrored to the phone
       fetchText: fetchText
     });
+    cs = Courses.create({
+      load: rawGet,
+      save: function (k, v) { rawSet(k, v, k === Courses.KEY); }, // ticks go to the phone too; the episode lists stay here
+      fetchText: fetchText, postJSON: postJSON, now: function () { return Date.now(); },
+      apiKey: function () { return prefs.apiKey || ''; },
+      watched: function (vid) { return !!(videos[vid] && videos[vid].done); }
+    });
     // Keep the phone's copy complete even before anything changes
     // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
-    if (Native.inApp && restored) { if (Object.keys(videos).length) Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); }
+    if (Native.inApp && restored) { if (Object.keys(videos).length) Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); if (rawGet(Courses.KEY)) Native.prefSet(Courses.KEY, rawGet(Courses.KEY)); }
     buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a');
     initAudio();
     if (Native.inApp) $('#toneBtn').hidden = false;
@@ -2242,7 +3078,7 @@ if (typeof module !== 'undefined') module.exports = Search;
     refreshAll(false);
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture,
-      get current() { return current; }, get vTimer() { return vTimer; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get busy() { return refreshing || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   restoreFromPhone().then(boot);
 })();
