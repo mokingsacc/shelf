@@ -1,0 +1,20 @@
+{
+  "name": "shelf",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Shelf: YouTube without the noise, resume everywhere, sleep timer.",
+  "scripts": {
+    "build": "node dev/build.mjs",
+    "test": "node dev/test/core.test.cjs && node dev/test/e2e.mjs"
+  },
+  "dependencies": {
+    "@capacitor/app": "8.1.2",
+    "@capacitor/clipboard": "8.0.1",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2",
+    "@capacitor/preferences": "8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}

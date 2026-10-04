@@ -197,7 +197,7 @@ dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 .copyrow input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--field); border-radius: 10px; padding: 9px 12px; font-size: 13px; color: var(--muted); }
 .btn2 { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; font-weight: 600; font-size: 13.5px; white-space: nowrap; }
 .btn2:hover { border-color: var(--accent); color: var(--accent); }
-.dlg-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .dlg-actions .resume { padding: 10px 18px; }
 .tip { font-size: 13px; color: var(--muted); margin: 14px 0 0 !important; }
 
@@ -295,7 +295,7 @@ dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
   </div>
 
   <footer class="foot">
-    <span class="foot-note"><span>Saved in this browser</span><span id="lastSaved"></span></span>
+    <span class="foot-note"><span id="saveWhere">Saved in this browser</span><span id="lastSaved"></span></span>
     <button id="sendBtn" class="send" type="button" data-act="send" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span id="sendLabel">Send to iPhone</span></button>
   </footer>
 </div>
@@ -304,7 +304,7 @@ dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
   <h2 id="checkH">Self-check</h2>
   <p>What's working, in plain words.</p>
   <ul id="checkList" class="checks"></ul>
-  <div class="dlg-actions"><button class="resume" type="button" data-act="dismiss" autofocus>Close</button></div>
+  <div class="dlg-actions"><button id="toneBtn" class="btn2" type="button" data-act="tone" hidden>Test lock-screen sound</button><button class="resume" type="button" data-act="dismiss" autofocus>Close</button></div>
 </dialog>
 
 <dialog id="sendDlg" aria-labelledby="sendH">
@@ -322,6 +322,7 @@ dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 
 <script>/*@QRCODE@*/</script>
 <script>/*@CORE@*/</script>
+<script>/*@NATIVE@*/</script>
 <script>/*@APP@*/</script>
 </body>
 </html>

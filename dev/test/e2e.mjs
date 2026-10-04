@@ -231,6 +231,34 @@ async function run(browserType, name) {
   await fp.waitForTimeout(150);
   ok((await fp.locator('#checkList').textContent()).includes('opened the file directly'), '7 opened-as-file is explained');
 
+  // Inside the iPhone shell (Capacitor faked): phone storage, clipboard plugin, feed check
+  const capCtx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await setup(capCtx);
+  await capCtx.route('https://feeds.megaphone.fm/**', (r) => r.fulfill({ contentType: 'application/rss+xml', body: '<?xml version="1.0"?><rss><channel><title>Fin vs History</title></channel></rss>' }));
+  const CAP = (seed) => `window.__prefs = ${JSON.stringify(seed)};
+    window.Capacitor = { isNativePlatform: () => true, Plugins: {
+      Preferences: { get: async ({ key }) => ({ value: key in window.__prefs ? window.__prefs[key] : null }), set: async ({ key, value }) => { window.__prefs[key] = value; } },
+      Clipboard: { read: async () => ({ value: 'https://youtu.be/capcapcapca', type: 'text/plain' }) } } };`;
+  const cp = await capCtx.newPage(); cp.on('pageerror', (e) => errors.push('app: ' + e.message));
+  await cp.addInitScript(CAP({}));
+  await cp.goto('http://localhost:8765/'); await cp.waitForTimeout(2200);
+  await cp.locator('#addBtn').click(); await cp.waitForTimeout(400);
+  ok(await cp.evaluate(() => !!window.__resume.videos.capcapcapca), 'app: Paste uses the phone clipboard');
+  await cp.waitForTimeout(500);
+  ok(await cp.evaluate(() => (window.__prefs['resume.shelf.v1'] || '').includes('capcapcapca')), 'app: shelf saved to phone storage');
+  await cp.locator('.only-playing[data-act="close"]').click();
+  await cp.locator('#statusBtn').click(); await cp.waitForTimeout(200);
+  const capText = await cp.locator('#checkList').textContent();
+  ok(capText.includes('Running inside the Shelf app') && capText.includes('Can read podcast feeds') && capText.includes('Lock-screen sound not tested'), 'app: self-check shows app, feed and sound-test lines');
+  ok(await cp.locator('#toneBtn').isVisible(), 'app: sound test button shows');
+  const savedPrefs = await cp.evaluate(() => window.__prefs);
+  // Web storage wiped, phone storage kept: the shelf comes back
+  const cap2 = await browser.newContext(); await setup(cap2);
+  const cp2 = await cap2.newPage(); await cp2.addInitScript(CAP(savedPrefs));
+  await cp2.goto('http://localhost:8765/'); await cp2.waitForTimeout(600);
+  ok(await cp2.evaluate(() => !!window.__resume.videos.capcapcapca), 'app: shelf restored from phone storage after web storage loss');
+  // Plain browser shows no app-only lines
+  ok(!(await p2.locator('#toneBtn').isVisible()), 'web: no sound test button outside the app');
+
   ok(errors.length === 0, 'no script errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await browser.close();
 }

@@ -197,7 +197,7 @@ dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 .copyrow input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--field); border-radius: 10px; padding: 9px 12px; font-size: 13px; color: var(--muted); }
 .btn2 { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; font-weight: 600; font-size: 13.5px; white-space: nowrap; }
 .btn2:hover { border-color: var(--accent); color: var(--accent); }
-.dlg-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .dlg-actions .resume { padding: 10px 18px; }
 .tip { font-size: 13px; color: var(--muted); margin: 14px 0 0 !important; }
 
@@ -295,7 +295,7 @@ dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
   </div>
 
   <footer class="foot">
-    <span class="foot-note"><span>Saved in this browser</span><span id="lastSaved"></span></span>
+    <span class="foot-note"><span id="saveWhere">Saved in this browser</span><span id="lastSaved"></span></span>
     <button id="sendBtn" class="send" type="button" data-act="send" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span id="sendLabel">Send to iPhone</span></button>
   </footer>
 </div>
@@ -304,7 +304,7 @@ dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
   <h2 id="checkH">Self-check</h2>
   <p>What's working, in plain words.</p>
   <ul id="checkList" class="checks"></ul>
-  <div class="dlg-actions"><button class="resume" type="button" data-act="dismiss" autofocus>Close</button></div>
+  <div class="dlg-actions"><button id="toneBtn" class="btn2" type="button" data-act="tone" hidden>Test lock-screen sound</button><button class="resume" type="button" data-act="dismiss" autofocus>Close</button></div>
 </dialog>
 
 <dialog id="sendDlg" aria-labelledby="sendH">
@@ -2266,6 +2266,111 @@ var Core = (function () {
 })();
 if (typeof module !== 'undefined') module.exports = Core;
 </script>
+<script>// The iPhone shell (Capacitor) adds native helpers to this page. Everything here also works without them.
+var Native = (function () {
+  var Cap = window.Capacitor;
+  var inApp = !!(Cap && typeof Cap.isNativePlatform === 'function' && Cap.isNativePlatform());
+
+  function call(plugin, method, opts) {
+    try {
+      var P = Cap && Cap.Plugins && Cap.Plugins[plugin];
+      if (P && typeof P[method] === 'function') return Promise.resolve(P[method](opts || {}));
+      if (Cap && Cap.nativePromise) return Cap.nativePromise(plugin, method, opts || {});
+    } catch (e) { return Promise.reject(e); }
+    return Promise.reject(new Error('not in the app'));
+  }
+
+  // Durable storage on the phone (survives the web view clearing its own storage)
+  function prefGet(key) {
+    if (!inApp) return Promise.resolve(null);
+    return call('Preferences', 'get', { key: key }).then(function (r) { return r && r.value != null ? r.value : null; }, function () { return null; });
+  }
+  var pendingSet = {};
+  function prefSet(key, value) {
+    if (!inApp) return;
+    // Coalesce rapid saves into one write per key
+    if (pendingSet[key]) { pendingSet[key].value = value; return; }
+    pendingSet[key] = { value: value };
+    setTimeout(function () {
+      var v = pendingSet[key].value; delete pendingSet[key];
+      call('Preferences', 'set', { key: key, value: v }).catch(function () { prefError = true; });
+    }, 300);
+  }
+  var prefError = false;
+
+  // Clipboard without Safari's paste bubble
+  function readClipboard() {
+    if (inApp) return call('Clipboard', 'read').then(function (r) { return (r && r.value) || ''; });
+    if (navigator.clipboard && navigator.clipboard.readText) return navigator.clipboard.readText();
+    return Promise.reject(new Error('no clipboard'));
+  }
+
+  // Can the app read a podcast feed? (needs the shell's native networking: feeds don't allow browser reads)
+  var feedStatus = { state: inApp ? 'wait' : 'web', text: '' };
+  function testFeed() {
+    if (!inApp) return;
+    var done = false;
+    setTimeout(function () { if (!done) { feedStatus = { state: 'bad', text: "Couldn't reach the Fin vs History feed in 20 seconds. Check your internet." }; } }, 20000);
+    fetch('https://feeds.megaphone.fm/finvshistory').then(function (r) {
+      done = true;
+      if (!r.ok) { feedStatus = { state: 'bad', text: "Couldn't read the Fin vs History feed (the server said " + r.status + ').' }; return; }
+      return r.text().then(function (t) {
+        feedStatus = /<rss|<channel/i.test(t) ? { state: 'ok', text: 'Can read podcast feeds' } : { state: 'bad', text: 'The Fin vs History feed came back in a shape Shelf doesn\'t understand.' };
+      });
+    }).catch(function () { done = true; feedStatus = { state: 'bad', text: "Couldn't read podcast feeds. Close and reopen Shelf; if it keeps happening the app shell needs a rebuild." }; });
+  }
+
+  // Lock-screen sound test: a soft 45-second tone with lock-screen info.
+  var TONE_KEY = 'shelf.toneTest';
+  var tone = null, toneHiddenAt = 0, toneTimeAtHide = 0;
+  function toneResult() { try { return JSON.parse(localStorage.getItem(TONE_KEY) || 'null'); } catch (e) { return null; } }
+  function setToneResult(ok, why) { try { localStorage.setItem(TONE_KEY, JSON.stringify({ ok: ok, why: why, at: Date.now() })); } catch (e) {} prefSet(TONE_KEY, JSON.stringify({ ok: ok, why: why, at: Date.now() })); }
+  function makeTone(seconds) {
+    var rate = 8000, n = rate * seconds, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    var w = function (o, s) { for (var i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate, true);
+    v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+    for (var i = 0; i < n; i++) {
+      var t = i / rate, pulse = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.5 * t);
+      v.setUint8(44 + i, 128 + Math.round(18 * pulse * Math.sin(2 * Math.PI * 330 * t)));
+    }
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+  function playTone() {
+    stopTone();
+    tone = new Audio(makeTone(45));
+    tone.setAttribute('playsinline', '');
+    try {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'Lock-screen sound test', artist: 'Shelf', album: 'Self-check' });
+        navigator.mediaSession.setActionHandler('pause', function () { tone && tone.pause(); });
+        navigator.mediaSession.setActionHandler('play', function () { tone && tone.play(); });
+      }
+    } catch (e) {}
+    tone.addEventListener('ended', function () { if (toneHiddenAt) setToneResult(true, 'played to the end with the screen locked'); stopTone(); });
+    return tone.play();
+  }
+  function stopTone() { if (tone) { try { tone.pause(); } catch (e) {} tone = null; } toneHiddenAt = 0; }
+  document.addEventListener('visibilitychange', function () {
+    if (!tone) return;
+    if (document.visibilityState === 'hidden') { toneHiddenAt = Date.now(); toneTimeAtHide = tone.currentTime; }
+    else if (toneHiddenAt) {
+      var away = (Date.now() - toneHiddenAt) / 1000, moved = tone.currentTime - toneTimeAtHide;
+      if (away > 4) setToneResult(moved > away * 0.6 || tone.ended, moved > away * 0.6 ? 'kept playing while locked' : 'stopped when the screen locked');
+      toneHiddenAt = 0;
+    }
+  });
+
+  if (inApp) {
+    document.documentElement.classList.add('in-app');
+    setTimeout(testFeed, 1500);
+  }
+  return { inApp: inApp, call: call, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+    readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
+    get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
+})();
+</script>
 <script>// App: storage, YouTube player, shelf, self-check, Send to iPhone.
 (function () {
   var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1';
@@ -2285,7 +2390,8 @@ if (typeof module !== 'undefined') module.exports = Core;
   var lastSaveError = '';
   function store(k, v) {
     var s = JSON.stringify(v);
-    if (!canSave) { mem[k] = s; return false; }
+    Native.prefSet(k, s);
+    if (!canSave) { mem[k] = s; return Native.inApp; }
     try { localStorage.setItem(k, s); lastSaveError = ''; return true; }
     catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
   }
@@ -2471,7 +2577,12 @@ if (typeof module !== 'undefined') module.exports = Core;
     updateDot();
   }
   // Save on the way out
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') capture(true); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'hidden') return;
+    capture(true);
+    // YouTube doesn't allow its videos to keep playing in the background, so pause when the app is hidden
+    if ((Native.inApp || isPhone) && current) { try { player.pauseVideo(); } catch (e) {} }
+  });
   window.addEventListener('pagehide', function () { capture(true); });
 
   function closeNow() {
@@ -2581,6 +2692,12 @@ if (typeof module !== 'undefined') module.exports = Core;
     else if (act === 'send') openSend();
     else if (act === 'dismiss') { var d = b.closest('dialog'); if (d) d.close(); }
     else if (act === 'copy') copyText($('#sendLink').value, $('#sendLink'));
+    else if (act === 'tone') {
+      if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
+      if (current) closeNow();
+      Native.playTone().then(function () { b.textContent = 'Stop the sound test'; fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },
+        function () { toast("The sound test couldn't start. Turn the volume up and try again.", 'warn'); });
+    }
   });
   // Click on the dimmed backdrop closes a dialog
   Array.prototype.forEach.call(document.querySelectorAll('dialog'), function (d) {
@@ -2602,8 +2719,11 @@ if (typeof module !== 'undefined') module.exports = Core;
     var touch = /iPhone|iPad|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent) && !matchMedia('(pointer: fine)').matches);
     var fallback = function () { input.focus(); toast(touch ? 'Tap the box, then tap Paste.' : 'Press ⌘V to paste your link.'); };
     try {
-      if (!navigator.clipboard || !navigator.clipboard.readText) return fallback();
-      navigator.clipboard.readText().then(function (txt) { if (txt && txt.trim()) add(txt); else fallback(); }, fallback);
+      Native.readClipboard().then(function (txt) {
+        if (txt && txt.trim()) return add(txt);
+        // Universal Clipboard can take a moment to arrive from the Mac: try once more
+        setTimeout(function () { Native.readClipboard().then(function (t2) { if (t2 && t2.trim()) add(t2); else fallback(); }, fallback); }, 1200);
+      }, fallback);
     } catch (er) { fallback(); }
   });
   document.addEventListener('paste', function (e) {
@@ -2654,8 +2774,19 @@ if (typeof module !== 'undefined') module.exports = Core;
         : playingNow && ago > 20 ? { ok: 0, text: "Your spot hasn't saved for " + ago + ' seconds. Reload the page; your last spot is kept.' }
         : { ok: 1, text: 'Saved your spot ' + (ago < 3 ? 'just now' : ago + ' seconds ago') });
     }
+    if (Native.inApp) {
+      out.push({ ok: 1, text: 'Running inside the Shelf app' });
+      if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
+      var fs = Native.feedStatus;
+      out.push(fs.state === 'ok' ? { ok: 1, text: fs.text } : fs.state === 'bad' ? { ok: 0, text: fs.text } : { ok: 2, text: 'Checking podcast feeds…' });
+      var tr = Native.toneResult;
+      out.push(Native.tonePlaying ? { ok: 2, text: 'Sound test playing. Lock your phone for 10 seconds, then come back.' }
+        : !tr ? { ok: 2, text: 'Lock-screen sound not tested yet. Tap "Test lock-screen sound" below, lock the phone for 10 seconds, then come back.' }
+        : tr.ok ? { ok: 1, text: 'Sound keeps playing on the lock screen' }
+        : { ok: 0, text: 'Sound stopped when the screen locked. The app shell needs a fix and a rebuild in Xcode; tell Claude.' });
+    }
     var n = Object.keys(videos).length;
-    out.push({ ok: 1, text: n + ' video' + (n === 1 ? '' : 's') + ' on your shelf, saved in this browser' });
+    out.push({ ok: 1, text: n + ' video' + (n === 1 ? '' : 's') + ' on your shelf, saved ' + (Native.inApp ? 'on this phone' : 'in this browser') });
     return out;
   }
   function updateDot() {
@@ -2732,6 +2863,20 @@ if (typeof module !== 'undefined') module.exports = Core;
   }
 
   // ---------- start ----------
+  if (Native.inApp) {
+    $('#toneBtn').hidden = false;
+    $('#saveWhere').textContent = 'Saved on this phone';
+    // The phone's own storage is the safe copy: bring anything it has into this page
+    Promise.all([Native.prefGet(KEY), Native.prefGet(PREF)]).then(function (r) {
+      try {
+        var changed = false;
+        if (r[0]) { var m = Core.merge(videos, JSON.parse(r[0])); if (m.added || m.updated) { videos = m.videos; changed = true; } }
+        if (r[1]) { var p = JSON.parse(r[1]); for (var k in p) if (!(k in prefs)) prefs[k] = p[k]; }
+        if (changed) { save(); render(); }
+        else if (!r[0] && Object.keys(videos).length) save();
+      } catch (e) {}
+    });
+  }
   if (isPhone) {
     // On the phone the button sends the other way
     $('#sendLabel').textContent = 'Send to Mac';

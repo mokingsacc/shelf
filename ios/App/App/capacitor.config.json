@@ -1,0 +1,23 @@
+{
+	"appId": "com.mokingsacc.shelf",
+	"appName": "Shelf",
+	"webDir": "www",
+	"server": {
+		"url": "https://mokingsacc.github.io/shelf/",
+		"errorPath": "error.html"
+	},
+	"ios": {
+		"contentInset": "never",
+		"limitsNavigationsToAppBoundDomains": false
+	},
+	"plugins": {
+		"CapacitorHttp": {
+			"enabled": true
+		}
+	},
+	"packageClassList": [
+		"AppPlugin",
+		"ClipboardPlugin",
+		"PreferencesPlugin"
+	]
+}

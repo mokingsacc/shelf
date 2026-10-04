@@ -1,0 +1,7 @@
+# Build output only. Everything else is committed so Xcode can build straight from the downloaded ZIP.
+App/build
+App/Pods
+App/output
+DerivedData
+xcuserdata
+.DS_Store

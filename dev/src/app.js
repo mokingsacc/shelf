@@ -17,7 +17,8 @@
   var lastSaveError = '';
   function store(k, v) {
     var s = JSON.stringify(v);
-    if (!canSave) { mem[k] = s; return false; }
+    Native.prefSet(k, s);
+    if (!canSave) { mem[k] = s; return Native.inApp; }
     try { localStorage.setItem(k, s); lastSaveError = ''; return true; }
     catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
   }
@@ -203,7 +204,12 @@
     updateDot();
   }
   // Save on the way out
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') capture(true); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'hidden') return;
+    capture(true);
+    // YouTube doesn't allow its videos to keep playing in the background, so pause when the app is hidden
+    if ((Native.inApp || isPhone) && current) { try { player.pauseVideo(); } catch (e) {} }
+  });
   window.addEventListener('pagehide', function () { capture(true); });
 
   function closeNow() {
@@ -313,6 +319,12 @@
     else if (act === 'send') openSend();
     else if (act === 'dismiss') { var d = b.closest('dialog'); if (d) d.close(); }
     else if (act === 'copy') copyText($('#sendLink').value, $('#sendLink'));
+    else if (act === 'tone') {
+      if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
+      if (current) closeNow();
+      Native.playTone().then(function () { b.textContent = 'Stop the sound test'; fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },
+        function () { toast("The sound test couldn't start. Turn the volume up and try again.", 'warn'); });
+    }
   });
   // Click on the dimmed backdrop closes a dialog
   Array.prototype.forEach.call(document.querySelectorAll('dialog'), function (d) {
@@ -334,8 +346,11 @@
     var touch = /iPhone|iPad|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent) && !matchMedia('(pointer: fine)').matches);
     var fallback = function () { input.focus(); toast(touch ? 'Tap the box, then tap Paste.' : 'Press ⌘V to paste your link.'); };
     try {
-      if (!navigator.clipboard || !navigator.clipboard.readText) return fallback();
-      navigator.clipboard.readText().then(function (txt) { if (txt && txt.trim()) add(txt); else fallback(); }, fallback);
+      Native.readClipboard().then(function (txt) {
+        if (txt && txt.trim()) return add(txt);
+        // Universal Clipboard can take a moment to arrive from the Mac: try once more
+        setTimeout(function () { Native.readClipboard().then(function (t2) { if (t2 && t2.trim()) add(t2); else fallback(); }, fallback); }, 1200);
+      }, fallback);
     } catch (er) { fallback(); }
   });
   document.addEventListener('paste', function (e) {
@@ -386,8 +401,19 @@
         : playingNow && ago > 20 ? { ok: 0, text: "Your spot hasn't saved for " + ago + ' seconds. Reload the page; your last spot is kept.' }
         : { ok: 1, text: 'Saved your spot ' + (ago < 3 ? 'just now' : ago + ' seconds ago') });
     }
+    if (Native.inApp) {
+      out.push({ ok: 1, text: 'Running inside the Shelf app' });
+      if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
+      var fs = Native.feedStatus;
+      out.push(fs.state === 'ok' ? { ok: 1, text: fs.text } : fs.state === 'bad' ? { ok: 0, text: fs.text } : { ok: 2, text: 'Checking podcast feeds…' });
+      var tr = Native.toneResult;
+      out.push(Native.tonePlaying ? { ok: 2, text: 'Sound test playing. Lock your phone for 10 seconds, then come back.' }
+        : !tr ? { ok: 2, text: 'Lock-screen sound not tested yet. Tap "Test lock-screen sound" below, lock the phone for 10 seconds, then come back.' }
+        : tr.ok ? { ok: 1, text: 'Sound keeps playing on the lock screen' }
+        : { ok: 0, text: 'Sound stopped when the screen locked. The app shell needs a fix and a rebuild in Xcode; tell Claude.' });
+    }
     var n = Object.keys(videos).length;
-    out.push({ ok: 1, text: n + ' video' + (n === 1 ? '' : 's') + ' on your shelf, saved in this browser' });
+    out.push({ ok: 1, text: n + ' video' + (n === 1 ? '' : 's') + ' on your shelf, saved ' + (Native.inApp ? 'on this phone' : 'in this browser') });
     return out;
   }
   function updateDot() {
@@ -464,6 +490,20 @@
   }
 
   // ---------- start ----------
+  if (Native.inApp) {
+    $('#toneBtn').hidden = false;
+    $('#saveWhere').textContent = 'Saved on this phone';
+    // The phone's own storage is the safe copy: bring anything it has into this page
+    Promise.all([Native.prefGet(KEY), Native.prefGet(PREF)]).then(function (r) {
+      try {
+        var changed = false;
+        if (r[0]) { var m = Core.merge(videos, JSON.parse(r[0])); if (m.added || m.updated) { videos = m.videos; changed = true; } }
+        if (r[1]) { var p = JSON.parse(r[1]); for (var k in p) if (!(k in prefs)) prefs[k] = p[k]; }
+        if (changed) { save(); render(); }
+        else if (!r[0] && Object.keys(videos).length) save();
+      } catch (e) {}
+    });
+  }
   if (isPhone) {
     // On the phone the button sends the other way
     $('#sendLabel').textContent = 'Send to Mac';
