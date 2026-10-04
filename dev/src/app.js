@@ -15,8 +15,11 @@
   var mem = {};
   function rawGet(k) { try { return canSave ? localStorage.getItem(k) : (k in mem ? mem[k] : null); } catch (e) { return null; } }
   var lastSaveError = '';
+  // The channel list and course ticks are only written to the phone once the phone's own copy was read,
+  // so a slow start can't replace good ticks with a fresh copy
+  var guarded = function (k) { return Native.inApp && !restored && (k === Library.KEY || k === Courses.KEY); };
   function rawSet(k, s, mirror) {
-    if (mirror !== false) Native.prefSet(k, s);
+    if (mirror !== false && !guarded(k)) Native.prefSet(k, s);
     if (!canSave) { mem[k] = s; return Native.inApp; }
     try { localStorage.setItem(k, s); lastSaveError = ''; return true; } catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
   }
@@ -757,7 +760,7 @@
   }
   function courseSub(c, pr, arr) {
     var st = cs.status(c.id);
-    if (!arr.length) return st.loading || c.seed ? 'Loading episodes…' : !st.ok ? "Couldn't load it. Tap to see why." : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app on your iPhone';
+    if (!arr.length) return st.loading ? 'Loading episodes…' : !st.ok ? "Couldn't load it. Tap to see why." : c.seed ? 'Loading episodes…' : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app on your iPhone';
     if (pr.state === 'done') return 'Done · ' + pr.done + '/' + pr.total;
     if (pr.state === 'new') return 'Not started · ' + pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '');
     var nx = pr.next, sp = spotOf(nx);
@@ -780,7 +783,7 @@
     var st = cs.status(c.id), link = 'https://www.youtube.com/playlist?list=' + encodeURIComponent(c.id), h = '<div class="cbody">';
     if (!st.ok && st.error) h += '<p class="cnote err">' + (/private or gone/.test(st.error) ? 'YouTube says this playlist is private or gone. Your ticks are kept.' : "Couldn't load this playlist from YouTube: " + esc(st.error) + ' Your ticks are safe.') +
       ' <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Retry</button></p>';
-    if (st.partial) h += '<p class="cnote">YouTube sent the first ' + arr.length + ' of ' + st.partial + ' videos. <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Load the rest</button></p>';
+    if (st.partial) h += '<p class="cnote">YouTube sent only the first ' + arr.length + (st.partial > 0 ? ' of ' + st.partial : '') + ' videos' + (c.seed ? ', so your place from the note waits for the rest' : '') + '. <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Load the rest</button></p>';
     if (c.note) h += '<p class="cnote">' + esc(c.note) + '</p>';
     if (arr.length) {
       if (cplace[c.id]) h += '<form class="cplace" data-id="' + esc(c.id) + '"><label for="pl-' + esc(c.id) + '">Where are you? Episode № from the title</label>' +
@@ -804,7 +807,7 @@
     for (var i = from; i <= to; i++) {
       var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
       h += '<li class="ep' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
-        '<button type="button" class="tk" data-act="ep-tick" data-hold="upto"' + da + ' aria-pressed="' + d + '" aria-label="' + esc((d ? 'Untick ' : 'Tick ') + lab + '. Hold to tick everything above it too.') + '"><span>' + (d ? '✓' : '') + '</span></button>' +
+        '<button type="button" class="tk" data-act="ep-tick" data-hold="upto"' + da + ' aria-pressed="' + d + '" aria-label="' + esc((d ? 'Untick ' : 'Tick ') + lab + '. Hold to tick everything up to here.') + '"><span>' + (d ? '✓' : '') + '</span></button>' +
         '<span class="no mono">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</span>' +
         '<button type="button" class="et" data-act="ep-play" data-hold="pin"' + da + '>' + esc(titleFor(c, x)) + '</button>' +
         '<span class="du mono">' + esc(spotOf(x)) + '</span></li>';
@@ -822,7 +825,7 @@
   // Courses shown on a section's band: the ones on the go, at most two
   function coursesStrip(secId) {
     if (!cs) return '';
-    var all = cs.list().filter(function (c) { return (c.section || 'med') === secId; });
+    var all = cs.list().filter(function (c) { return courseSec(c) === secId; });
     if (!all.length) return '';
     var go = all.filter(function (c) { var s = cs.progress(c.id).state; return s === 'go' || (s === 'empty' && (c.touched || (c.seed && c.seed.upTo))); })
       .sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
@@ -833,9 +836,9 @@
     return h + '</div>';
   }
   function coursesPage(v) {
-    var sec = lib.section(v.id) || lib.sections()[0], all = cs.list().filter(function (c) { return (c.section || 'med') === sec.id; }), h = '';
+    var sec = lib.section(v.id) || lib.sections()[0], all = cs.list().filter(function (c) { return courseSec(c) === sec.id; }), h = '';
     h += '<div class="top band ' + bandClass(sec.id) + '">' + eyebrow(sec.name.toUpperCase(), all.length + (all.length === 1 ? ' COURSE' : ' COURSES')) + h1('Courses') +
-      '<p>Playlists ticked episode by episode. Tap one to open it. Hold a tick to tick everything above it.</p>' +
+      '<p>Playlists ticked episode by episode. Tap one to open it. Hold a box to tick everything up to it.</p>' +
       '<div class="acts"><button type="button" class="btn" data-act="add-course" data-id="' + esc(sec.id) + '">+ Add course</button></div></div>';
     if (sec.id === Courses.SEED.section) cs.misses.forEach(function (m) {
       h += '<p class="pnote err">Couldn\'t find your ' + esc(m.name) + ' playlist on Mehlman\'s channel (' + esc(m.error) + '). <button type="button" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '">Fix</button></p>';
@@ -852,6 +855,7 @@
     h += '<button type="button" class="more" data-act="add-course" data-id="' + esc(sec.id) + '"><span>+ Add course</span><span class="mono">paste a playlist link</span></button>';
     return h;
   }
+  function courseSec(c) { return lib.section(c.section) ? c.section : lib.sections()[0].id; }
   function openCourses(secId) { push({ name: 'courses', id: secId || 'med' }); }
   // Re-render without losing what's being typed in a Set place box
   function keepTyping(fn) {
@@ -867,8 +871,8 @@
   function setTick(cid, vid, on) {
     cs.tick(cid, vid, on);
     var v = videos[vid];
-    if (v && on && !v.done) { v.done = true; v.t = v.dur || v.t; v.updated = Date.now(); saveVideos(); }
-    else if (v && !on && v.done) { v.done = false; v.t = 0; saveVideos(); }
+    if (v && on && !v.done) { v.done = true; v.updated = Date.now(); saveVideos(); }
+    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; saveVideos(); } // keeps a half-watched spot
     renderAll();
   }
   function playEp(cid, vid) {
@@ -886,7 +890,7 @@
     if (el.getAttribute('data-hold') === 'upto') {
       var before = cs.tickUpTo(cid, i);
       renderAll();
-      toast('Ticked everything down to ' + lab + ' (' + (i + 1) + ' of ' + arr.length + ').', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+      toast('Ticked everything up to ' + lab + ' (' + (i + 1) + ' of ' + arr.length + ').', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
     } else {
       var on = !c.pins[vid];
       cs.pin(cid, vid, on); renderAll();
@@ -898,7 +902,7 @@
   document.addEventListener('pointerdown', function (e) {
     var el = e.target.closest && e.target.closest('[data-hold]'); if (!el) return;
     cHoldXY = [e.clientX, e.clientY]; cHeld = false; clearTimeout(cHoldT);
-    cHoldT = setTimeout(function () { cHeld = true; cSwallowUntil = Infinity; holdAct(el); }, 500);
+    cHoldT = setTimeout(function () { cHeld = true; cSwallowUntil = Date.now() + 1500; holdAct(el); }, 600);
   });
   document.addEventListener('pointermove', function (e) { if (cHoldXY && Math.abs(e.clientX - cHoldXY[0]) + Math.abs(e.clientY - cHoldXY[1]) > 12) clearTimeout(cHoldT); });
   ['pointerup', 'pointercancel'].forEach(function (t) { document.addEventListener(t, function () { clearTimeout(cHoldT); cHoldXY = null; if (cHeld) { cHeld = false; cSwallowUntil = Date.now() + 450; } }); });
@@ -914,7 +918,7 @@
     var before = cs.tickUpTo(cid, hits[0]);
     cplace[cid] = false; cwin[cid] = null;
     renderAll();
-    toast(n + ' is ' + (hits[0] + 1) + ' of ' + arr.length + '. Ticked it and everything above it' + (hits.length > 1 ? ' (first of ' + hits.length + ')' : '') + '.', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+    toast(n + ' is ' + (hits[0] + 1) + ' of ' + arr.length + '. Ticked everything up to it' + (hits.length > 1 ? ' (first of ' + hits.length + ')' : '') + '.', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
   });
 
   // Add a course
@@ -986,6 +990,7 @@
   function showNextUp(w) {
     var c = w.course, arr = cs.items(c.id), nx = null, ni = -1;
     for (var i = w.i + 1; i < arr.length; i++) if (!cs.isDone(c.id, arr[i].id)) { nx = arr[i]; ni = i; break; }
+    if (!nx) for (var k = 0; k < arr.length; k++) if (!cs.isDone(c.id, arr[k].id)) { nx = arr[k]; ni = k; break; } // gaps earlier on
     var box = $('#vNext'), pr = cs.progress(c.id);
     if (nx) box.innerHTML = '<small>Next up · ' + esc(c.name) + '</small><b>' + esc(epLabel(nx, ni)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' · ' + Core.fmt(nx.dur) : '') + '</b>' +
       '<div class="row2"><button type="button" class="btn solid" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '">Play next ▶</button><button type="button" class="btn" data-act="close-video">Done for now</button></div>';
@@ -1018,7 +1023,7 @@
       case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
       case 'sec-delete':
         if (!confirmDel) { confirmDel = true; var to = lib.sections().filter(function (s) { return s.id !== editing; })[0]; b.textContent = 'Tap again: channels move to ' + (to ? to.name : '?'); break; }
-        try { lib.removeSection(editing); $('#secDlg').close(); if (stack.length) { stack = []; $('#page').hidden = true; } renderAll(); toast('Section deleted. Its channels moved.'); }
+        try { var toSec = lib.removeSection(editing); cs.list().forEach(function (c) { if (c.section === editing) cs.move(c.id, toSec); }); $('#secDlg').close(); if (stack.length) { stack = []; $('#page').hidden = true; } renderAll(); toast('Section deleted. Its channels moved.'); }
         catch (err) { $('#secMsg').textContent = err.message; $('#secMsg').className = 'msgline err'; }
         break;
       case 'seen-section': lib.sources(id).forEach(function (s) { lib.markSeen(s.id); }); renderAll(); break;
@@ -1159,6 +1164,7 @@
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
+      if (!restored) out.push({ ok: 0, text: "The phone's storage was slow to answer at start, so your channels and course ticks aren't being saved to it yet. Close and reopen Shelf." });
       if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
       var fs = Native.feedStatus;
       out.push(fs.state === 'ok' ? { ok: 1, text: fs.text } : fs.state === 'bad' ? { ok: 0, text: fs.text } : { ok: 2, text: 'Checking podcast feeds…' });
@@ -1211,10 +1217,11 @@
 
   // ---------- Start ----------
   var restored = false;
-  function restoreFromPhone() {
+  function restoreFromPhone(wait) {
     if (!Native.inApp) return Promise.resolve();
     var keys = [KEY, PREF, AKEY, Library.KEY, Courses.KEY];
-    return withTimeout(Promise.all(keys.map(Native.prefGet)), 2000, 'slow').then(function (r) {
+    wait = wait || 2000;
+    return withTimeout(Promise.all(keys.map(Native.prefGet)), wait, 'slow').then(function (r) {
       try {
         if (r[0]) { var local = load(KEY, {}), m = Core.merge(local, JSON.parse(r[0])); if (m.added || m.updated || !rawGet(KEY)) rawSet(KEY, JSON.stringify(m.videos), false); }
         if (r[1] && !rawGet(PREF)) rawSet(PREF, r[1], false);
@@ -1223,7 +1230,7 @@
         if (r[4]) { var lc = load(Courses.KEY, null), pc = JSON.parse(r[4]); if (!lc || (pc.saved || 0) > (lc.saved || 0)) rawSet(Courses.KEY, r[4], false); }
         restored = true;
       } catch (e) {}
-    }, function () {});
+    }, function () { if (wait < 6000) return restoreFromPhone(6000); }); // slow phone: one longer try
   }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
@@ -1253,7 +1260,7 @@
     loadYT();
     updateDot();
     setInterval(updateDot, 5000);
-    setInterval(function () { if (!stack.length && document.visibilityState === 'visible') renderHome(); }, 60000);
+    setInterval(function () { if (!stack.length && document.visibilityState === 'visible') keepTyping(renderHome); }, 60000);
     window.addEventListener('online', updateDot); window.addEventListener('offline', updateDot);
     if (!canSave && !Native.inApp) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Tap the self-check for how to fix it.', 'warn'); }, 600);
     refreshAll(false);

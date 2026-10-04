@@ -75,9 +75,10 @@ function setup(store, opts = {}) {
   // New-style lockups for videos
   const lockv = { x: { lockupViewModel: { contentId: 'zzzzzzzzzzz', contentType: 'LOCKUP_CONTENT_TYPE_VIDEO', metadata: { lockupMetadataViewModel: { title: { content: 'HY USMLE Q #9' } } } } } };
   assert.strictEqual(Courses.readVideos(lockv).items[0].title, 'HY USMLE Q #9');
-  // Number order wins over YouTube's order when nearly everything is numbered
-  assert.deepStrictEqual(Courses.ordered([{ n: 3 }, { n: 1 }, { n: 2 }], 'asc').map((x) => x.n), [1, 2, 3]);
-  assert.deepStrictEqual(Courses.ordered([{ n: 0, t: 'a' }, { n: 0, t: 'b' }, { n: 5 }], 'asc').map((x) => x.n), [0, 0, 5], 'mostly unnumbered keeps YouTube order');
+  assert.strictEqual(Courses.shortName('HY USMLE Q - Internal Medicine'), 'Internal');
+  assert.strictEqual(Courses.shortName('Family Medicine Qs'), 'Family Medicine');
+  assert.ok(new RegExp(Courses.SEED.courses[2].match, 'i').test('Ophtho Qs'), 'Ophtho matches');
+  assert.ok(new RegExp(Courses.SEED.courses[1].match, 'i').test('Gyn questions'), 'Gyn matches');
 
   // First run: finds Mo's six on the channel's Playlists page, Step 2 pharm over Step 1
   let { c, store, calls } = setup();
@@ -117,6 +118,16 @@ function setup(store, opts = {}) {
   assert.strictEqual(c.where(arr[5].id).course.name, 'Paeds');
   assert.strictEqual(c.where(arr[5].id).i, 5);
 
+  // Last one ticked with gaps earlier: next is the first gap, not nothing (froze Home before)
+  {
+    const r = setup({}, {});
+    await r.c.add('PLoph00000000000');
+    const it = r.c.items('PLoph00000000000');
+    r.c.tick('PLoph00000000000', it[it.length - 1].id, true);
+    const pr = r.c.progress('PLoph00000000000');
+    assert.strictEqual(pr.notch, 0); assert.strictEqual(pr.next.id, it[0].id); assert.strictEqual(pr.state, 'go');
+  }
+
   // Survives a relaunch: ticks from the small store, episodes from the cache
   const c2 = Courses.create({ load: (k) => store[k] ?? null, save: (k, v) => { store[k] = v; }, now: () => Date.now() });
   assert.strictEqual(c2.progress(peds).done, 91);
@@ -141,10 +152,15 @@ function setup(store, opts = {}) {
   assert.strictEqual(r5.c.progress('PLdesc0000000000').done, 40, 'everything above 1107 in the list (40 of 130)');
   assert.strictEqual(r5.c.progress('PLdesc0000000000').next.n, 1099);
 
-  // Load more refused: keeps the first 100 and says so
+  // Load more refused: keeps the first 100, says so, and Mo's note waits for the full list
   const r6 = setup({}, { noMore: true });
   await r6.c.add('PLpeds0000000000');
   assert.strictEqual(r6.c.progress('PLpeds0000000000').total, 100);
+  assert.strictEqual(r6.c.status('PLpeds0000000000').partial, -1);
+  r6.c.raw().courses.PLpeds0000000000.seed = { upTo: 1107, pct: 70 };
+  await r6.c.load('PLpeds0000000000', true);
+  assert.ok(r6.c.get('PLpeds0000000000').seed, 'seed kept while the list is partial');
+  assert.strictEqual(r6.c.progress('PLpeds0000000000').done, 0);
 
   // Adding: bad link, already there, offline
   await assert.rejects(r6.c.add('https://youtu.be/dQw4w9WgXcQ'), /not a playlist link/);

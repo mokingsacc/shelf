@@ -14,9 +14,9 @@ var Courses = (function () {
   // Mo's playlists (his note, 4 Oct 2026), found on the channel's Playlists page by name.
   // upTo: everything in the playlist's own order down to the video whose title holds this number. pct: his "70% complete", the fallback.
   var SEED = { channel: '@MehlmanMedical', section: 'med', courses: [
-    { name: 'Paeds', match: 'pediatric|paediatric|\\bpeds\\b|\\bpaeds\\b', upTo: 1107, pct: 70 },
-    { name: 'OBGYN', match: 'ob\\s*[/&-]?\\s*gyn|obstetric|gyn(a|e)?ecolog|women', all: true, pin: 1607 },
-    { name: 'Ophthal', match: 'oph?thal|\\beyes?\\b', all: true },
+    { name: 'Paeds', match: 'pediatric|paediatric|\\bpa?eds?\\b', upTo: 1107, pct: 70 },
+    { name: 'OBGYN', match: 'ob\\s*[/&-]?\\s*gyn|obstetric|gyn(a|e)?ecolog|\\bgyn\\b|women', all: true, pin: 1607 },
+    { name: 'Ophthal', match: 'oph?th|\\beyes?\\b', all: true },
     { name: 'Internal Med', match: 'internal\\s*med|\\bim\\b' },
     { name: 'Pharm', match: 'pharm' },
     { name: 'Family Med', match: 'family\\s*med|primary\\s*care|\\bfm\\b' }
@@ -82,8 +82,9 @@ var Courses = (function () {
         return false;
       }
       if (k === 'lockupViewModel' && v && v.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO' && v.contentId) {
-        var md = v.metadata && v.metadata.lockupMetadataViewModel;
-        out.items.push({ id: v.contentId, title: txt(md && md.title), dur: 0 });
+        var md = v.metadata && v.metadata.lockupMetadataViewModel, lt = txt(md && md.title), ld = 0;
+        walk(v.contentImage, function (k2, v2) { if (!ld && typeof v2 === 'string' && /^\d{1,2}(:\d\d){1,2}$/.test(v2)) ld = v2.split(':').reduce(function (a, p) { return a * 60 + (+p); }, 0); });
+        if (!GONE.test(lt)) out.items.push({ id: v.contentId, title: lt, dur: ld });
         return false;
       }
       if (k === 'continuationItemRenderer') {
@@ -132,14 +133,6 @@ var Courses = (function () {
     var n = parseInt(m[1], 10);
     return n >= 1900 && n <= 2099 ? 0 : n; // a year, not an episode
   }
-  // Courses keep YouTube's playlist order ('list', what Mo watches down). 'asc'/'desc' sort by title number when nearly all have one.
-  function ordered(items, dir) {
-    var list = items.map(function (x, i) { return { x: x, i: i, n: x.n }; });
-    var numbered = list.filter(function (o) { return o.n; }).length;
-    if (dir === 'list' || numbered < Math.max(1, list.length * 0.8)) return items.slice();
-    var s = dir === 'desc' ? -1 : 1;
-    return list.sort(function (a, b) { return a.n && b.n ? s * (a.n - b.n) || a.i - b.i : a.n ? -1 : b.n ? 1 : a.i - b.i; }).map(function (o) { return o.x; });
-  }
   // A playlist link (or bare id) -> its id
   function playlistId(text) {
     text = String(text || '').trim();
@@ -149,9 +142,11 @@ var Courses = (function () {
   }
   // "HY USMLE Qs - Pediatrics | Mehlman Medical" -> "Pediatrics"
   function shortName(title) {
-    var t = String(title || '').replace(/mehlman\s*medical|mehlman|\bHY\b|USMLE|step\s*[123]\s*(ck)?|\bCK\b|\bQ'?s\b|questions|playlist|podcast|shelf|review|nbme/gi, ' ')
-      .replace(/[|:–—#()\[\]-]+/g, ' ').replace(/\s+/g, ' ').trim();
-    return (t || String(title || 'Course').trim()).slice(0, 14).trim() || 'Course';
+    var t = String(title || '').replace(/mehlman\s*medical|mehlman|\bHY\b|USMLE|step\s*[123]\s*(ck)?|\bCK\b|\bQ'?s?\b|questions|playlist|podcast|shelf|review|nbme/gi, ' ')
+      .replace(/[|:–—#()\[\]-]+/g, ' ').replace(/\s+/g, ' ').trim() || String(title || 'Course').trim();
+    if (t.length <= 16) return t || 'Course';
+    var cut = t.slice(0, 17).replace(/\s+\S*$/, ''); // whole words only
+    return cut || t.slice(0, 16);
   }
   function fmtHours(sec) { var h = sec / 3600; return h >= 1 ? Math.round(h) + ' h' : Math.max(1, Math.round(sec / 60)) + ' min'; }
 
@@ -175,11 +170,11 @@ var Courses = (function () {
     function items(id) {
       var c = get(id), ch = cache[id];
       if (!c || !ch || !ch.items) return [];
-      var key = c.order + '|' + ch.fetched;
-      if (!order[id] || order[id].key !== key) {
-        var arr = ordered(ch.items, c.order), ix = {};
-        arr.forEach(function (x, i) { ix[x.id] = i; });
-        order[id] = { key: key, arr: arr }; index[id] = ix;
+      // Always YouTube's own playlist order (what Mo watches down), never sorted by number
+      if (!order[id] || order[id].key !== ch.fetched) {
+        var ix = {};
+        ch.items.forEach(function (x, i) { ix[x.id] = i; });
+        order[id] = { key: ch.fetched, arr: ch.items }; index[id] = ix;
       }
       return order[id].arr;
     }
@@ -191,7 +186,9 @@ var Courses = (function () {
       var c = get(id), arr = items(id), done = 0, last = -1, secs = 0;
       if (!c) return null;
       arr.forEach(function (x, i) { if (isDone(c, x.id)) { done++; last = i; } secs += x.dur || 0; });
+      // You're here: just after the last tick; if the last one is ticked, the first one still open
       var notch = arr.length && last < arr.length - 1 ? last + 1 : -1;
+      if (notch < 0 && done < arr.length) for (var g = 0; g < arr.length; g++) if (!isDone(c, arr[g].id)) { notch = g; break; }
       var st = !arr.length ? 'empty' : done === arr.length ? 'done' : done || c.touched ? 'go' : 'new';
       return { total: arr.length, done: done, notch: notch, next: notch >= 0 ? arr[notch] : null, state: st, secs: secs, hours: secs ? fmtHours(secs) : '' };
     }
@@ -222,7 +219,7 @@ var Courses = (function () {
       return hits;
     }
     function touchCourse(id) { var c = get(id); if (c) { touch(c); save(); } }
-    function rename(id, name) { var c = get(id); name = String(name || '').trim().slice(0, 14); if (!c || !name) return false; c.name = name; save(); return true; }
+    function move(id, sectionId) { var c = get(id); if (!c) return false; c.section = sectionId; save(); return true; }
     function remove(id) { if (!state.courses[id]) return false; state.removed = state.removed || {}; state.removed[id] = state.courses[id].ticks; delete state.courses[id]; save(); return true; }
 
     // ----- Loading a playlist -----
@@ -239,9 +236,10 @@ var Courses = (function () {
             { context: { client: { clientName: 'WEB', clientVersion: ci.ver, hl: 'en', gl: 'GB' } }, continuation: token },
             { 'Content-Type': 'application/json', 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': ci.ver, Origin: 'https://www.youtube.com', Cookie: CONSENT, 'User-Agent': DESKTOP })
             .then(function (t) { var r = readVideos(initialData(t) || {}); all = all.concat(r.items); return r.items.length ? more(r.token) : null; },
-              function () { partial = all.length; });
+              function () { partial = -1; });
         }
-        return more(first.token).then(function () { return { title: first.title, items: all, partial: partial && first.count > all.length ? first.count : 0 }; });
+        // partial: how many YouTube says there are (or -1 if it didn't say) when "load more" failed
+        return more(first.token).then(function () { return { title: first.title, items: all, partial: partial ? (first.count > all.length ? first.count : -1) : 0 }; });
       });
     }
     function fromApi(pid, key) {
@@ -273,7 +271,7 @@ var Courses = (function () {
         if (!its.length) throw new Error('This playlist has no videos Shelf can play.');
         cache[id] = { fetched: now(), ok: true, items: its, partial: r.partial };
         if (r.title) c.title = r.title;
-        applySeed(c);
+        if (!r.partial) applySeed(c); // Mo's note needs the whole list; it waits for a full load
         saveCache(); save();
         delete busy[id]; return c;
       }).catch(function (e) {
@@ -289,8 +287,8 @@ var Courses = (function () {
       var arr = items(c.id);
       if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
       if (s.upTo) {
-        var at = findNumber(c.id, s.upTo)[0];
-        if (at != null) { for (var j = 0; j <= at; j++) c.ticks[arr[j].id] = 1; c.note = ''; }
+        var hitsN = findNumber(c.id, s.upTo), at = hitsN[0];
+        if (at != null) { for (var j = 0; j <= at; j++) c.ticks[arr[j].id] = 1; c.note = hitsN.length > 1 ? s.upTo + ' appears ' + hitsN.length + ' times in this playlist, so it is ticked up to the first one. Check where you are.' : ''; }
         else if (s.pct) {
           var k = Math.round(arr.length * s.pct / 100);
           for (var q = 0; q < k; q++) c.ticks[arr[q].id] = 1;
@@ -306,7 +304,7 @@ var Courses = (function () {
       var prior = state.removed && state.removed[pid];
       var c = state.courses[pid] = state.courses[pid] || {
         id: pid, name: info.name || 'Course', title: info.title || '', channel: info.channel || '', section: info.section || 'med',
-        added: now(), touched: 0, ticks: prior || {}, pins: {}, order: 'list'
+        added: now(), touched: 0, ticks: prior || {}, pins: {}
       };
       if (info.seed) c.seed = info.seed;
       if (prior) delete state.removed[pid];
@@ -351,7 +349,7 @@ var Courses = (function () {
     function pick(all, re) {
       var rx = new RegExp(re, 'i');
       var hits = all.filter(function (p) { return rx.test(p.title); });
-      var score = function (p) { return (/step\s*2|\bck\b|shelf/i.test(p.title) ? 4 : 0) + (/step\s*1/i.test(p.title) ? -4 : 0) + (/\bq'?s?\b|question|qbank|hy\b/i.test(p.title) ? 2 : 0); };
+      var score = function (p) { return (/step\s*2|\bck\b|shelf/i.test(p.title) ? 4 : 0) + (/step\s*1/i.test(p.title) ? -4 : 0) + (/\bq'?s?\b|question|qbank/i.test(p.title) ? 3 : 0) + (/\bhy\b|usmle/i.test(p.title) ? 1 : 0); };
       hits.sort(function (a, b) { return score(b) - score(a) || (b.count || 0) - (a.count || 0); });
       return hits[0] || null;
     }
@@ -383,20 +381,14 @@ var Courses = (function () {
       function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }
       return Promise.all([next(), next()]);
     }
-    // The phone's copy and this one: keep the newer
-    function merge(phoneJson) {
-      try { var p = JSON.parse(phoneJson); if (p && p.courses && (p.saved || 0) > (state.saved || 0)) { state = p; order = {}; index = {}; save(); return true; } } catch (e) {}
-      return false;
-    }
-
     return {
       list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
-      tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, rename: rename, remove: remove,
-      load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists, merge: merge,
+      tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, move: move, remove: remove,
+      load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists,
       get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
     };
   }
-  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, epNumber: epNumber, ordered: ordered, playlistId: playlistId, shortName: shortName,
+  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
     initialData: initialData, readVideos: readVideos, readPlaylists: readPlaylists, fmtHours: fmtHours };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;

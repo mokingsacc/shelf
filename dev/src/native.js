@@ -116,8 +116,18 @@ var Native = (function () {
     }
   });
 
+  // YouTube's consent choice, put in iOS's own cookie store as well as the request header: once YouTube sets
+  // cookies of its own, iOS sends the stored ones and drops a hand-written Cookie header
+  function consentCookies() {
+    var exp = new Date(Date.now() + 365 * 864e5).toUTCString();
+    ['https://www.youtube.com', 'https://youtube.com'].forEach(function (u) {
+      [['SOCS', 'CAI'], ['CONSENT', 'YES+1']].forEach(function (c) { call('CapacitorCookies', 'setCookie', { url: u, key: c[0], value: c[1], path: '/', expires: exp }).catch(function () {}); });
+    });
+  }
+
   if (inApp) {
     document.documentElement.classList.add('in-app');
+    try { consentCookies(); } catch (e) {}
     setTimeout(testFeed, 1500);
   }
   return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },

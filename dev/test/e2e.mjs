@@ -218,13 +218,13 @@ ok(await p.locator('.course.open .ep').count() === 16, 'C "more" reveals 10 more
 const tk = p.locator('.course.open .ep .tk').nth(10); await tk.evaluate((e) => e.scrollIntoView({ block: 'center' })); const tb = await tk.boundingBox();
 await p.mouse.move(tb.x + 10, tb.y + 10); await p.mouse.down(); await p.waitForTimeout(700); await p.mouse.up(); await p.waitForTimeout(200);
 const afterHold = await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done);
-ok(afterHold === 101 && /Ticked everything down to/.test(await p.locator('#toast').textContent()), 'C hold ticks everything above it (' + afterHold + ')');
+ok(afterHold === 101 && /Ticked everything up to/.test(await p.locator('#toast').textContent()), 'C hold ticks everything up to it (' + afterHold + ')');
 await p.locator('#toast button').click(); await p.waitForTimeout(150);
 ok(await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done) === 92, 'C Undo puts it back');
 // set place by episode number
 await p.locator('.course.open [data-act="course-place"]').click(); await p.waitForTimeout(100);
 await p.fill('#pl-PLpeds0000000000', '1203'); await p.press('#pl-PLpeds0000000000', 'Enter'); await p.waitForTimeout(150);
-ok(await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done) === 103 && /1203 is 103 of 130/.test(await p.locator('#toast').textContent()), 'C Set place 1203 ticks down to it in playlist order');
+ok(await shelf(p, () => window.__shelf.courses.progress('PLpeds0000000000').done) === 103 && /1203 is 103 of 130. Ticked everything up to it/.test(await p.locator('#toast').textContent()), 'C Set place 1203 ticks down to it in playlist order');
 // play next from the row, finish it, Next up
 await p.locator('.band.c1 .course .cgo').click(); await p.waitForTimeout(500);
 ok(/PAEDS · 104 OF 130/.test(await p.locator('#vCh').textContent()), 'C player says which course and where: ' + await p.locator('#vCh').textContent());
@@ -249,6 +249,10 @@ await p.locator('#pasteBtn').click(); await p.waitForTimeout(300);
 ok(await p.locator('#courseDlg[open]').count() === 1 && (await p.inputValue('#courseInput')).includes('PLs1pharm'), 'C pasting a playlist link opens Add course');
 await p.keyboard.press('Escape');
 await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
+// Watched the newest Internal Med video first (the last in its playlist): Home still draws, next is the first gap
+await shelf(p, () => { const c = window.__shelf.courses, it = c.items('PLim000000000000'); c.tick('PLim000000000000', it[it.length - 1].id, true); });
+await p.locator('.band.c2 .hd').click(); await p.waitForTimeout(150); await p.locator('[data-act="back"]').click(); await p.waitForTimeout(200);
+ok(await p.locator('.band.c1 .course').count() === 2 && /Next · 100 /.test(await p.locator('.band.c1 .course', { hasText: 'Internal Med' }).locator('.cx').textContent()), 'C last video ticked first: Home still draws, next is the first one still open');
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 ok(/Tracking 7 courses/.test(await p.locator('#checkList').textContent()), 'C self-check counts the courses');
 await p.keyboard.press('Escape');

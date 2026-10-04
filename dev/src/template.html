@@ -77,8 +77,8 @@ a{color:inherit}
 .bands{display:flex;flex-direction:column}
 .band{padding:14px var(--g) 18px;background:var(--bg);color:var(--fg)}
 .band.c1{--bg:var(--b1-bg);--fg:var(--b1-fg);--tb:var(--b1-tag-bg);--tf:var(--b1-tag-fg);--duo:var(--duo1);--blend:multiply}
-.band.c2{--bg:var(--b2-bg);--fg:var(--b2-fg);--tb:var(--b2-tag-bg);--tf:var(--b2-tag-fg);--duo:var(--duo2);--blend:screen}
-.band.c3{--bg:var(--b3-bg);--fg:var(--b3-fg);--tb:var(--b3-tag-bg);--tf:var(--b3-tag-fg);--duo:transparent;--blend:normal}
+.band.c2{--pin:#ffc2b8;--bg:var(--b2-bg);--fg:var(--b2-fg);--tb:var(--b2-tag-bg);--tf:var(--b2-tag-fg);--duo:var(--duo2);--blend:screen}
+.band.c3{--pin:#ff6a52;--bg:var(--b3-bg);--fg:var(--b3-fg);--tb:var(--b3-tag-bg);--tf:var(--b3-tag-fg);--duo:transparent;--blend:normal}
 .band.c0{--bg:var(--b0-bg);--fg:var(--b0-fg);--tb:var(--b0-tag-bg);--tf:var(--b0-tag-fg);--duo:transparent;--blend:normal}
 .band .hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;width:100%}
 .band .hd h2{margin:0;font-size:46px;line-height:.9;font-weight:900;font-stretch:125%;letter-spacing:-.035em;text-transform:uppercase;white-space:nowrap;overflow:hidden;min-width:0;flex:1}
@@ -410,7 +410,7 @@ body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,
     <input class="field" id="courseInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="youtube.com/playlist?list=…" aria-label="Playlist link or name">
     <div class="cpicks" id="coursePicks"></div>
     <label for="courseName">Short name</label>
-    <input class="field" id="courseName" type="text" autocomplete="off" maxlength="14" placeholder="e.g. Surgery">
+    <input class="field" id="courseName" type="text" autocomplete="off" maxlength="16" placeholder="e.g. Surgery">
     <p class="small">The label on its ruler. Leave it empty to use the playlist's name.</p>
     <label>Put it in</label>
     <div class="picks" id="courseSec" role="group" aria-label="Section"></div>
