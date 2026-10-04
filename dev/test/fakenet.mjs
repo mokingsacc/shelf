@@ -71,11 +71,27 @@ YT.Player = function (el, opts) {
 setTimeout(function(){ window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(); }, 20);
 `;
 
-// The iPhone shell, faked: phone storage and clipboard plugins
-export const CAP = (seed, clip) => `window.__prefs = ${JSON.stringify(seed || {})}; window.__clip = ${JSON.stringify(clip || '')};
-  window.Capacitor = { isNativePlatform: () => true, Plugins: {
-    Preferences: { get: async ({ key }) => ({ value: key in window.__prefs ? window.__prefs[key] : null }), set: async ({ key, value }) => { window.__prefs[key] = value; } },
-    Clipboard: { read: async () => ({ value: window.__clip, type: 'text/plain' }), write: async ({ string }) => { window.__clip = string; } } } };`;
+// The iPhone shell, faked: phone storage, clipboard and native HTTP plugins.
+// Like the real shell, a plain cross-site fetch() from the page fails (the bridge routes it through
+// capacitor://localhost, which the github.io page can't read), so the app must use CapacitorHttp.
+export const CAP = (seed, clip) => `window.__prefs = ${JSON.stringify(seed || {})}; window.__clip = ${JSON.stringify(clip || '')}; window.__httpCalls = [];
+  (function () {
+    var webFetch = window.fetch.bind(window);
+    window.fetch = function (res, opts) {
+      var u = typeof res === 'string' ? res : res.url;
+      if (/^https?:/.test(u) && new URL(u).origin !== location.origin) return Promise.reject(new TypeError('Load failed'));
+      return webFetch(res, opts);
+    };
+    window.Capacitor = { isNativePlatform: () => true, Plugins: {
+      Preferences: { get: async ({ key }) => ({ value: key in window.__prefs ? window.__prefs[key] : null }), set: async ({ key, value }) => { window.__prefs[key] = value; } },
+      Clipboard: { read: async () => ({ value: window.__clip, type: 'text/plain' }), write: async ({ string }) => { window.__clip = string; } },
+      CapacitorHttp: { request: async ({ url, method, headers }) => {
+        window.__httpCalls.push({ url: url, method: method, headers: headers });
+        var r = await webFetch(url);
+        var t = await r.text(), ct = r.headers.get('content-type') || '';
+        return { status: r.status, url: url, headers: { 'content-type': ct }, data: /json/.test(ct) ? JSON.parse(t) : t };
+      } } } };
+  })();`;
 
 // opts.fresh: hide the newest item on the first fetch of each feed, so a later refresh shows "new"
 export async function installFakes(ctx, opts = {}) {

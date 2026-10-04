@@ -121,7 +121,9 @@ const page = fx('channel.html');
   assert.strictEqual(out.length, Library.SEED_SOURCES.length);
   assert.strictEqual(out.filter((x) => x.ok).length, 1, 'only the reachable feed resolves offline');
   assert.ok(r.lib.seedMisses.every((m) => m.error && m.section));
-  assert.deepStrictEqual(await r.lib.seed(), [], 'seeds only once');
+  const again = await r.lib.seed();
+  assert.strictEqual(again.length, Library.SEED_SOURCES.length - 1, 'later runs retry only the misses');
+  assert.ok(again.every((x) => x.input !== 'https://feeds.megaphone.fm/finvshistory'), 'found ones are not looked up again');
 
   // Garbage input
   await assert.rejects(r.lib.add('', 'med'), /doesn't look like/);

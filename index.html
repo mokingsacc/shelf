@@ -184,13 +184,13 @@ body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-
 .tmr .lab span:first-child{color:var(--pl-hi)}
 .tmr .lab span.mono{font-weight:400;text-transform:none;letter-spacing:0}
 .seg{display:grid;grid-template-columns:repeat(5,1fr);margin-top:10px;border:3px solid var(--pl-fg)}
-.seg button{text-align:center;padding:13px 0;font-size:16px;font-weight:700;border-left:3px solid var(--pl-fg);min-height:48px}
+.seg button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;text-align:center;padding:13px 0;font-size:16px;font-weight:700;border-left:3px solid var(--pl-fg);min-height:48px}
 .seg button:first-child{border-left:0}
 .seg button[aria-pressed="true"]{background:var(--pl-hi);color:var(--pl-bg)}
 .cd{font-size:64px;line-height:1;font-weight:400;margin-top:12px;letter-spacing:-.02em;min-height:64px}
 .cd small{font-size:12px;display:block;color:var(--pl-mute);letter-spacing:.08em;text-transform:uppercase;font-family:var(--font);font-weight:700;margin-bottom:4px}
 .cd.off{font-size:16px;min-height:0;color:var(--pl-mute);font-family:var(--font)}
-.ctl{margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:3px solid var(--pl-fg);padding-bottom:env(safe-area-inset-bottom,0px)}
+.ctl{margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:3px solid var(--pl-fg);padding-bottom:env(safe-area-inset-bottom,0px);position:sticky;bottom:0;background:var(--pl-bg);z-index:3}
 .ctl button{padding:18px 0 22px;text-align:center;font-size:22px;border-left:3px solid var(--pl-fg);min-height:64px;font-family:var(--mono)}
 .ctl button:first-child{border-left:0}
 .ctl button.on{background:var(--pl-fg);color:var(--pl-bg)}
@@ -216,12 +216,12 @@ body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-
 .night .scrub .line{height:2px;background:#1b1b24}
 .night .scrub .line i{background:var(--cob)}
 .night .scrub .nums{color:var(--n-dim)}
-.night .nctl{display:grid;grid-template-columns:1fr 1fr 1fr;margin:22px 0 0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 18px)}
+.night .nctl{display:grid;grid-template-columns:1fr 1fr 1fr;margin:22px calc(-1 * var(--g)) 0;padding:0 var(--g) calc(env(safe-area-inset-bottom,0px) + 10px);position:sticky;bottom:0;background:var(--n-bg);z-index:3}
 .night .nctl button{font-size:26px;color:var(--n-fg);min-height:64px;text-align:center;font-family:var(--mono)}
 .night .rate{font-size:12px;color:var(--n-dim);text-align:center;min-height:40px;width:100%}
 
 /* ---------- Dialogs ---------- */
-dialog{border:4px solid var(--rule);padding:0;background:var(--paper);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100% - 40px);border-radius:0}
+dialog{overflow:auto;border:4px solid var(--rule);padding:0;background:var(--paper);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100% - 40px);border-radius:0}
 dialog::backdrop{background:rgba(6,6,10,.55)}
 .dh{display:flex;justify-content:space-between;align-items:center;padding:12px var(--g);background:var(--ink);color:var(--paper)}
 .dh h2{margin:0;font-size:22px;font-weight:900;font-stretch:118%;letter-spacing:-.02em;text-transform:uppercase}
@@ -577,19 +577,30 @@ var Native = (function () {
     return Promise.reject(new Error('no clipboard'));
   }
 
+  // Web reads from the app go straight to iOS networking. (Plain fetch() GETs get routed through
+  // capacitor://localhost, which a page served from github.io can't read, and browsers drop Cookie headers.)
+  var SAFARI_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  function httpGet(url, headers) {
+    var h = { 'User-Agent': SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9' };
+    for (var k in headers || {}) h[k] = headers[k];
+    return call('CapacitorHttp', 'request', { url: url, method: 'GET', headers: h, responseType: 'text' }).then(function (r) {
+      var d = r && r.data;
+      if (d != null && typeof d !== 'string') d = JSON.stringify(d); // iOS pre-parses JSON replies
+      return { status: (r && r.status) || 0, ok: r && r.status >= 200 && r.status < 300, text: d == null ? '' : d, unreadable: d == null };
+    });
+  }
+
   // Can the app read a podcast feed? (needs the shell's native networking: feeds don't allow browser reads)
   var feedStatus = { state: inApp ? 'wait' : 'web', text: '' };
   function testFeed() {
     if (!inApp) return;
     var done = false;
     setTimeout(function () { if (!done) { feedStatus = { state: 'bad', text: "Couldn't reach the Fin vs History feed in 20 seconds. Check your internet." }; } }, 20000);
-    fetch('https://feeds.megaphone.fm/finvshistory').then(function (r) {
+    httpGet('https://feeds.megaphone.fm/finvshistory').then(function (r) {
       done = true;
       if (!r.ok) { feedStatus = { state: 'bad', text: "Couldn't read the Fin vs History feed (the server said " + r.status + ').' }; return; }
-      return r.text().then(function (t) {
-        feedStatus = /<rss|<channel/i.test(t) ? { state: 'ok', text: 'Can read podcast feeds' } : { state: 'bad', text: 'The Fin vs History feed came back in a shape Shelf doesn\'t understand.' };
-      });
-    }).catch(function () { done = true; feedStatus = { state: 'bad', text: "Couldn't read podcast feeds. Close and reopen Shelf; if it keeps happening the app shell needs a rebuild." }; });
+      feedStatus = /<rss|<channel/i.test(r.text) ? { state: 'ok', text: 'Can read podcast feeds' } : { state: 'bad', text: 'The Fin vs History feed came back in a shape Shelf doesn\'t understand.' };
+    }).catch(function () { done = true; feedStatus = { state: 'bad', text: "Couldn't read podcast feeds. Check your internet, then close and reopen Shelf. If it keeps happening, tell Claude." }; });
   }
 
   // Lock-screen sound test: a soft 45-second tone with lock-screen info.
@@ -638,7 +649,7 @@ var Native = (function () {
     document.documentElement.classList.add('in-app');
     setTimeout(testFeed, 1500);
   }
-  return { inApp: inApp, call: call, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+  return { inApp: inApp, call: call, httpGet: httpGet, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
 })();
@@ -924,7 +935,7 @@ var Library = (function () {
           return io.fetchText(url).then(function (xml) {
             var f = Feeds.parsePodcast(xml), id = hash(url);
             var s = state.sources[id] = Object.assign(state.sources[id] || {}, {
-              id: id, type: 'podcast', url: url, name: f.title || 'Podcast', image: f.image, section: sec.id,
+              id: id, type: 'podcast', url: url, name: f.title || 'Podcast', image: f.image, section: opts.keepSection && state.sources[id] ? state.sources[id].section : sec.id,
               private: isPrivate(url), added: (state.sources[id] && state.sources[id].added) || now(), seenUpTo: newest(f.items)
             });
             cache[id] = { fetched: now(), ok: true, items: f.items };
@@ -938,7 +949,7 @@ var Library = (function () {
           var prior = state.sources[c.id];
           var s = state.sources[c.id] = Object.assign(prior || {}, {
             id: c.id, type: 'youtube', name: c.name || f.author || f.title || 'Channel', handle: c.handle || (prior && prior.handle) || '',
-            image: c.avatar || (prior && prior.image) || '', section: sec.id, added: (prior && prior.added) || now(),
+            image: c.avatar || (prior && prior.image) || '', section: opts.keepSection && prior ? prior.section : sec.id, added: (prior && prior.added) || now(),
             seenUpTo: prior ? prior.seenUpTo : newest(f.items)
           });
           cache[c.id] = { fetched: now(), ok: true, items: f.items };
@@ -946,16 +957,23 @@ var Library = (function () {
         });
       });
     }
+    // Already on the shelf under this handle, name or feed? (Mo may have fixed a miss by hand)
+    function have(input) {
+      var lc = String(input).toLowerCase().replace(/^@/, '').replace(/\s+/g, '');
+      return sources().some(function (x) { return (x.handle || '').toLowerCase().replace(/^@/, '') === lc || x.name.toLowerCase().replace(/\s+/g, '') === lc || x.url === input; });
+    }
     function newest(items) { return items.reduce(function (m, x) { return Math.max(m, x.published || 0); }, 0); }
 
     // ----- First run: Mo's channels -----
     // Returns [{input, ok, error}] so the UI can show what didn't resolve.
+    // Runs fully once; after that, retries only the ones that failed (a first launch on bad Wi-Fi heals itself)
     function seed() {
-      if (state.seeded) return Promise.resolve([]);
+      var todo = state.seeded ? (state.seedMisses || []).map(function (m) { return SEED_SOURCES.filter(function (x) { return x.input === m.input; })[0]; }).filter(function (x) { return x && !have(x.input); }) : SEED_SOURCES;
+      if (!todo.length) return Promise.resolve([]);
       var out = [];
-      return SEED_SOURCES.reduce(function (p, s) {
+      return todo.reduce(function (p, s) {
         return p.then(function () {
-          return add(s.input, s.section, { audio: s.audio }).then(function () { out.push({ input: s.input, ok: true }); },
+          return add(s.input, s.section, { audio: s.audio, keepSection: true }).then(function () { out.push({ input: s.input, ok: true }); },
             function (e) { out.push({ input: s.input, section: s.section, ok: false, error: e.message }); });
         });
       }, Promise.resolve()).then(function () {
@@ -1020,7 +1038,7 @@ var Library = (function () {
 
     return {
       sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
-      sources: sources, source: source, setSection: setSection, remove: remove, add: add, seed: seed,
+      sources: sources, source: source, have: have, setSection: setSection, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
       markSeen: markSeen, fresh: fresh, saveCache: saveCache, get seedMisses() { return state.seedMisses || []; }
     };
@@ -1113,15 +1131,14 @@ var AudioEngine = (function () {
       startAt = from != null ? from : Core.resumeAt(r);
       if (el.src !== episode.url) { el.src = episode.url; if (el.load) el.load(); }
       el.playbackRate = rate;
-      var go = function () {
-        try { if (startAt > 0) el.currentTime = startAt; } catch (e) {}
-        return el.play();
-      };
-      // Seeking before metadata is ignored on iOS, so wait for it when needed
-      var p = el.readyState >= 1 ? go() : new Promise(function (res, rej) {
-        var once = function () { el.removeEventListener('loadedmetadata', once); Promise.resolve(go()).then(res, rej); };
+      var seekStart = function () { try { if (startAt > 0) el.currentTime = startAt; } catch (e) {} };
+      // play() straight away, inside the tap (Safari refuses it later); seeking before metadata is ignored on iOS, so seek once it arrives
+      if (el.readyState >= 1) seekStart();
+      else {
+        var once = function () { el.removeEventListener('loadedmetadata', once); seekStart(); };
         el.addEventListener('loadedmetadata', once);
-      });
+      }
+      var p = el.play();
       setSession();
       changed();
       return Promise.resolve(p).catch(function (e) { stopReason = 'Tap play to start (' + (e && e.name || 'blocked') + ').'; changed(); });
@@ -1183,6 +1200,8 @@ var AudioEngine = (function () {
       if (ms) try { ms.playbackState = 'playing'; } catch (e) {}
       setPosition(); changed();
     });
+    // After the deferred seek lands where we asked, the spot can be trusted
+    el.addEventListener('seeked', function () { if (!armed && !el.paused && Math.abs((el.currentTime || 0) - startAt) < 15) armed = true; });
     el.addEventListener('pause', function () { capture(true); if (ms) try { ms.playbackState = 'paused'; } catch (e) {} changed(); });
     // timeupdate keeps firing while the phone is locked, so the timer is checked here as well as by the UI's clock
     el.addEventListener('timeupdate', function () {
@@ -1333,14 +1352,20 @@ if (typeof module !== 'undefined') module.exports = Search;
     if (e && e.name === 'TypeError') return new Error(Native.inApp ? "Couldn't reach the internet. Check your connection." : 'This needs the Shelf app on your iPhone. Browsers aren\'t allowed to read YouTube\'s channel lists.');
     return e;
   }
+  // In the app every read goes through iOS networking (Native.httpGet); in a browser, plain fetch
+  function get(url, headers) {
+    var p = Native.inApp ? Native.httpGet(url, headers).catch(function () { throw new Error("Couldn't reach the internet. Check your connection."); })
+      : fetch(url, { credentials: 'omit' }).then(function (r) { return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; }); }, function (e) { throw netError(e); });
+    return withTimeout(p, 20000, 'No answer after 20 seconds. Check your internet.');
+  }
   function fetchText(url, headers) {
-    return withTimeout(fetch(url, { headers: headers || {}, credentials: 'omit' }), 20000, 'No answer after 20 seconds. Check your internet.')
-      .then(function (r) { if (!r.ok) throw new Error(r.status === 404 ? 'Not found (it may have moved or been deleted).' : 'The server said ' + r.status + '.'); return r.text(); }, function (e) { throw netError(e); });
+    return get(url, headers).then(function (r) {
+      if (!r.ok) throw new Error(r.status === 404 ? 'Not found (it may have moved or been deleted).' : 'The server said ' + r.status + '.');
+      if (r.unreadable) throw new Error('It sent something Shelf can\'t read.');
+      return r.text;
+    });
   }
-  function fetchJSON(url) {
-    return withTimeout(fetch(url, { credentials: 'omit' }), 20000, 'No answer after 20 seconds. Check your internet.')
-      .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; }); }, function (e) { throw netError(e); });
-  }
+  function fetchJSON(url) { return get(url); }
 
   // ---------- model helpers ----------
   function sectionIndex(id) { var s = lib.sections(); for (var i = 0; i < s.length; i++) if (s[i].id === id) return i; return -1; }
@@ -1575,10 +1600,7 @@ if (typeof module !== 'undefined') module.exports = Search;
       if (!v.results && !v.msg) setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50);
     }
   }
-  function alreadyHave(input) {
-    var lc = String(input).toLowerCase().replace(/^@/, '');
-    return lib.sources().some(function (s) { return (s.handle || '').toLowerCase().replace(/^@/, '') === lc || s.name.toLowerCase().replace(/\s+/g, '') === lc.replace(/\s+/g, '') || s.url === input; });
-  }
+  function alreadyHave(input) { return lib.have(input); }
   function openSection(id) { push({ name: 'section', id: id }); }
   function openChannel(id) {
     var s = lib.source(id); chanNew = {};
@@ -1754,7 +1776,7 @@ if (typeof module !== 'undefined') module.exports = Search;
     capture(true);
     try { player && player.pauseVideo(); } catch (e) {}
     clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); keepAwake(false);
-    current = null; vTimer = null; vTimerMsg = '';
+    current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
     closeSheet('#vsheet');
     renderAll();
   }
@@ -1795,6 +1817,19 @@ if (typeof module !== 'undefined') module.exports = Search;
 
   // ---------- Sleep timer UI (shared by both players) ----------
   var SEGS = [15, 30, 45, 60, 'end'];
+  // Press and hold a number for a 1-minute test timer (for the done test)
+  var holdT = null, held = false;
+  function holdStart(e) {
+    var b = e.target.closest('[data-act="timer"]'); if (!b) return;
+    held = false; clearTimeout(holdT);
+    holdT = setTimeout(function () { held = true; setTimer(b.getAttribute('data-p'), 1); toast('Test timer: 1 minute.'); }, 600);
+  }
+  function holdEnd() { clearTimeout(holdT); }
+  ['#vSeg', '#nSeg'].forEach(function (sel) {
+    var el = document.querySelector(sel);
+    el.addEventListener('pointerdown', holdStart); el.addEventListener('pointerup', holdEnd); el.addEventListener('pointerleave', holdEnd); el.addEventListener('pointercancel', holdEnd);
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  });
   function buildSeg(sel, which) {
     $(sel).innerHTML = SEGS.map(function (m) { return '<button type="button" data-act="timer" data-p="' + which + '" data-m="' + m + '" aria-pressed="false">' + (m === 'end' ? 'End' : m) + '</button>'; }).join('');
   }
@@ -2023,7 +2058,7 @@ if (typeof module !== 'undefined') module.exports = Search;
       case 'close-video': closeVideo(); break;
       case 'v-toggle': try { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); } catch (er) {} break;
       case 'v-back': case 'v-fwd': try { player.seekTo(Math.max(0, player.getCurrentTime() + (act === 'v-back' ? -15 : 15)), true); videoTick(); } catch (er) {} break;
-      case 'timer': setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
+      case 'timer': if (held) { held = false; break; } setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
       case 'open-night': nightOpen = true; openSheet('#nsheet'); renderAudio(); break;
       case 'close-night': closeNight(); break;
       case 'audio-toggle': engine.toggle(); break;
@@ -2120,7 +2155,7 @@ if (typeof module !== 'undefined') module.exports = Search;
       out.push(fs.state === 'ok' ? { ok: 1, text: fs.text } : fs.state === 'bad' ? { ok: 0, text: fs.text } : { ok: 2, text: 'Checking podcast feeds…' });
       var tr = Native.toneResult;
       out.push(Native.tonePlaying ? { ok: 2, text: 'Sound test playing. Lock your phone for 10 seconds, then come back.' }
-        : !tr ? { ok: 1, text: 'Lock-screen sound not tested yet. Tap "Test lock-screen sound" below, lock the phone for 10 seconds, then come back.' }
+        : !tr ? { ok: 1, text: 'Lock-screen sound: optional test below (tap it, lock the phone for 10 seconds, come back)' }
         : tr.ok ? { ok: 1, text: 'Sound keeps playing on the lock screen' }
         : { ok: 0, text: 'Sound stopped when the screen locked. The app shell needs a fix and a rebuild in Xcode; tell Claude.' });
     }
@@ -2166,6 +2201,7 @@ if (typeof module !== 'undefined') module.exports = Search;
   }
 
   // ---------- Start ----------
+  var restored = false;
   function restoreFromPhone() {
     if (!Native.inApp) return Promise.resolve();
     var keys = [KEY, PREF, AKEY, Library.KEY];
@@ -2175,6 +2211,7 @@ if (typeof module !== 'undefined') module.exports = Search;
         if (r[1] && !rawGet(PREF)) rawSet(PREF, r[1], false);
         if (r[2]) { var la = load(AKEY, {}), pa = JSON.parse(r[2]); Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); rawSet(AKEY, JSON.stringify(la), false); }
         if (r[3] && !rawGet(Library.KEY)) rawSet(Library.KEY, r[3], false);
+        restored = true;
       } catch (e) {}
     }, function () {});
   }
@@ -2186,7 +2223,8 @@ if (typeof module !== 'undefined') module.exports = Search;
       fetchText: fetchText
     });
     // Keep the phone's copy complete even before anything changes
-    if (Native.inApp) { Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); }
+    // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
+    if (Native.inApp && restored) { if (Object.keys(videos).length) Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); }
     buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a');
     initAudio();
     if (Native.inApp) $('#toneBtn').hidden = false;

@@ -184,13 +184,13 @@ body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-
 .tmr .lab span:first-child{color:var(--pl-hi)}
 .tmr .lab span.mono{font-weight:400;text-transform:none;letter-spacing:0}
 .seg{display:grid;grid-template-columns:repeat(5,1fr);margin-top:10px;border:3px solid var(--pl-fg)}
-.seg button{text-align:center;padding:13px 0;font-size:16px;font-weight:700;border-left:3px solid var(--pl-fg);min-height:48px}
+.seg button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;text-align:center;padding:13px 0;font-size:16px;font-weight:700;border-left:3px solid var(--pl-fg);min-height:48px}
 .seg button:first-child{border-left:0}
 .seg button[aria-pressed="true"]{background:var(--pl-hi);color:var(--pl-bg)}
 .cd{font-size:64px;line-height:1;font-weight:400;margin-top:12px;letter-spacing:-.02em;min-height:64px}
 .cd small{font-size:12px;display:block;color:var(--pl-mute);letter-spacing:.08em;text-transform:uppercase;font-family:var(--font);font-weight:700;margin-bottom:4px}
 .cd.off{font-size:16px;min-height:0;color:var(--pl-mute);font-family:var(--font)}
-.ctl{margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:3px solid var(--pl-fg);padding-bottom:env(safe-area-inset-bottom,0px)}
+.ctl{margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:3px solid var(--pl-fg);padding-bottom:env(safe-area-inset-bottom,0px);position:sticky;bottom:0;background:var(--pl-bg);z-index:3}
 .ctl button{padding:18px 0 22px;text-align:center;font-size:22px;border-left:3px solid var(--pl-fg);min-height:64px;font-family:var(--mono)}
 .ctl button:first-child{border-left:0}
 .ctl button.on{background:var(--pl-fg);color:var(--pl-bg)}
@@ -216,12 +216,12 @@ body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-
 .night .scrub .line{height:2px;background:#1b1b24}
 .night .scrub .line i{background:var(--cob)}
 .night .scrub .nums{color:var(--n-dim)}
-.night .nctl{display:grid;grid-template-columns:1fr 1fr 1fr;margin:22px 0 0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 18px)}
+.night .nctl{display:grid;grid-template-columns:1fr 1fr 1fr;margin:22px calc(-1 * var(--g)) 0;padding:0 var(--g) calc(env(safe-area-inset-bottom,0px) + 10px);position:sticky;bottom:0;background:var(--n-bg);z-index:3}
 .night .nctl button{font-size:26px;color:var(--n-fg);min-height:64px;text-align:center;font-family:var(--mono)}
 .night .rate{font-size:12px;color:var(--n-dim);text-align:center;min-height:40px;width:100%}
 
 /* ---------- Dialogs ---------- */
-dialog{border:4px solid var(--rule);padding:0;background:var(--paper);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100% - 40px);border-radius:0}
+dialog{overflow:auto;border:4px solid var(--rule);padding:0;background:var(--paper);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100% - 40px);border-radius:0}
 dialog::backdrop{background:rgba(6,6,10,.55)}
 .dh{display:flex;justify-content:space-between;align-items:center;padding:12px var(--g);background:var(--ink);color:var(--paper)}
 .dh h2{margin:0;font-size:22px;font-weight:900;font-stretch:118%;letter-spacing:-.02em;text-transform:uppercase}

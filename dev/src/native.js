@@ -37,19 +37,30 @@ var Native = (function () {
     return Promise.reject(new Error('no clipboard'));
   }
 
+  // Web reads from the app go straight to iOS networking. (Plain fetch() GETs get routed through
+  // capacitor://localhost, which a page served from github.io can't read, and browsers drop Cookie headers.)
+  var SAFARI_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  function httpGet(url, headers) {
+    var h = { 'User-Agent': SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9' };
+    for (var k in headers || {}) h[k] = headers[k];
+    return call('CapacitorHttp', 'request', { url: url, method: 'GET', headers: h, responseType: 'text' }).then(function (r) {
+      var d = r && r.data;
+      if (d != null && typeof d !== 'string') d = JSON.stringify(d); // iOS pre-parses JSON replies
+      return { status: (r && r.status) || 0, ok: r && r.status >= 200 && r.status < 300, text: d == null ? '' : d, unreadable: d == null };
+    });
+  }
+
   // Can the app read a podcast feed? (needs the shell's native networking: feeds don't allow browser reads)
   var feedStatus = { state: inApp ? 'wait' : 'web', text: '' };
   function testFeed() {
     if (!inApp) return;
     var done = false;
     setTimeout(function () { if (!done) { feedStatus = { state: 'bad', text: "Couldn't reach the Fin vs History feed in 20 seconds. Check your internet." }; } }, 20000);
-    fetch('https://feeds.megaphone.fm/finvshistory').then(function (r) {
+    httpGet('https://feeds.megaphone.fm/finvshistory').then(function (r) {
       done = true;
       if (!r.ok) { feedStatus = { state: 'bad', text: "Couldn't read the Fin vs History feed (the server said " + r.status + ').' }; return; }
-      return r.text().then(function (t) {
-        feedStatus = /<rss|<channel/i.test(t) ? { state: 'ok', text: 'Can read podcast feeds' } : { state: 'bad', text: 'The Fin vs History feed came back in a shape Shelf doesn\'t understand.' };
-      });
-    }).catch(function () { done = true; feedStatus = { state: 'bad', text: "Couldn't read podcast feeds. Close and reopen Shelf; if it keeps happening the app shell needs a rebuild." }; });
+      feedStatus = /<rss|<channel/i.test(r.text) ? { state: 'ok', text: 'Can read podcast feeds' } : { state: 'bad', text: 'The Fin vs History feed came back in a shape Shelf doesn\'t understand.' };
+    }).catch(function () { done = true; feedStatus = { state: 'bad', text: "Couldn't read podcast feeds. Check your internet, then close and reopen Shelf. If it keeps happening, tell Claude." }; });
   }
 
   // Lock-screen sound test: a soft 45-second tone with lock-screen info.
@@ -98,7 +109,7 @@ var Native = (function () {
     document.documentElement.classList.add('in-app');
     setTimeout(testFeed, 1500);
   }
-  return { inApp: inApp, call: call, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+  return { inApp: inApp, call: call, httpGet: httpGet, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
 })();

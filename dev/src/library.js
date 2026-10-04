@@ -137,7 +137,7 @@ var Library = (function () {
           return io.fetchText(url).then(function (xml) {
             var f = Feeds.parsePodcast(xml), id = hash(url);
             var s = state.sources[id] = Object.assign(state.sources[id] || {}, {
-              id: id, type: 'podcast', url: url, name: f.title || 'Podcast', image: f.image, section: sec.id,
+              id: id, type: 'podcast', url: url, name: f.title || 'Podcast', image: f.image, section: opts.keepSection && state.sources[id] ? state.sources[id].section : sec.id,
               private: isPrivate(url), added: (state.sources[id] && state.sources[id].added) || now(), seenUpTo: newest(f.items)
             });
             cache[id] = { fetched: now(), ok: true, items: f.items };
@@ -151,7 +151,7 @@ var Library = (function () {
           var prior = state.sources[c.id];
           var s = state.sources[c.id] = Object.assign(prior || {}, {
             id: c.id, type: 'youtube', name: c.name || f.author || f.title || 'Channel', handle: c.handle || (prior && prior.handle) || '',
-            image: c.avatar || (prior && prior.image) || '', section: sec.id, added: (prior && prior.added) || now(),
+            image: c.avatar || (prior && prior.image) || '', section: opts.keepSection && prior ? prior.section : sec.id, added: (prior && prior.added) || now(),
             seenUpTo: prior ? prior.seenUpTo : newest(f.items)
           });
           cache[c.id] = { fetched: now(), ok: true, items: f.items };
@@ -159,16 +159,23 @@ var Library = (function () {
         });
       });
     }
+    // Already on the shelf under this handle, name or feed? (Mo may have fixed a miss by hand)
+    function have(input) {
+      var lc = String(input).toLowerCase().replace(/^@/, '').replace(/\s+/g, '');
+      return sources().some(function (x) { return (x.handle || '').toLowerCase().replace(/^@/, '') === lc || x.name.toLowerCase().replace(/\s+/g, '') === lc || x.url === input; });
+    }
     function newest(items) { return items.reduce(function (m, x) { return Math.max(m, x.published || 0); }, 0); }
 
     // ----- First run: Mo's channels -----
     // Returns [{input, ok, error}] so the UI can show what didn't resolve.
+    // Runs fully once; after that, retries only the ones that failed (a first launch on bad Wi-Fi heals itself)
     function seed() {
-      if (state.seeded) return Promise.resolve([]);
+      var todo = state.seeded ? (state.seedMisses || []).map(function (m) { return SEED_SOURCES.filter(function (x) { return x.input === m.input; })[0]; }).filter(function (x) { return x && !have(x.input); }) : SEED_SOURCES;
+      if (!todo.length) return Promise.resolve([]);
       var out = [];
-      return SEED_SOURCES.reduce(function (p, s) {
+      return todo.reduce(function (p, s) {
         return p.then(function () {
-          return add(s.input, s.section, { audio: s.audio }).then(function () { out.push({ input: s.input, ok: true }); },
+          return add(s.input, s.section, { audio: s.audio, keepSection: true }).then(function () { out.push({ input: s.input, ok: true }); },
             function (e) { out.push({ input: s.input, section: s.section, ok: false, error: e.message }); });
         });
       }, Promise.resolve()).then(function () {
@@ -233,7 +240,7 @@ var Library = (function () {
 
     return {
       sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
-      sources: sources, source: source, setSection: setSection, remove: remove, add: add, seed: seed,
+      sources: sources, source: source, have: have, setSection: setSection, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
       markSeen: markSeen, fresh: fresh, saveCache: saveCache, get seedMisses() { return state.seedMisses || []; }
     };

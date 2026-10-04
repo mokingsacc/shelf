@@ -14,7 +14,7 @@ function fakeAudio() {
     load() {},
     play() { el.paused = false; el.fire('playing'); return Promise.resolve(); },
     pause() { el.paused = true; el.fire('pause'); },
-    meta(d) { el.duration = d; el.readyState = 1; el.fire('loadedmetadata'); el.fire('durationchange'); },
+    meta(d) { el.duration = d; el.readyState = 1; el.fire('loadedmetadata'); el.fire('durationchange'); el.fire('seeked'); },
     run(sec, clock) { for (let i = 0; i < sec; i++) { if (el.paused) return; el.currentTime += 1; clock.t += 1000; el.fire('timeupdate'); } }
   };
   return el;
@@ -33,7 +33,7 @@ const EP = { guid: 'ep213', url: 'https://example.com/213.mp3', title: 'Ep. 213:
   // Starts after metadata, saves every 5 s, shows on the lock screen
   let { el, eng, db, clock, session } = setup();
   const p = eng.play(EP);
-  assert.strictEqual(el.paused, true, 'waits for metadata');
+  assert.strictEqual(el.paused, false, 'plays straight away, inside the tap');
   el.meta(3600); await p;
   assert.strictEqual(el.paused, false);
   assert.strictEqual(session.metadata.title, EP.title);
@@ -51,6 +51,15 @@ const EP = { guid: 'ep213', url: 'https://example.com/213.mp3', title: 'Ep. 213:
   el.meta(3600);
   await eng.play(EP);
   assert.strictEqual(el.currentTime, 597);
+
+  // Resume when metadata arrives after the tap: seeks then, and trusts the spot after the seek
+  {
+    const r2 = setup(); r2.db.ep213 = { t: 600, dur: 3600, done: false };
+    const pp = r2.eng.play(EP); r2.el.meta(3600); await pp;
+    assert.strictEqual(r2.el.currentTime, 597, 'deferred seek to the saved spot');
+    r2.el.run(6, r2.clock);
+    assert.ok(r2.db.ep213.t >= 602, 'saves after a deferred seek (' + r2.db.ep213.t + ')');
+  }
 
   // Lock-screen buttons
   session.handlers.seekbackward(); assert.strictEqual(el.currentTime, 582);

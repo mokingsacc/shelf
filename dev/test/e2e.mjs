@@ -42,6 +42,8 @@ ok(await shelf(p, () => window.__shelf.lib.sources().length) === 6, '1 all six o
 await p.waitForFunction(() => document.querySelector('#statusDot').classList.contains('good'), null, { timeout: 6000 }).catch(() => {});
 ok(await p.locator('#statusDot.good').count() === 1 && (await p.locator('#statusText').textContent()) === 'All good', '1 corner says All good');
 ok(await p.locator('.band .nw').count() === 0, '1 nothing marked new on the very first run');
+const calls = await shelf(p, () => window.__httpCalls);
+ok(calls.some((c) => /youtube\.com\/@/.test(c.url) && /SOCS=/.test(c.headers.Cookie) && /Safari/.test(c.headers['User-Agent'])), '1 channel pages are read natively, with the consent cookie and a Safari identity');
 
 console.log('\n== 2 New uploads');
 await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
@@ -87,6 +89,9 @@ await p.evaluate(() => { window.__shelf.vTimer.endsAt = Date.now() + 1200; });
 await p.waitForTimeout(2600);
 ok(await shelf(p, () => window.__fake.getPlayerState()) === 2, '5 video pauses when the timer hits zero');
 ok((await p.locator('#vCd').textContent()).includes('Paused by the sleep timer'), '5 says it was the sleep timer');
+const b15 = p.locator('#vSeg [data-m="15"]').first(); const bb = await b15.boundingBox();
+await p.mouse.move(bb.x + 10, bb.y + 10); await p.mouse.down(); await p.waitForTimeout(800); await p.mouse.up(); await p.waitForTimeout(100);
+ok(await shelf(p, () => window.__shelf.vTimer && window.__shelf.vTimer.minutes) === 1 && /[01]:\d\d/.test(await p.locator('#vCd').textContent()), '5 press and hold sets a 1-minute test timer');
 await p.locator('#vSeg [data-m="30"]').click(); await p.locator('#vSeg [data-m="30"]').click();
 ok((await p.locator('#vCd').textContent()).startsWith('Off'), '5 tapping the chosen number again turns the timer off');
 // guards from v1: video swap and pre-roll ads must not overwrite a spot
@@ -178,6 +183,19 @@ ok(/Couldn't update .*Dirty Medicine/.test(ft) && await p.locator('#statusDot.ba
 await p.keyboard.press('Escape');
 await shelf(p, () => window.__shelf.handleText('https://youtu.be/blockedxxxx')); await p.waitForTimeout(300);
 ok((await p.locator('#perr').textContent()).includes('only lets it play on YouTube'), 'embed-blocked video explained, with Open on YouTube');
+await ctx.close();
+
+// Small phone (iPhone SE): player controls and dialog buttons stay reachable
+({ ctx, p } = await appPage({ ctxOpts: { viewport: { width: 375, height: 667 } } }));
+await settle(p);
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(500);
+const ctlBox = await p.locator('#vsheet .ctl').boundingBox();
+ok(ctlBox && ctlBox.y + ctlBox.height <= 667 + 1, 'SE: pause button visible without scrolling (bottom ' + (ctlBox && Math.round(ctlBox.y + ctlBox.height)) + ')');
+await p.locator('[data-act="close-video"]').click();
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+await p.locator('#sendBtn').scrollIntoViewIfNeeded();
+const sb = await p.locator('#sendBtn').boundingBox();
+ok(sb && sb.y + sb.height <= 667, 'SE: self-check buttons reachable');
 await ctx.close();
 
 console.log('\n== Mac browser (no app)');

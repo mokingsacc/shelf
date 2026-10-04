@@ -1,6 +1,6 @@
 # Shelf
 
-YouTube without the noise: paste a link and Shelf remembers where you stopped. The bigger iPhone version (sections, channels, sleep timer, Sleep podcasts on the lock screen) is being built here.
+YouTube without the noise, laid out like your day. Your channels sit in bands (Medicine, Entertainment, Sleep) showing only what's new or unfinished. Every video remembers where you stopped, every player has a one-tap sleep timer, and Sleep podcasts keep playing on the lock screen. No recommendations.
 
 Open it in a browser: https://mokingsacc.github.io/shelf/
 
@@ -14,6 +14,7 @@ Updates arrive by themselves: the app loads this website, so there's nothing to 
 
 ## For Claude
 
-- `index.html` and `icon.png` are the web app (built). Source and tests are in `dev/`: `node dev/build.mjs`, `node dev/test/core.test.cjs`, `node dev/test/e2e.mjs` (Playwright).
+- `index.html` and `icon.png` are the web app (built). Source and tests are in `dev/`: `node dev/build.mjs`, `npm test` (node unit tests + Playwright e2e of the done test with a faked iPhone shell and internet in `dev/test/fakenet.mjs`). `node dev/test/preview.mjs <outdir>` saves phone screenshots.
+- Look: "Day Sheet" (Archivo + Azeret Mono, flat yellow/cobalt/black bands, thick rules). Dark mode is the same sheet with the lights down; podcasts always use the night player.
 - GitHub Pages serves the `gh-pages` branch: after pushing `main`, also `git push origin main:gh-pages`.
 - `ios/` is the Capacitor shell (loads the Pages site via `server.url`). Plugins are vendored in `ios/vendor` so Xcode needs no npm; after `npx cap sync ios` run `node dev/vendor-ios.mjs`.

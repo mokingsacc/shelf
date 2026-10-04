@@ -33,15 +33,14 @@ var AudioEngine = (function () {
       startAt = from != null ? from : Core.resumeAt(r);
       if (el.src !== episode.url) { el.src = episode.url; if (el.load) el.load(); }
       el.playbackRate = rate;
-      var go = function () {
-        try { if (startAt > 0) el.currentTime = startAt; } catch (e) {}
-        return el.play();
-      };
-      // Seeking before metadata is ignored on iOS, so wait for it when needed
-      var p = el.readyState >= 1 ? go() : new Promise(function (res, rej) {
-        var once = function () { el.removeEventListener('loadedmetadata', once); Promise.resolve(go()).then(res, rej); };
+      var seekStart = function () { try { if (startAt > 0) el.currentTime = startAt; } catch (e) {} };
+      // play() straight away, inside the tap (Safari refuses it later); seeking before metadata is ignored on iOS, so seek once it arrives
+      if (el.readyState >= 1) seekStart();
+      else {
+        var once = function () { el.removeEventListener('loadedmetadata', once); seekStart(); };
         el.addEventListener('loadedmetadata', once);
-      });
+      }
+      var p = el.play();
       setSession();
       changed();
       return Promise.resolve(p).catch(function (e) { stopReason = 'Tap play to start (' + (e && e.name || 'blocked') + ').'; changed(); });
@@ -103,6 +102,8 @@ var AudioEngine = (function () {
       if (ms) try { ms.playbackState = 'playing'; } catch (e) {}
       setPosition(); changed();
     });
+    // After the deferred seek lands where we asked, the spot can be trusted
+    el.addEventListener('seeked', function () { if (!armed && !el.paused && Math.abs((el.currentTime || 0) - startAt) < 15) armed = true; });
     el.addEventListener('pause', function () { capture(true); if (ms) try { ms.playbackState = 'paused'; } catch (e) {} changed(); });
     // timeupdate keeps firing while the phone is locked, so the timer is checked here as well as by the UI's clock
     el.addEventListener('timeupdate', function () {

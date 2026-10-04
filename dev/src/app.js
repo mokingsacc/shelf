@@ -38,14 +38,20 @@
     if (e && e.name === 'TypeError') return new Error(Native.inApp ? "Couldn't reach the internet. Check your connection." : 'This needs the Shelf app on your iPhone. Browsers aren\'t allowed to read YouTube\'s channel lists.');
     return e;
   }
+  // In the app every read goes through iOS networking (Native.httpGet); in a browser, plain fetch
+  function get(url, headers) {
+    var p = Native.inApp ? Native.httpGet(url, headers).catch(function () { throw new Error("Couldn't reach the internet. Check your connection."); })
+      : fetch(url, { credentials: 'omit' }).then(function (r) { return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; }); }, function (e) { throw netError(e); });
+    return withTimeout(p, 20000, 'No answer after 20 seconds. Check your internet.');
+  }
   function fetchText(url, headers) {
-    return withTimeout(fetch(url, { headers: headers || {}, credentials: 'omit' }), 20000, 'No answer after 20 seconds. Check your internet.')
-      .then(function (r) { if (!r.ok) throw new Error(r.status === 404 ? 'Not found (it may have moved or been deleted).' : 'The server said ' + r.status + '.'); return r.text(); }, function (e) { throw netError(e); });
+    return get(url, headers).then(function (r) {
+      if (!r.ok) throw new Error(r.status === 404 ? 'Not found (it may have moved or been deleted).' : 'The server said ' + r.status + '.');
+      if (r.unreadable) throw new Error('It sent something Shelf can\'t read.');
+      return r.text;
+    });
   }
-  function fetchJSON(url) {
-    return withTimeout(fetch(url, { credentials: 'omit' }), 20000, 'No answer after 20 seconds. Check your internet.')
-      .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; }); }, function (e) { throw netError(e); });
-  }
+  function fetchJSON(url) { return get(url); }
 
   // ---------- model helpers ----------
   function sectionIndex(id) { var s = lib.sections(); for (var i = 0; i < s.length; i++) if (s[i].id === id) return i; return -1; }
@@ -280,10 +286,7 @@
       if (!v.results && !v.msg) setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50);
     }
   }
-  function alreadyHave(input) {
-    var lc = String(input).toLowerCase().replace(/^@/, '');
-    return lib.sources().some(function (s) { return (s.handle || '').toLowerCase().replace(/^@/, '') === lc || s.name.toLowerCase().replace(/\s+/g, '') === lc.replace(/\s+/g, '') || s.url === input; });
-  }
+  function alreadyHave(input) { return lib.have(input); }
   function openSection(id) { push({ name: 'section', id: id }); }
   function openChannel(id) {
     var s = lib.source(id); chanNew = {};
@@ -459,7 +462,7 @@
     capture(true);
     try { player && player.pauseVideo(); } catch (e) {}
     clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); keepAwake(false);
-    current = null; vTimer = null; vTimerMsg = '';
+    current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
     closeSheet('#vsheet');
     renderAll();
   }
@@ -500,6 +503,19 @@
 
   // ---------- Sleep timer UI (shared by both players) ----------
   var SEGS = [15, 30, 45, 60, 'end'];
+  // Press and hold a number for a 1-minute test timer (for the done test)
+  var holdT = null, held = false;
+  function holdStart(e) {
+    var b = e.target.closest('[data-act="timer"]'); if (!b) return;
+    held = false; clearTimeout(holdT);
+    holdT = setTimeout(function () { held = true; setTimer(b.getAttribute('data-p'), 1); toast('Test timer: 1 minute.'); }, 600);
+  }
+  function holdEnd() { clearTimeout(holdT); }
+  ['#vSeg', '#nSeg'].forEach(function (sel) {
+    var el = document.querySelector(sel);
+    el.addEventListener('pointerdown', holdStart); el.addEventListener('pointerup', holdEnd); el.addEventListener('pointerleave', holdEnd); el.addEventListener('pointercancel', holdEnd);
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  });
   function buildSeg(sel, which) {
     $(sel).innerHTML = SEGS.map(function (m) { return '<button type="button" data-act="timer" data-p="' + which + '" data-m="' + m + '" aria-pressed="false">' + (m === 'end' ? 'End' : m) + '</button>'; }).join('');
   }
@@ -728,7 +744,7 @@
       case 'close-video': closeVideo(); break;
       case 'v-toggle': try { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); } catch (er) {} break;
       case 'v-back': case 'v-fwd': try { player.seekTo(Math.max(0, player.getCurrentTime() + (act === 'v-back' ? -15 : 15)), true); videoTick(); } catch (er) {} break;
-      case 'timer': setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
+      case 'timer': if (held) { held = false; break; } setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
       case 'open-night': nightOpen = true; openSheet('#nsheet'); renderAudio(); break;
       case 'close-night': closeNight(); break;
       case 'audio-toggle': engine.toggle(); break;
@@ -825,7 +841,7 @@
       out.push(fs.state === 'ok' ? { ok: 1, text: fs.text } : fs.state === 'bad' ? { ok: 0, text: fs.text } : { ok: 2, text: 'Checking podcast feeds…' });
       var tr = Native.toneResult;
       out.push(Native.tonePlaying ? { ok: 2, text: 'Sound test playing. Lock your phone for 10 seconds, then come back.' }
-        : !tr ? { ok: 1, text: 'Lock-screen sound not tested yet. Tap "Test lock-screen sound" below, lock the phone for 10 seconds, then come back.' }
+        : !tr ? { ok: 1, text: 'Lock-screen sound: optional test below (tap it, lock the phone for 10 seconds, come back)' }
         : tr.ok ? { ok: 1, text: 'Sound keeps playing on the lock screen' }
         : { ok: 0, text: 'Sound stopped when the screen locked. The app shell needs a fix and a rebuild in Xcode; tell Claude.' });
     }
@@ -871,6 +887,7 @@
   }
 
   // ---------- Start ----------
+  var restored = false;
   function restoreFromPhone() {
     if (!Native.inApp) return Promise.resolve();
     var keys = [KEY, PREF, AKEY, Library.KEY];
@@ -880,6 +897,7 @@
         if (r[1] && !rawGet(PREF)) rawSet(PREF, r[1], false);
         if (r[2]) { var la = load(AKEY, {}), pa = JSON.parse(r[2]); Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); rawSet(AKEY, JSON.stringify(la), false); }
         if (r[3] && !rawGet(Library.KEY)) rawSet(Library.KEY, r[3], false);
+        restored = true;
       } catch (e) {}
     }, function () {});
   }
@@ -891,7 +909,8 @@
       fetchText: fetchText
     });
     // Keep the phone's copy complete even before anything changes
-    if (Native.inApp) { Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); }
+    // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
+    if (Native.inApp && restored) { if (Object.keys(videos).length) Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); }
     buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a');
     initAudio();
     if (Native.inApp) $('#toneBtn').hidden = false;
