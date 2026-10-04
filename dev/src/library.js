@@ -32,11 +32,13 @@ var Library = (function () {
     function read() {
       var s = null;
       try { s = JSON.parse(io.load(KEY) || 'null'); } catch (e) { s = null; }
-      if (!s || !Array.isArray(s.sections)) s = { sections: SEED_SECTIONS.map(function (x) { return Object.assign({}, x); }), sources: {}, seeded: false };
+      if (!s || !Array.isArray(s.sections)) s = { sections: SEED_SECTIONS.map(function (x) { return Object.assign({}, x); }), sources: {}, seeded: false, born: now() };
       s.sources = s.sources || {};
       return s;
     }
-    function save() { io.save(KEY, JSON.stringify(state)); }
+    // rev counts saves, so the phone's copy and the web view's copy can tell which is newer; born marks a
+    // list started from scratch, so a fresh list made while the phone couldn't be read never beats the real one
+    function save() { state.rev = (state.rev || 0) + 1; io.save(KEY, JSON.stringify(state)); }
 
     // ----- Sections -----
     function sections() { return state.sections.slice(); }

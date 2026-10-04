@@ -160,6 +160,7 @@ const txt = await p.locator('#checkList').textContent();
 ok(await p.locator('#checkList li.ok').count() >= 6 && txt.includes('Running inside the Shelf app'), '8 green ticks in the app');
 ok(await p.locator('#toneBtn').isVisible(), '8 lock-screen sound test is offered in the app');
 ok(txt.includes('Signed in to YouTube') && (await p.locator('#ytBtn').textContent()) === 'Sign out of YouTube', '8 says it is signed in to YouTube, with a way out');
+ok(!(await p.locator('#retryBtn').isVisible()), '8 no Try again when phone storage is fine');
 await p.screenshot({ path: SHOTS + '/e2e-check.png' });
 await p.keyboard.press('Escape');
 ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'phone: no sideways scroll');
@@ -196,6 +197,57 @@ await ctx.close();
 await settle(p);
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 ok(/older than the website.*run the installer again/.test(await p.locator('#checkList').textContent()) && !(await p.locator('#ytBtn').isVisible()), 'YT an old shell is told to re-run the installer, no dead button');
+await ctx.close();
+
+console.log('\n== Phone storage safety');
+const LIBK = 'shelf.v2.library', VK = 'resume.shelf.v1';
+const libWith = (extra, rev) => JSON.stringify({ sections: [{ id: 'med', name: 'Medicine', kind: 'video' }, { id: 'ent', name: 'Entertainment', kind: 'video' }, { id: 'sleep', name: 'Sleep', kind: 'audio' }].concat(extra ? [{ id: 'x', name: extra, kind: 'video' }] : []),
+  sources: {}, seeded: true, seedV: 2, seedMisses: [], rev: rev });
+const phoneSpot = JSON.stringify({ dQw4w9WgXcQ: { id: 'dQw4w9WgXcQ', title: 'Phone spot', t: 600, dur: 1200, updated: Date.now() - 60000 } });
+// Phone reads fail: nothing is written to the phone, the self-check says so and offers Try again
+({ ctx, p } = await appPage({ prefs: { [VK]: phoneSpot, [LIBK]: libWith('Phone only', 7) }, shell: { prefFail: true } }));
+await p.waitForFunction(() => !!window.__shelf, null, { timeout: 12000 }); await p.waitForTimeout(1200);
+ok(/didn't answer/.test(await p.locator('#toast').textContent()), 'store: a warning says the phone storage didn\'t answer');
+await settle(p);
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/swapswapswa')); await p.waitForTimeout(400);
+await p.evaluate(() => window.__fake.advance(40)); await p.waitForTimeout(5400);
+await p.locator('[data-act="close-video"]').first().click(); await p.waitForTimeout(500);
+ok(await shelf(p, () => window.__prefWrites) === 0, 'store: with unreadable phone storage nothing is written over it');
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(/didn't answer at start/.test(await p.locator('#checkList').textContent()) && await p.locator('#retryBtn').isVisible(), 'store: self-check explains it and offers Try again');
+// The phone answers again: Try again reloads, merges both copies, and only then writes
+await p.evaluate(() => localStorage.setItem('fake.prefFail', '0'));
+const again = p.waitForEvent('load', { timeout: 5000 }).then(() => true, () => false);
+await p.locator('#retryBtn').click();
+ok(await again, 'store: Try again restarts Shelf');
+await settle(p); await p.waitForTimeout(800);
+const merged = await shelf(p, () => ({ v: window.__shelf.videos, phone: JSON.parse(window.__prefs['resume.shelf.v1'] || '{}'), secs: window.__shelf.lib.sections().map((x) => x.name) }));
+ok(merged.v.dQw4w9WgXcQ && merged.v.swapswapswa && merged.phone.dQw4w9WgXcQ && merged.phone.swapswapswa, 'store: after Try again the phone keeps its spot and gets the new one');
+ok(merged.secs.includes('Phone only'), 'store: the phone\'s newer channel list was kept');
+await ctx.close();
+// Library: the copy with more saves wins, whichever side it is on
+({ ctx, p } = await appPage({ prefs: { [LIBK]: libWith('Phone newer', 9) }, shell: { web: { [LIBK]: libWith('Web older', 4) } } }));
+await settle(p); await p.waitForTimeout(600);
+let secs = await shelf(p, () => window.__shelf.lib.sections().map((x) => x.name));
+ok(secs.includes('Phone newer') && !secs.includes('Web older'), 'store: a newer phone channel list beats a stale web copy (' + secs.join(', ') + ')');
+ok(/Phone newer/.test(await shelf(p, () => window.__prefs['shelf.v2.library'])), 'store: and the stale copy is not mirrored over it');
+await ctx.close();
+({ ctx, p } = await appPage({ prefs: { [LIBK]: libWith('Phone older', 2) }, shell: { web: { [LIBK]: libWith('Web newer', 5) } } }));
+await settle(p); await p.waitForTimeout(600);
+secs = await shelf(p, () => window.__shelf.lib.sections().map((x) => x.name));
+ok(secs.includes('Web newer') && /Web newer/.test(await shelf(p, () => window.__prefs['shelf.v2.library'])), 'store: a newer web copy wins and is backed up to the phone');
+await ctx.close();
+// Copies from before save counting: the phone's copy is trusted
+({ ctx, p } = await appPage({ prefs: { [LIBK]: libWith('Phone legacy') }, shell: { web: { [LIBK]: libWith('Web legacy') } } }));
+await settle(p);
+secs = await shelf(p, () => window.__shelf.lib.sections().map((x) => x.name));
+ok(secs.includes('Phone legacy') && !secs.includes('Web legacy'), 'store: legacy copies (no save count) prefer the phone');
+await ctx.close();
+// A damaged phone record is ignored, the rest still restores
+({ ctx, p } = await appPage({ prefs: { [VK]: '{broken', [LIBK]: libWith('Phone ok', 3) } }));
+await settle(p); await p.waitForTimeout(600);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(await shelf(p, () => window.__shelf.lib.sections().some((x) => x.name === 'Phone ok')) && !/didn't answer/.test(await p.locator('#checkList').textContent()), 'store: a damaged phone record is skipped and the rest restores');
 await ctx.close();
 
 // Problems are explained in plain words
@@ -332,7 +384,7 @@ ok(await m.evaluate(() => window.__shelf.current) === '9bZkp7q19f0' && await m.e
 await m.keyboard.press('Escape');
 ok(await m.locator('.band.c0').count() === 1, 'mac: pasted video shows under Pasted');
 await m.locator('#statusBtn').click();
-ok(!(await m.locator('#toneBtn').isVisible()) && !(await m.locator('#ytBtn').isVisible()) && await m.locator('#statusDot.good').count() === 1, 'mac: all good, no app-only buttons');
+ok(!(await m.locator('#toneBtn').isVisible()) && !(await m.locator('#ytBtn').isVisible()) && !(await m.locator('#retryBtn').isVisible()) && await m.locator('#statusDot.good').count() === 1, 'mac: all good, no app-only buttons');
 await m.locator('#sendBtn').click(); await m.waitForTimeout(200);
 const link = await m.evaluate(() => navigator.clipboard.readText());
 ok(/#shelf=/.test(link), 'mac: shelf link copied');

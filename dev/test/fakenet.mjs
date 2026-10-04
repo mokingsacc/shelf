@@ -94,10 +94,20 @@ setTimeout(function(){ window.onYouTubeIframeAPIReady && window.onYouTubeIframeA
 // The iPhone shell, faked: phone storage, clipboard, native HTTP and the YouTube sign-in sheet.
 // Like the real shell, a plain cross-site fetch() from the page fails (the bridge routes it through
 // capacitor://localhost, which the github.io page can't read), so the app must use CapacitorHttp.
+// Phone storage (Preferences) outlives a reload, like the real one. shell.prefFail: every read fails (the switch
+// is localStorage 'fake.prefFail', so a test can heal it before a reload); shell.web: web-view storage to start with.
 // shell.ytSignedIn: YouTube cookies already there (default yes); shell.ytRefuse: Google won't finish the
 // sign-in; shell.oldShell: a shell built before the ShelfSignIn plugin (its plugin list lacks it).
-export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: true }, shell); return `window.__prefs = ${JSON.stringify(seed || {})}; window.__clip = ${JSON.stringify(clip || '')}; window.__httpCalls = []; window.__ytCalls = [];
+export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: true }, shell); return `window.__clip = ${JSON.stringify(clip || '')}; window.__httpCalls = []; window.__prefWrites = 0; window.__ytCalls = [];
   (function () {
+    if (!sessionStorage.getItem('fake.started')) {
+      sessionStorage.setItem('fake.started', '1');
+      sessionStorage.setItem('fake.prefs', JSON.stringify(${JSON.stringify(seed || {})}));
+      localStorage.setItem('fake.prefFail', ${shell.prefFail ? "'1'" : "'0'"});
+      var web = ${JSON.stringify(shell.web || {})}; Object.keys(web).forEach(function (k) { localStorage.setItem(k, web[k]); });
+    }
+    window.__prefs = JSON.parse(sessionStorage.getItem('fake.prefs'));
+    var keep = function () { sessionStorage.setItem('fake.prefs', JSON.stringify(window.__prefs)); };
     // The sheet's cookie jar outlives a page reload, like the real one
     var yt = { get signedIn() { var v = localStorage.getItem('fake.yt'); return v == null ? ${!!shell.ytSignedIn} : v === '1'; }, set signedIn(b) { localStorage.setItem('fake.yt', b ? '1' : '0'); } };
     var signIn = ${shell.oldShell ? '{}' : `{ PluginHeaders: [{ name: 'ShelfSignIn', methods: [] }], plugin: {
@@ -112,7 +122,8 @@ export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: 
       return webFetch(res, opts);
     };
     window.Capacitor = { isNativePlatform: () => true, Plugins: {
-      Preferences: { get: async ({ key }) => ({ value: key in window.__prefs ? window.__prefs[key] : null }), set: async ({ key, value }) => { window.__prefs[key] = value; } },
+      Preferences: { get: async ({ key }) => { if (localStorage.getItem('fake.prefFail') === '1') throw new Error('Preferences unavailable'); return { value: key in window.__prefs ? window.__prefs[key] : null }; },
+        set: async ({ key, value }) => { window.__prefs[key] = value; window.__prefWrites++; keep(); } },
       Clipboard: { read: async () => ({ value: window.__clip, type: 'text/plain' }), write: async ({ string }) => { window.__clip = string; } },
       CapacitorHttp: { request: async ({ url, method, headers, data }) => {
         window.__httpCalls.push({ url: url, method: method, headers: headers, data: data });

@@ -15,7 +15,8 @@ var Native = (function () {
   // Durable storage on the phone (survives the web view clearing its own storage)
   function prefGet(key) {
     if (!inApp) return Promise.resolve(null);
-    return call('Preferences', 'get', { key: key }).then(function (r) { return r && r.value != null ? r.value : null; }, function () { return null; });
+    // A failed read rejects (it is not the same as "nothing saved"), so a restore never mistakes it for an empty phone
+    return call('Preferences', 'get', { key: key }).then(function (r) { return r && r.value != null ? r.value : null; });
   }
   var pendingSet = {};
   function prefSet(key, value) {
