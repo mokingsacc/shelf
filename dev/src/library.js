@@ -13,10 +13,11 @@ var Library = (function () {
     { input: '@DirtyMedicine', section: 'med' },
     { input: '@MehlmanMedical', section: 'med' },
     { input: '@BreakingPoints', section: 'ent' },
-    { input: 'The Ezra Klein Show', section: 'ent', audio: true },
+    { input: 'The Ezra Klein Show', section: 'ent', since: 2 }, // the video show (was its podcast before seed version 2)
     { input: 'https://feeds.megaphone.fm/finvshistory', section: 'sleep' },
     { input: 'Fall of Civilizations', section: 'sleep', audio: true }
   ];
+  var SEED_V = 2; // seeds marked since: n are added once to libraries seeded before version n
   var CONSENT = { Cookie: 'SOCS=CAI; CONSENT=YES+1' };
 
   function hash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return 'p' + (h >>> 0).toString(36); }
@@ -160,9 +161,9 @@ var Library = (function () {
       });
     }
     // Already on the shelf under this handle, name or feed? (Mo may have fixed a miss by hand)
-    function have(input) {
+    function have(input, type) {
       var lc = String(input).toLowerCase().replace(/^@/, '').replace(/\s+/g, '');
-      return sources().some(function (x) { return (x.handle || '').toLowerCase().replace(/^@/, '') === lc || x.name.toLowerCase().replace(/\s+/g, '') === lc || x.url === input; });
+      return sources().some(function (x) { return (!type || x.type === type) && ((x.handle || '').toLowerCase().replace(/^@/, '') === lc || x.name.toLowerCase().replace(/\s+/g, '') === lc || x.url === input); });
     }
     function newest(items) { return items.reduce(function (m, x) { return Math.max(m, x.published || 0); }, 0); }
 
@@ -170,7 +171,12 @@ var Library = (function () {
     // Returns [{input, ok, error}] so the UI can show what didn't resolve.
     // Runs fully once; after that, retries only the ones that failed (a first launch on bad Wi-Fi heals itself)
     function seed() {
-      var todo = state.seeded ? (state.seedMisses || []).map(function (m) { return SEED_SOURCES.filter(function (x) { return x.input === m.input; })[0]; }).filter(function (x) { return x && !have(x.input); }) : SEED_SOURCES;
+      function kind(x) { return x.audio || /^https?:/.test(x.input) ? 'podcast' : 'youtube'; }
+      var todo = state.seeded ? (state.seedMisses || []).map(function (m) { return SEED_SOURCES.filter(function (x) { return x.input === m.input; })[0]; }).filter(function (x) { return x && !have(x.input, kind(x)); }) : SEED_SOURCES;
+      if (state.seeded && (state.seedV || 1) < SEED_V) {
+        todo = todo.concat(SEED_SOURCES.filter(function (x) { return x.since > (state.seedV || 1) && todo.indexOf(x) < 0 && !have(x.input, kind(x)); }));
+        if (!todo.length) { state.seedV = SEED_V; save(); }
+      }
       if (!todo.length) return Promise.resolve([]);
       var out = [];
       return todo.reduce(function (p, s) {
@@ -179,7 +185,7 @@ var Library = (function () {
             function (e) { out.push({ input: s.input, section: s.section, ok: false, error: e.message }); });
         });
       }, Promise.resolve()).then(function () {
-        state.seeded = true; state.seedMisses = out.filter(function (x) { return !x.ok; }); save(); return out;
+        state.seeded = true; state.seedV = SEED_V; state.seedMisses = out.filter(function (x) { return !x.ok; }); save(); return out;
       });
     }
 

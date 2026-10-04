@@ -225,6 +225,13 @@ await settle(p);
 await shelf(p, () => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(500);
 const ctlBox = await p.locator('#vsheet .ctl').boundingBox();
 ok(ctlBox && ctlBox.y + ctlBox.height <= 667 + 1, 'SE: pause button visible without scrolling (bottom ' + (ctlBox && Math.round(ctlBox.y + ctlBox.height)) + ')');
+// Turned sideways, the video fills the screen; upright again, the player is back
+await p.setViewportSize({ width: 667, height: 375 }); await p.waitForTimeout(150);
+const land = await p.locator('#vsheet .vid').boundingBox();
+ok(land && land.x === 0 && land.y === 0 && land.width === 667 && land.height === 375, 'sideways: the video fills the screen (' + (land && [land.width, land.height].join('x')) + ')');
+await p.setViewportSize({ width: 375, height: 667 }); await p.waitForTimeout(150);
+const up = await p.locator('#vsheet .vid').boundingBox();
+ok(up && Math.round(up.height) === Math.round(375 * 9 / 16) && await p.locator('#vsheet .ctl').isVisible(), 'upright again: normal player');
 await p.locator('[data-act="close-video"]').click();
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 await p.locator('#sendBtn').scrollIntoViewIfNeeded();
