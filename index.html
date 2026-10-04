@@ -1650,10 +1650,10 @@ var Courses = (function () {
       var c = get(id), ch = cache[id];
       if (!c || !ch || !ch.items) return [];
       // Always YouTube's own playlist order (what Mo watches down), never sorted by number
-      if (!order[id] || order[id].key !== ch.fetched) {
+      if (!order[id] || order[id].arr !== ch.items) {
         var ix = {};
         ch.items.forEach(function (x, i) { ix[x.id] = i; });
-        order[id] = { key: ch.fetched, arr: ch.items }; index[id] = ix;
+        order[id] = { arr: ch.items }; index[id] = ix;
       }
       return order[id].arr;
     }
@@ -1708,13 +1708,16 @@ var Courses = (function () {
         if (!data) throw new Error(/consent\.(youtube|google)\.com/i.test(html) ? 'YouTube showed its cookie page. Try again in a minute.' : "YouTube's page came back in a shape Shelf can't read.");
         var first = readVideos(data), ci = clientInfo(html), all = first.items.slice(), pages = 1, partial = 0;
         if (!all.length && /"alerts"[\s\S]{0,400}(private|does not exist|unavailable)/i.test(html)) throw new Error('YouTube says this playlist is private or gone.');
+        // Any chain that stops while YouTube still offers more (page limit, no way to ask, an empty or failed
+        // answer) leaves the list partial, so Mo's note and progress never treat a short list as the whole thing
         function more(token) {
-          if (!token || pages >= MAX_PAGES || !io.postJSON) return Promise.resolve();
+          if (!token) return Promise.resolve();
+          if (pages >= MAX_PAGES || !io.postJSON) { partial = -1; return Promise.resolve(); }
           pages++;
           return io.postJSON('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false' + (ci.key ? '&key=' + ci.key : ''),
             { context: { client: { clientName: 'WEB', clientVersion: ci.ver, hl: 'en', gl: 'GB' } }, continuation: token },
             { 'Content-Type': 'application/json', 'X-YouTube-Client-Name': '1', 'X-YouTube-Client-Version': ci.ver, Origin: 'https://www.youtube.com', Cookie: CONSENT, 'User-Agent': DESKTOP })
-            .then(function (t) { var r = readVideos(initialData(t) || {}); all = all.concat(r.items); return r.items.length ? more(r.token) : null; },
+            .then(function (t) { var r = readVideos(initialData(t) || {}); all = all.concat(r.items); if (!r.items.length) { partial = -1; return null; } return more(r.token); },
               function () { partial = -1; });
         }
         // partial: how many YouTube says there are (or -1 if it didn't say) when "load more" failed
@@ -1727,13 +1730,15 @@ var Courses = (function () {
         return io.fetchText(API + 'playlistItems?part=snippet&maxResults=50&playlistId=' + pid + '&key=' + encodeURIComponent(key) + (tok ? '&pageToken=' + tok : '')).then(function (t) {
           var j = JSON.parse(t);
           (j.items || []).forEach(function (it) { var sn = it.snippet || {}, v = sn.resourceId && sn.resourceId.videoId; if (v && !GONE.test('[' + String(sn.title).replace(/^\[|\]$/g, '') + ']')) all.push({ id: v, title: sn.title, dur: 0 }); });
+          if (j.nextPageToken && n >= 80) cut = true;
           return j.nextPageToken && n < 80 ? page(j.nextPageToken, n + 1) : null;
         });
       }
+      var cut = false;
       return io.fetchText(API + 'playlists?part=snippet&id=' + pid + '&key=' + encodeURIComponent(key)).then(function (t) {
         var j = JSON.parse(t); title = j.items && j.items[0] && j.items[0].snippet.title || '';
         return page('', 0);
-      }).then(function () { return { title: title, items: all, partial: 0 }; });
+      }).then(function () { return { title: title, items: all, partial: cut ? -1 : 0 }; });
     }
     function fetchList(pid) {
       var key = io.apiKey && io.apiKey();
@@ -1748,9 +1753,11 @@ var Courses = (function () {
         var seen = {}, its = [];
         r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; x.n = epNumber(x.title); its.push(x); } });
         if (!its.length) throw new Error('This playlist has no videos Shelf can play.');
-        cache[id] = { fetched: now(), ok: true, items: its, partial: r.partial };
+        // A refresh that came back short never replaces a complete list (the later episodes would vanish)
+        if (r.partial && ch && ch.items && ch.items.length && !ch.partial && ch.items.length >= its.length) cache[id] = Object.assign({}, ch, { fetched: now(), ok: true, shortRefresh: true });
+        else cache[id] = { fetched: now(), ok: true, items: its, partial: r.partial };
         if (r.title) c.title = r.title;
-        if (!r.partial) applySeed(c); // Mo's note needs the whole list; it waits for a full load
+        applySeed(c); // waits by itself until the whole list is known
         saveCache(); save();
         delete busy[id]; return c;
       }).catch(function (e) {
@@ -1760,10 +1767,12 @@ var Courses = (function () {
       return busy[id];
     }
     // Mo's note, applied once the episodes are known
+    // It needs the whole list: with no list yet, or a partial one, the note is kept for a later full load.
     function applySeed(c) {
       var s = c.seed; if (!s) return;
+      var ch = cache[c.id], arr = items(c.id);
+      if (!ch || ch.partial || !arr.length) return;
       delete c.seed;
-      var arr = items(c.id);
       if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
       if (s.upTo) {
         var hitsN = findNumber(c.id, s.upTo), at = hitsN[0];
@@ -1796,9 +1805,10 @@ var Courses = (function () {
       if (!pid) return Promise.reject(new Error("That's not a playlist link. It should contain list=."));
       if (get(pid)) return Promise.reject(new Error('Already on your shelf as ' + get(pid).name + '.'));
       return fetchList(pid).then(function (r) {
-        var c = addCourse(pid, { name: opts.name || shortName(r.title), title: r.title, section: opts.section, channel: opts.channel });
         var seen = {}, its = [];
         r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; x.n = epNumber(x.title); its.push(x); } });
+        if (!its.length) throw new Error('This playlist has no videos Shelf can play.');
+        var c = addCourse(pid, { name: opts.name || shortName(r.title), title: r.title, section: opts.section, channel: opts.channel });
         cache[pid] = { fetched: now(), ok: true, items: its, partial: r.partial };
         saveCache(); save();
         return c;

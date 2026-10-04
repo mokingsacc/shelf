@@ -50,12 +50,14 @@ function setup(store, opts = {}) {
     postJSON: async (url, body, headers) => {
       calls.push({ url, body, headers, post: true });
       if (opts.noMore) throw new Error('refused');
+      if (opts.emptyMore) return '{}';
       const name = body.continuation.split(':')[0];
       const pl = Object.values(PL).find((p) => p.html.includes(' - ' + name + '"'));
       return pl.more(body.continuation);
     }
   };
-  return { c: Courses.create(io), store, calls, tick: (ms) => { t += ms; } };
+  if (opts.noPost) delete io.postJSON;
+  return { c: Courses.create(io), store, calls, tick: (ms) => { t += ms; }, opts };
 }
 
 (async () => {
@@ -161,6 +163,36 @@ function setup(store, opts = {}) {
   await r6.c.load('PLpeds0000000000', true);
   assert.ok(r6.c.get('PLpeds0000000000').seed, 'seed kept while the list is partial');
   assert.strictEqual(r6.c.progress('PLpeds0000000000').done, 0);
+
+  // An empty answer to "load more" is not the end of the playlist: partial, and Mo's note waits (no 70% guess)
+  const r6b = setup({}, { emptyMore: true });
+  await r6b.c.add('PLpeds0000000000');
+  assert.strictEqual(r6b.c.status('PLpeds0000000000').partial, -1, 'empty continuation = partial');
+  r6b.c.raw().courses.PLpeds0000000000.seed = { upTo: 1107, pct: 70 };
+  await r6b.c.load('PLpeds0000000000', true);
+  assert.ok(r6b.c.get('PLpeds0000000000').seed && r6b.c.progress('PLpeds0000000000').done === 0, 'seed not consumed on an empty continuation');
+  // No way to ask for more (no POST in this shell): partial too
+  const r6c = setup({}, { noPost: true });
+  await r6c.c.add('PLpeds0000000000');
+  assert.strictEqual(r6c.c.status('PLpeds0000000000').partial, -1, 'no transport = partial');
+  // fixMiss on a partial list keeps the note for later; the next full load applies it
+  const r6d = setup({}, { noMore: true });
+  const cfix = await r6d.c.add('PLpeds0000000000');
+  r6d.c.fixMiss('Paeds', cfix);
+  assert.ok(r6d.c.get('PLpeds0000000000').seed && r6d.c.progress('PLpeds0000000000').done === 0, 'fixMiss waits for a full list');
+  r6d.opts.noMore = false;
+  await r6d.c.load('PLpeds0000000000', true);
+  assert.ok(!r6d.c.get('PLpeds0000000000').seed && r6d.c.progress('PLpeds0000000000').done === 91, 'then ticks through #1107 in playlist order');
+  // A refresh that comes back short keeps the complete list (later episodes don't vanish)
+  r6d.opts.noMore = true;
+  await r6d.c.load('PLpeds0000000000', true);
+  assert.strictEqual(r6d.c.progress('PLpeds0000000000').total, 130, 'complete list kept after a short refresh');
+  assert.strictEqual(r6d.c.status('PLpeds0000000000').partial, 0);
+  // An empty playlist isn't added
+  const r6e = setup({}, {});
+  PL.PLempty000000000 = { html: '<script>var ytInitialData = ' + JSON.stringify({ metadata: { playlistMetadataRenderer: { title: 'Empty' } }, contents: { list: { contents: [] } } }) + ';</script>' };
+  await assert.rejects(r6e.c.add('PLempty000000000'), /no videos/);
+  assert.ok(!r6e.c.get('PLempty000000000'), 'nothing added');
 
   // Adding: bad link, already there, offline
   await assert.rejects(r6.c.add('https://youtu.be/dQw4w9WgXcQ'), /not a playlist link/);
