@@ -54,6 +54,7 @@ var Library = (function () {
       if (!s || !name) return false;
       s.name = name; save(); return true;
     }
+    function setKind(id, kind) { var s = section(id); if (!s) return false; s.kind = kind === 'audio' ? 'audio' : 'video'; save(); return true; }
     // Channels in a removed section move to the first remaining one, so nothing is lost by accident
     function removeSection(id) {
       if (state.sections.length < 2) throw new Error("Shelf needs at least one section.");
@@ -231,7 +232,7 @@ var Library = (function () {
     loadCache();
 
     return {
-      sections: sections, section: section, addSection: addSection, renameSection: renameSection, removeSection: removeSection, moveSection: moveSection,
+      sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
       sources: sources, source: source, setSection: setSection, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
       markSeen: markSeen, fresh: fresh, saveCache: saveCache, get seedMisses() { return state.seedMisses || []; }

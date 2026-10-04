@@ -8,2101 +8,373 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="theme-color" content="#FBFBF9" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#17181B" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#08080C" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232B4C9B'/%3E%3Cpath d='M26 20l18 12-18 12z' fill='%23FBFBF9'/%3E%3Crect x='12' y='50' width='40' height='3' rx='1.5' fill='%23FBFBF9' opacity='.45'/%3E%3Crect x='12' y='50' width='24' height='3' rx='1.5' fill='%23FBFBF9'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='22' fill='%23ffe41a'/%3E%3Crect y='22' width='64' height='21' fill='%231a35d6'/%3E%3Crect y='43' width='64' height='21' fill='%230c0c10'/%3E%3C/svg%3E">
 <title>Shelf</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Azeret+Mono:wght@400;600&display=swap">
 <style>
-/* Quiet Shelf: paper, one serif, one ink blue. Desktop: player left, list right. Phone: one column. */
-:root {
-  --bg: #FBFBF9; --surface: #FFFFFF; --fg: #1C1D1F; --muted: #6E7078; --line: #E6E6E2; --field: #F1F1ED;
-  --accent: #2B4C9B; --ok: #2E8B57; --wait: #B7791F; --bad: #C0392B;
-  --shadow: 0 1px 2px rgba(20,20,30,.06), 0 12px 32px -16px rgba(20,20,30,.18);
-  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
-  --font-ui: "Figtree", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
-  --gutter: 18px;
+/* Day Sheet: the day as a timetable. Flat colour bands, heavy wide type, thick rules, mono numbers.
+   Dark mode is the same sheet with the lights turned down. */
+:root{
+  --paper:#fff; --ink:#0c0c10; --grey:#6c6c74; --rule:#0c0c10; --soft:#f1f1f3; --line2:#d9d9de;
+  --yel:#ffe41a; --cob:#1a35d6; --blk:#0c0c10; --bad:#d6311a; --ok:#178a3a;
+  --b1-bg:var(--yel); --b1-fg:#0c0c10; --b1-tag-bg:#0c0c10; --b1-tag-fg:var(--yel);
+  --b2-bg:var(--cob); --b2-fg:#fff;    --b2-tag-bg:#fff;    --b2-tag-fg:var(--cob);
+  --b3-bg:var(--blk); --b3-fg:#fff;    --b3-tag-bg:#fff;    --b3-tag-fg:#0c0c10;
+  --b0-bg:var(--soft); --b0-fg:#0c0c10; --b0-tag-bg:#0c0c10; --b0-tag-fg:#fff;
+  --duo1:var(--yel); --duo2:var(--cob); --duo-op:1;
+  --pl-bg:#0c0c10; --pl-fg:#fff; --pl-dim:#4a4a56; --pl-mute:#8d8d99; --pl-hi:var(--yel);
+  --font:"Archivo","Helvetica Neue",Arial,system-ui,sans-serif;
+  --mono:"Azeret Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --g:18px; --foot:64px;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #17181B; --surface: #1F2024; --fg: #ECECE8; --muted: #9A9BA3; --line: #2C2D33; --field: #23242A;
-    --accent: #8FA8E8; --ok: #5CC48A; --wait: #E3B341; --bad: #F07167;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -16px rgba(0,0,0,.6);
-  }
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#08080c; --ink:#c9c9d6; --grey:#6a6a7a; --rule:#2a2a36; --soft:#111118; --line2:#22222c;
+  --b1-bg:#15140a; --b1-fg:#d9cb4a; --b1-tag-bg:#d9cb4a; --b1-tag-fg:#15140a;
+  --b2-bg:#0b0f2e; --b2-fg:#9fb0ff; --b2-tag-bg:#9fb0ff; --b2-tag-fg:#0b0f2e;
+  --b3-bg:#101016; --b3-fg:#b9b9c6; --b3-tag-bg:#b9b9c6; --b3-tag-fg:#101016;
+  --b0-bg:#111118; --b0-fg:#b9b9c6; --b0-tag-bg:#b9b9c6; --b0-tag-fg:#111118;
+  --duo1:#3a3510; --duo2:#1a2a80; --duo-op:.85;
+  --pl-bg:#06060a; --pl-fg:#c9c9d6; --pl-dim:#1b1b24; --pl-mute:#5c5c6b; --pl-hi:#c9c9d6;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#08080c; --ink:#c9c9d6; --grey:#6a6a7a; --rule:#2a2a36; --soft:#111118; --line2:#22222c;
+  --b1-bg:#15140a; --b1-fg:#d9cb4a; --b1-tag-bg:#d9cb4a; --b1-tag-fg:#15140a;
+  --b2-bg:#0b0f2e; --b2-fg:#9fb0ff; --b2-tag-bg:#9fb0ff; --b2-tag-fg:#0b0f2e;
+  --b3-bg:#101016; --b3-fg:#b9b9c6; --b3-tag-bg:#b9b9c6; --b3-tag-fg:#101016;
+  --b0-bg:#111118; --b0-fg:#b9b9c6; --b0-tag-bg:#b9b9c6; --b0-tag-fg:#111118;
+  --duo1:#3a3510; --duo2:#1a2a80; --duo-op:.85;
+  --pl-bg:#06060a; --pl-fg:#c9c9d6; --pl-dim:#1b1b24; --pl-mute:#5c5c6b; --pl-hi:#c9c9d6;
+  color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;background:var(--paper)}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.3 var(--font);-webkit-font-smoothing:antialiased;
+  padding-bottom:calc(var(--foot) + env(safe-area-inset-bottom,0px));overflow-x:hidden}
+body.mini-on{padding-bottom:calc(var(--foot) + 58px + env(safe-area-inset-bottom,0px))}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left;-webkit-tap-highlight-color:transparent}
+a{color:inherit}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:0}
+:focus-visible{outline:3px solid var(--cob);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- Home ---------- */
+.date{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 18px) var(--g) 6px;border-bottom:4px solid var(--rule)}
+.date .d{font-size:84px;line-height:.82;font-weight:900;font-stretch:125%;letter-spacing:-.04em}
+.date .m{font-size:12px;line-height:1.35;text-align:right;text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-bottom:4px}
+.date .m button{display:inline;text-transform:none;letter-spacing:0;font-weight:400;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+.cont{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:12px var(--g);border-bottom:4px solid var(--rule);position:relative}
+.cont .k{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);line-height:1}
+.cont .t{min-width:0}
+.cont .t b{display:block;font-weight:800;font-size:17px;line-height:1.08;letter-spacing:-.02em;font-stretch:112%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cont .t span{display:block;font-size:12px;color:var(--grey);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cont .go{width:48px;height:48px;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;font-size:18px}
+.cont .bar{position:absolute;left:var(--g);bottom:-4px;height:4px;background:var(--yel);width:0}
+.bands{display:flex;flex-direction:column}
+.band{padding:14px var(--g) 18px;background:var(--bg);color:var(--fg)}
+.band.c1{--bg:var(--b1-bg);--fg:var(--b1-fg);--tb:var(--b1-tag-bg);--tf:var(--b1-tag-fg);--duo:var(--duo1);--blend:multiply}
+.band.c2{--bg:var(--b2-bg);--fg:var(--b2-fg);--tb:var(--b2-tag-bg);--tf:var(--b2-tag-fg);--duo:var(--duo2);--blend:screen}
+.band.c3{--bg:var(--b3-bg);--fg:var(--b3-fg);--tb:var(--b3-tag-bg);--tf:var(--b3-tag-fg);--duo:transparent;--blend:normal}
+.band.c0{--bg:var(--b0-bg);--fg:var(--b0-fg);--tb:var(--b0-tag-bg);--tf:var(--b0-tag-fg);--duo:transparent;--blend:normal}
+.band .hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;width:100%}
+.band .hd h2{margin:0;font-size:46px;line-height:.9;font-weight:900;font-stretch:125%;letter-spacing:-.035em;text-transform:uppercase;white-space:nowrap;overflow:hidden;min-width:0;flex:1}
+.band .hd .tm{font-size:12px;font-weight:600;white-space:nowrap}
+.band ul{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}
+.band li>button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;font-size:14px;line-height:1.2;align-items:baseline;border-top:2px solid currentColor;padding-top:7px;width:100%;min-height:44px}
+.band li b{font-weight:700}
+.band li .src{opacity:.85}
+.band li .n{font-size:12px;font-weight:600}
+.band .empty{margin:10px 0 0;font-size:14px;border-top:2px solid currentColor;padding-top:8px;opacity:.85}
+.band .empty button{text-decoration:underline;text-underline-offset:3px;font-weight:700}
+.nw{display:inline-block;background:var(--tb,var(--ink));color:var(--tf,var(--paper));padding:0 5px;font-size:10px;font-weight:800;letter-spacing:.1em;margin-right:6px;vertical-align:1px;font-family:var(--font)}
+.pr{display:block;height:3px;margin-top:5px;background:color-mix(in srgb,currentColor 25%,transparent);position:relative}
+.pr i{position:absolute;left:0;top:0;bottom:0;background:currentColor}
+.addsec{display:flex;justify-content:space-between;align-items:center;width:100%;padding:16px var(--g);border-top:4px solid var(--rule);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.addsec span.mono{text-transform:none;letter-spacing:0;font-weight:400;color:var(--grey)}
+.note{margin:0;padding:12px var(--g);font-size:13px;border-bottom:2px solid var(--rule);background:var(--soft)}
+@media (min-width:900px){
+  .bands{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .band{min-height:340px}
+  .band .hd h2{font-size:58px}
 }
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #17181B; --surface: #1F2024; --fg: #ECECE8; --muted: #9A9BA3; --line: #2C2D33; --field: #23242A;
-  --accent: #8FA8E8; --ok: #5CC48A; --wait: #E3B341; --bad: #F07167;
-  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -16px rgba(0,0,0,.6);
-}
-@media (min-width: 720px) { :root { --gutter: 44px; } }
 
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; }
-body {
-  margin: 0; background: var(--bg); color: var(--fg);
-  font-family: var(--font-ui); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased;
-  padding-inline: max(var(--gutter), env(safe-area-inset-left, 0px)) max(var(--gutter), env(safe-area-inset-right, 0px));
-  padding-block: max(22px, env(safe-area-inset-top, 0px)) max(28px, env(safe-area-inset-bottom, 0px));
-  min-height: 100vh;
-}
-.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
-button, input { font: inherit; color: inherit; }
-button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-img { max-width: 100%; }
+/* ---------- Foot ---------- */
+.foot{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:4px solid var(--rule);background:var(--paper);padding-bottom:env(safe-area-inset-bottom,0px)}
+.foot button{padding:10px var(--g) 12px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-left:2px solid var(--rule);min-height:var(--foot)}
+.foot button:first-child{border-left:0}
+.foot small{display:block;font-weight:400;letter-spacing:0;text-transform:none;color:var(--grey);margin-top:2px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:0;background:var(--grey)}
+.dot.good{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.wait{background:#c99a00}
 
-/* header */
-.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
-.brand { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 30px; letter-spacing: -0.01em; line-height: 1; }
-.brand em { color: var(--muted); font-style: italic; font-size: .82em; }
-.status { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 6px 4px; font-size: 13px; color: var(--muted); border-radius: 8px; }
-.status:hover { color: var(--fg); }
-.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
-.dot.good { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
-.dot.wait { background: var(--wait); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wait) 18%, transparent); }
-.dot.bad { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 22%, transparent); }
-.dot.pulse { animation: pulse .7s ease-out; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
-.status-text { white-space: nowrap; }
+/* ---------- Mini player (audio keeps going while you browse) ---------- */
+.mini{position:fixed;left:0;right:0;bottom:calc(var(--foot) + 4px + env(safe-area-inset-bottom,0px));z-index:29;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;background:var(--pl-bg);color:var(--pl-fg);border-top:4px solid var(--rule)}
+.mini>button{padding:9px var(--g);min-height:54px;min-width:0}
+.mini .mt{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.mini .ms{font-size:12px;color:var(--pl-mute)}
+.mini .mp{width:58px;height:54px;display:flex;align-items:center;justify-content:center;font-size:20px;border-left:3px solid var(--pl-dim)}
 
-/* paste field */
-.paste { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 8px 8px 20px; border-radius: 16px; background: var(--field); border: 1px dashed color-mix(in srgb, var(--fg) 22%, transparent); transition: border-color .2s ease-out, background-color .2s ease-out; }
-.paste:focus-within { border-style: solid; border-color: var(--accent); background: var(--surface); }
-.paste > svg { width: 20px; height: 20px; flex: none; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.paste input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: 17px; padding: 10px 0; outline: none; }
-.paste input::placeholder { color: var(--muted); opacity: 1; }
-.kbd { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
-.kbd kbd { font: 600 12px var(--font-ui); padding: 2px 7px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); color: var(--fg); }
-.add-btn { flex: none; border: 0; border-radius: 10px; padding: 11px 18px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 14px; transition: transform .18s ease-out; }
-.add-btn:active { transform: scale(.97); }
+/* ---------- Pages (section, channel, pasted, search) ---------- */
+.page{position:fixed;inset:0;z-index:20;background:var(--paper);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--foot) + 20px + env(safe-area-inset-bottom,0px))}
+body.mini-on .page{padding-bottom:calc(var(--foot) + 80px + env(safe-area-inset-bottom,0px))}
+.top{padding:calc(env(safe-area-inset-top,0px) + 14px) var(--g) 12px;background:var(--bg);color:var(--fg);border-bottom:4px solid var(--rule)}
+.top .eyebrow{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;font-weight:600}
+.top .eyebrow button{min-height:40px;padding-right:10px}
+.top h1{margin:6px 0 0;font-size:62px;line-height:.86;font-weight:900;font-stretch:125%;letter-spacing:-.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden}
+.top h1.wrap,.band .hd h2.wrap{white-space:normal;overflow-wrap:anywhere}
+.top p{margin:10px 0 0;font-size:13px;max-width:40ch;font-weight:500}
+.top .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border:3px solid currentColor;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.btn.solid{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.danger{color:var(--bad)}
+.item{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:12px var(--g);border-bottom:3px solid var(--rule);align-items:start;width:100%}
+.item.watched{opacity:.5}
+.th{width:96px;height:96px;position:relative;overflow:hidden;background:var(--soft);display:block}
+.th img{width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.15);display:block}
+.th::after{content:"";position:absolute;inset:0;background:var(--duo,transparent);mix-blend-mode:var(--blend,normal);opacity:var(--duo-op)}
+.item .ch{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
+.item .ch span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .t{font-size:19px;line-height:1.04;font-weight:800;letter-spacing:-.025em;font-stretch:108%;margin-top:6px;overflow-wrap:anywhere}
+.item .meta{font-size:12px;margin-top:8px;color:var(--grey)}
+.item .meta b{color:var(--ink);font-weight:600}
+.item .pr{color:var(--ink);margin-top:8px}
+.sub-h{margin:0;padding:22px var(--g) 8px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-bottom:4px solid var(--rule);display:flex;justify-content:space-between}
+.chrow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:10px var(--g);border-bottom:2px solid var(--line2);min-height:60px}
+.chrow .av{width:44px;height:44px;background:var(--soft);overflow:hidden;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px}
+.chrow .av img{width:100%;height:100%;object-fit:cover;filter:grayscale(1)}
+.chrow b{display:block;font-size:16px;font-weight:800;letter-spacing:-.01em}
+.chrow small{display:block;font-size:12px;color:var(--grey);margin-top:2px}
+.chrow .err{color:var(--bad)}
+.more{display:flex;justify-content:space-between;align-items:center;width:100%;padding:16px var(--g);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-bottom:2px solid var(--line2);min-height:54px}
+.more .mono{text-transform:none;letter-spacing:0;font-weight:400;color:var(--grey)}
+.pnote{margin:0;padding:14px var(--g);font-size:14px;color:var(--grey);border-bottom:2px solid var(--line2)}
+.pnote.err{color:var(--bad)}
+.pnote button{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+/* search */
+.sform{display:grid;grid-template-columns:minmax(0,1fr) auto;border:3px solid currentColor;margin-top:12px;background:var(--paper)}
+.sform input{font:600 18px var(--font);border:0;padding:12px;background:transparent;color:var(--ink);min-width:0;border-radius:0;-webkit-appearance:none}
+.sform input:focus{outline:none}
+.sform input::-webkit-search-cancel-button{display:none}
+.d1{--duo:var(--duo1);--blend:multiply}.d2{--duo:var(--duo2);--blend:screen}
+.sform button{padding:0 16px;background:var(--ink);color:var(--paper);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.item .addch{margin-top:10px}
 
-/* main layout */
-.main { display: grid; gap: 28px; align-items: start; }
-@media (min-width: 980px) { .main { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 44px; } }
+/* ---------- Video player sheet ---------- */
+.sheet{position:fixed;inset:0;z-index:40;background:var(--pl-bg);color:var(--pl-fg);display:flex;flex-direction:column;overflow-y:auto;transform:translateY(100%);visibility:hidden;transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility 0s .28s}
+.sheet.open{transform:none;visibility:visible;transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+@media (prefers-reduced-motion:reduce){.sheet,.sheet.open{transition:none}}
+.sh-top{display:flex;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 6px) var(--g) 6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.sh-top button,.sh-top a{min-height:44px;display:flex;align-items:center;text-decoration:none}
+.vid{position:relative;width:100%;aspect-ratio:16/9;background:#000;flex:none}
+.vid #player,.vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.perr{position:absolute;inset:0;background:var(--pl-bg);color:var(--pl-fg);display:flex;flex-direction:column;justify-content:center;gap:12px;padding:18px;font-size:15px;z-index:2}
+.perr a{color:var(--pl-fg);font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:.06em;border:3px solid currentColor;align-self:flex-start;padding:10px 14px;text-decoration:none}
+.info{padding:16px var(--g) 0}
+.info .ch{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pl-hi)}
+.info h2{margin:6px 0 0;font-size:30px;line-height:.98;font-weight:900;letter-spacing:-.035em;font-stretch:112%;overflow-wrap:anywhere}
+.scrub{margin:18px var(--g) 0;padding:10px 0 0;width:calc(100% - 2*var(--g));display:block}
+.scrub .line{display:block;height:4px;background:var(--pl-dim);position:relative}
+.scrub .line i{position:absolute;left:0;top:0;height:100%;width:0;background:var(--pl-hi)}
+.scrub .nums{display:flex;justify-content:space-between;font-size:12px;margin-top:6px}
+.tmr{margin:22px var(--g) 0;border-top:4px solid var(--pl-fg);padding-top:10px}
+.tmr .lab{display:flex;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.tmr .lab span:first-child{color:var(--pl-hi)}
+.tmr .lab span.mono{font-weight:400;text-transform:none;letter-spacing:0}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);margin-top:10px;border:3px solid var(--pl-fg)}
+.seg button{text-align:center;padding:13px 0;font-size:16px;font-weight:700;border-left:3px solid var(--pl-fg);min-height:48px}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--pl-hi);color:var(--pl-bg)}
+.cd{font-size:64px;line-height:1;font-weight:400;margin-top:12px;letter-spacing:-.02em;min-height:64px}
+.cd small{font-size:12px;display:block;color:var(--pl-mute);letter-spacing:.08em;text-transform:uppercase;font-family:var(--font);font-weight:700;margin-bottom:4px}
+.cd.off{font-size:16px;min-height:0;color:var(--pl-mute);font-family:var(--font)}
+.ctl{margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:3px solid var(--pl-fg);padding-bottom:env(safe-area-inset-bottom,0px)}
+.ctl button{padding:18px 0 22px;text-align:center;font-size:22px;border-left:3px solid var(--pl-fg);min-height:64px;font-family:var(--mono)}
+.ctl button:first-child{border-left:0}
+.ctl button.on{background:var(--pl-fg);color:var(--pl-bg)}
+.spacer{height:22px;flex:none}
 
-/* hero / player */
-.hero { min-width: 0; }
-.screen { position: relative; aspect-ratio: 16 / 9; width: 100%; border-radius: 14px; overflow: hidden; background: #0E0F12; box-shadow: var(--shadow); }
-.screen iframe, .screen #player { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-.poster { position: absolute; inset: 0; border: 0; padding: 0; background: #0E0F12; display: block; width: 100%; z-index: 2; }
-.poster img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease-out, filter .3s ease-out; }
-.poster::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,.4)); pointer-events: none; }
-.poster:hover img { transform: scale(1.015); filter: brightness(1.04); }
-.play-ic { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,.92); display: grid; place-items: center; z-index: 3; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); transition: transform .2s ease-out; }
-.play-ic::after { content: ""; border-left: 22px solid #1C1D1F; border-top: 13px solid transparent; border-bottom: 13px solid transparent; margin-left: 5px; }
-.poster:hover .play-ic { transform: translate(-50%, -50%) scale(1.06); }
-.chip { position: absolute; left: 16px; bottom: 14px; z-index: 3; color: #fff; font-size: 13px; font-weight: 500; background: rgba(0,0,0,.45); padding: 5px 10px; border-radius: 8px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.chip b, .meta b, .left b, .row-sub { font-variant-numeric: tabular-nums; }
-.hero > .bar { margin: 14px 2px 0; }
-.bar { display: block; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .22s ease-out; }
-.hero-title { font-family: var(--font-display); font-weight: 400; font-size: clamp(25px, 3.2vw, 32px); line-height: 1.1; margin: 16px 0 6px; letter-spacing: -0.01em; text-wrap: balance; overflow-wrap: anywhere; }
-.meta { margin: 0; color: var(--muted); font-size: 14px; }
-.meta b { color: var(--fg); font-weight: 500; }
-.hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 18px; }
-.resume { display: inline-flex; align-items: center; gap: 10px; border: 0; padding: 11px 18px 11px 15px; border-radius: 10px; background: var(--fg); color: var(--bg); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; transition: transform .18s ease-out; }
-.resume:active { transform: scale(.97); }
-.resume i { border-left: 9px solid currentColor; border-top: 6px solid transparent; border-bottom: 6px solid transparent; }
-.quiet { border: 0; background: none; padding: 8px 2px; color: var(--muted); font-size: 13.5px; text-decoration: none; }
-.quiet:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
-.only-playing { display: none; }
-body.playing .only-playing { display: inline-flex; }
-body.playing .not-playing { display: none; }
-.player-error { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--bad) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
-.player-error[hidden] { display: none; }
-.player-error a { color: var(--accent); font-weight: 600; }
+/* ---------- Night player (podcasts): lights down, no yellow ---------- */
+.night{--n-bg:#06060a;--n-fg:#8d8d99;--n-hi:#c9c9d6;--n-dim:#4d4d5e;--n-rule:#22222c;background:var(--n-bg);color:var(--n-fg)}
+.night .sh-top{color:var(--n-dim)}
+.night .nb{display:flex;flex-direction:column;padding:28px var(--g) 0;flex:1}
+.night .art{width:96px;height:96px;object-fit:cover;filter:grayscale(1) brightness(.6);margin-bottom:16px;background:var(--n-rule)}
+.night .ch{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--n-dim)}
+.night h2{margin:10px 0 0;font-size:40px;line-height:.92;font-weight:900;letter-spacing:-.04em;font-stretch:118%;color:#b9b9c6;overflow-wrap:anywhere}
+.night .ep{font-size:13px;margin-top:10px;color:#5c5c6b}
+.night .msg{font-size:14px;margin-top:10px;color:#c9a0a0}
+.night .ncd{font-size:112px;line-height:.9;letter-spacing:-.04em;color:var(--n-hi);margin-top:28px}
+.night .ncd small{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--font);font-weight:700;color:var(--n-dim);margin-bottom:10px}
+.night .ncd.off{font-size:18px;color:var(--n-dim);font-family:var(--font)}
+.night .seg{border:2px solid var(--n-rule);margin-top:22px}
+.night .seg button{border-left:2px solid var(--n-rule);color:var(--n-dim);font-size:15px}
+.night .seg button:first-child{border-left:0}
+.night .seg button[aria-pressed="true"]{background:var(--n-rule);color:var(--n-hi)}
+.night .scrub{margin:28px 0 0;width:100%}
+.night .scrub .line{height:2px;background:#1b1b24}
+.night .scrub .line i{background:var(--cob)}
+.night .scrub .nums{color:var(--n-dim)}
+.night .nctl{display:grid;grid-template-columns:1fr 1fr 1fr;margin:22px 0 0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 18px)}
+.night .nctl button{font-size:26px;color:var(--n-fg);min-height:64px;text-align:center;font-family:var(--mono)}
+.night .rate{font-size:12px;color:var(--n-dim);text-align:center;min-height:40px;width:100%}
 
-/* empty and caught up */
-.empty { border: 1px dashed var(--line); border-radius: 14px; padding: 36px 28px; }
-.empty h2 { font-family: var(--font-display); font-weight: 400; font-size: 30px; line-height: 1.1; margin: 0 0 10px; }
-.empty p { margin: 0; color: var(--muted); max-width: 46ch; }
-.empty ol { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s; }
-.empty li { display: flex; gap: 12px; align-items: baseline; counter-increment: s; }
-.empty li::before { content: counter(s); font-family: var(--font-display); font-size: 20px; color: var(--accent); width: 14px; flex: none; }
+/* ---------- Dialogs ---------- */
+dialog{border:4px solid var(--rule);padding:0;background:var(--paper);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100% - 40px);border-radius:0}
+dialog::backdrop{background:rgba(6,6,10,.55)}
+.dh{display:flex;justify-content:space-between;align-items:center;padding:12px var(--g);background:var(--ink);color:var(--paper)}
+.dh h2{margin:0;font-size:22px;font-weight:900;font-stretch:118%;letter-spacing:-.02em;text-transform:uppercase}
+.dh button{min-height:40px;min-width:40px;font-size:20px;text-align:right}
+.db{padding:14px var(--g) 18px;display:flex;flex-direction:column;gap:12px}
+.db p{margin:0;font-size:14px;line-height:1.4}
+.db label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.field{font:600 17px var(--font);border:3px solid var(--rule);padding:11px 12px;background:var(--paper);color:var(--ink);width:100%;border-radius:0;-webkit-appearance:none}
+.picks{display:flex;flex-wrap:wrap;gap:0;border:3px solid var(--rule)}
+.picks button{flex:1 1 auto;padding:11px 12px;font-weight:700;font-size:14px;border-left:3px solid var(--rule);text-align:center;min-height:44px}
+.picks button:first-child{border-left:0}
+.picks button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.row2{display:flex;flex-wrap:wrap;gap:8px}
+.msgline{font-size:14px;min-height:1.3em}
+.msgline.err{color:var(--bad)} .msgline.ok{color:var(--ok)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.checks li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;padding:9px 0;border-top:2px solid var(--line2);font-size:14px;line-height:1.35}
+.checks li:first-child{border-top:0}
+.checks .ic{font-weight:900;font-family:var(--mono)}
+.checks .ok .ic{color:var(--ok)} .checks .bad .ic{color:var(--bad)} .checks .wait .ic{color:#c99a00}
+.small{font-size:12px;color:var(--grey)}
 
-/* lists */
-.side { min-width: 0; display: flex; flex-direction: column; gap: 30px; }
-.side:empty { display: none; }
-.h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 6px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.h span { font-weight: 500; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-.list { list-style: none; margin: 0; padding: 0; }
-.row { position: relative; display: flex; align-items: center; border-top: 1px solid var(--line); }
-.row:first-child { border-top: 0; }
-.row.fresh { animation: slidein .32s ease-out; }
-@keyframes slidein { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
-.row-main { flex: 1; min-width: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 0; border: 0; background: none; text-align: left; border-radius: 8px; }
-.th { position: relative; width: 92px; aspect-ratio: 16 / 9; border-radius: 7px; overflow: hidden; background: var(--field); display: block; }
-.th img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease-out; }
-.row-main:hover .th img { transform: scale(1.04); }
-.row-text { min-width: 0; display: flex; flex-direction: column; }
-.row-title { font-weight: 500; font-size: 14.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-main:hover .row-title { color: var(--accent); }
-.row-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row .bar { margin-top: 8px; height: 2px; }
-.left { font-size: 12.5px; color: var(--muted); white-space: nowrap; text-align: right; }
-.left b { display: block; color: var(--fg); font-weight: 600; font-size: 14px; }
-.ring { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--muted); display: grid; place-items: center; color: var(--muted); justify-self: end; }
-.ring svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.row-tools { display: flex; gap: 2px; margin-left: 6px; }
-.tool { width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--muted); display: grid; place-items: center; }
-.tool:hover { background: var(--field); color: var(--fg); }
-.tool svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-@media (hover: hover) and (pointer: fine) {
-  .row-tools { position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: var(--bg); padding-left: 8px; box-shadow: -12px 0 12px -4px var(--bg); opacity: 0; pointer-events: none; transition: opacity .15s ease-out; }
-  .row:hover .row-tools, .row:focus-within .row-tools { opacity: 1; pointer-events: auto; }
-}
-.done-list .row { opacity: .72; }
-.done-list .row:hover { opacity: 1; }
-.done-list .th img { filter: saturate(.35); }
-.done-list summary { cursor: pointer; list-style: none; border-radius: 6px; }
-.done-list summary::-webkit-details-marker { display: none; }
-.done-list summary .h { margin: 0; }
-.done-list summary .h::after { content: "Show"; margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; }
-.done-list details[open] summary .h::after { content: "Hide"; }
-.done-list details[open] summary { margin-bottom: 6px; }
-
-/* footer */
-.foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
-.foot-note { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-.send { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-size: 13.5px; font-weight: 600; }
-.send svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.send:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.send:disabled { opacity: .45; cursor: default; }
-
-/* dialogs */
-dialog { border: 0; border-radius: 18px; padding: 26px 26px 20px; background: var(--surface); color: var(--fg); box-shadow: 0 30px 80px -20px rgba(0,0,0,.45); width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; }
-dialog::backdrop { background: rgba(15,16,20,.42); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
-dialog h2 { font-family: var(--font-display); font-weight: 400; font-size: 28px; margin: 0 0 6px; line-height: 1.1; }
-dialog p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
-.checks { list-style: none; margin: 14px 0 18px; padding: 0; display: grid; gap: 10px; }
-.checks li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; line-height: 1.4; }
-.checks .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; margin-top: -1px; }
-.checks .ok .ic { background: var(--ok); }
-.checks .wait .ic { background: var(--wait); }
-.checks .bad .ic { background: var(--bad); }
-.checks .bad { font-weight: 600; }
-.qr { display: grid; place-items: center; background: #fff; border-radius: 14px; padding: 12px; margin: 4px auto 16px; width: min(320px, 100%); border: 1px solid var(--line); }
-.qr svg { width: 100%; height: auto; display: block; }
-.qr-fail { color: #1C1D1F; font-size: 14px; margin: 8px; }
-.copy-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-.copyrow { display: flex; gap: 8px; }
-.copyrow input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--field); border-radius: 10px; padding: 9px 12px; font-size: 13px; color: var(--muted); }
-.btn2 { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; font-weight: 600; font-size: 13.5px; white-space: nowrap; }
-.btn2:hover { border-color: var(--accent); color: var(--accent); }
-.dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-.dlg-actions .resume { padding: 10px 18px; }
-.tip { font-size: 13px; color: var(--muted); margin: 14px 0 0 !important; }
-
-/* toast */
-.toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 16px); opacity: 0; pointer-events: none; z-index: 10;
-  display: flex; align-items: center; gap: 14px; width: max-content; max-width: calc(100vw - 32px); padding: 11px 16px; border-radius: 12px; background: var(--fg); color: var(--bg); font-size: 14px; box-shadow: 0 16px 40px -12px rgba(0,0,0,.4); transition: opacity .2s ease-out, transform .2s ease-out; }
-.toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
-.toast.warn { background: var(--bad); color: #fff; }
-.toast-act { border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
-
-/* phone */
-@media (max-width: 719px) {
-  .brand { font-size: 26px; }
-  .paste { min-height: 56px; padding: 6px 6px 6px 16px; border-radius: 14px; }
-  .paste input { font-size: 16px; }
-  .kbd { display: none; }
-  .screen { border-radius: 12px; }
-  .play-ic { width: 56px; height: 56px; }
-  .play-ic::after { border-left-width: 16px; border-top-width: 10px; border-bottom-width: 10px; }
-  .row-main { grid-template-columns: 76px minmax(0, 1fr) auto; gap: 12px; padding: 11px 0; }
-  .th { width: 76px; }
-  .row-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 14px; }
-  .resume.not-playing { flex: 1 1 100%; justify-content: center; padding-block: 13px; }
-  .empty { padding: 26px 20px; }
-}
-@media (hover: none) { .kbd { display: none; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* ---------- Toast ---------- */
+.toast{position:fixed;left:12px;right:12px;bottom:calc(var(--foot) + 16px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--paper);padding:12px 14px;font-size:14px;font-weight:600;display:flex;gap:12px;justify-content:space-between;align-items:center;transform:translateY(20px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:560px;margin:0 auto}
+body.mini-on .toast{bottom:calc(var(--foot) + 74px + env(safe-area-inset-bottom,0px))}
+.toast.show{opacity:1;transform:none;pointer-events:auto}
+.toast.warn{background:var(--bad);color:#fff}
+.toast button{font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:.06em;text-decoration:underline;flex:none}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <h1 class="brand">Shelf <em id="count"></em></h1>
-    <button id="statusBtn" class="status" data-act="check" type="button"><span id="statusDot" class="dot wait"></span><span id="statusText" class="status-text">Getting ready</span></button>
+<main id="home" aria-label="Today">
+  <header class="date">
+    <div class="d mono-no" id="dayNum" aria-hidden="true">--</div>
+    <div class="m"><span id="dayName"></span><br><span id="monthName"></span><br><button type="button" class="mono" id="summary" data-act="refresh">Loading…</button></div>
   </header>
+  <p class="note" id="webNote" hidden></p>
+  <button type="button" class="cont" id="cont" data-act="resume" hidden>
+    <span class="k">Resume</span>
+    <span class="t"><b id="contTitle"></b><span class="mono" id="contMeta"></span></span>
+    <span class="go" aria-hidden="true">▶</span>
+    <span class="bar" id="contBar"></span>
+  </button>
+  <div class="bands" id="bands"></div>
+  <button type="button" class="addsec" data-act="add-section"><span>+ Add section</span><span class="mono">for a new part of your day</span></button>
+</main>
 
-  <form id="addForm" class="paste" autocomplete="off">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1.2 1.2"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg>
-    <label for="paste" class="sr">YouTube link</label>
-    <input id="paste" type="text" inputmode="url" placeholder="Paste a YouTube link" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go">
-    <span class="kbd" aria-hidden="true"><kbd>⌘</kbd><kbd>V</kbd> works anywhere</span>
-    <button id="addBtn" class="add-btn" type="submit">Paste</button>
-  </form>
+<section class="page" id="page" hidden></section>
 
-  <section id="empty" class="empty">
-    <h2>Your shelf is empty</h2>
-    <p>Put any YouTube video here and it will always pick up where you stopped.</p>
-    <ol>
-      <li>Copy a video's link on YouTube.</li>
-      <li>Come back here and press ⌘V, or tap Paste.</li>
-      <li>Watch. Close the tab whenever you like; your spot is saved every few seconds.</li>
-    </ol>
-    <p id="homeHint" class="tip" hidden>Already using Shelf in Safari? The Home Screen app keeps its own shelf. In Safari, tap Send to Mac, then Copy link, come back here and tap Paste.</p>
-  </section>
-
-  <div class="main">
-    <section id="hero" class="hero" hidden aria-label="Now playing">
-      <div class="screen">
-        <div id="player"></div>
-        <button id="poster" class="poster" type="button" data-act="play-featured">
-          <img id="posterImg" alt="" decoding="async">
-          <span class="play-ic" aria-hidden="true"></span>
-          <span id="chip" class="chip" hidden>Picks up at <b id="chipTime"></b></span>
-        </button>
-      </div>
-      <div id="playerError" class="player-error" role="alert" hidden></div>
-      <span class="bar"><i id="heroBar"></i></span>
-      <h2 id="heroTitle" class="hero-title"></h2>
-      <p id="heroMeta" class="meta"></p>
-      <div class="hero-actions">
-        <button class="resume not-playing" type="button" data-act="play-featured"><i aria-hidden="true"></i><span id="resumeText">Play</span></button>
-        <button class="quiet only-playing" type="button" data-act="close">Close player</button>
-        <button class="quiet" type="button" data-act="done-featured">Mark finished</button>
-        <a id="heroYouTube" class="quiet" href="https://www.youtube.com/" target="_blank" rel="noopener">Open on YouTube</a>
-      </div>
-    </section>
-
-    <section id="caught" class="empty" hidden>
-      <h2>All caught up</h2>
-      <p>Everything on your shelf is finished. Paste a new link to start another.</p>
-    </section>
-
-    <div class="side">
-      <section id="watchingWrap" hidden>
-        <h2 class="h">Continue watching <span id="watchingSum"></span></h2>
-        <ul id="watching" class="list"></ul>
-      </section>
-      <section id="finishedWrap" class="done-list" hidden>
-        <details>
-          <summary><h2 class="h">Finished · <span id="finishedCount"></span></h2></summary>
-          <ul id="finished" class="list"></ul>
-        </details>
-      </section>
-    </div>
-  </div>
-
-  <footer class="foot">
-    <span class="foot-note"><span id="saveWhere">Saved in this browser</span><span id="lastSaved"></span></span>
-    <button id="sendBtn" class="send" type="button" data-act="send" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span id="sendLabel">Send to iPhone</span></button>
-  </footer>
+<div class="mini" id="mini" hidden>
+  <button type="button" data-act="open-night"><span class="mt" id="miniTitle"></span><span class="ms mono" id="miniSub"></span></button>
+  <button type="button" class="mp" id="miniPlay" data-act="audio-toggle" aria-label="Pause">❚❚</button>
 </div>
 
+<nav class="foot" aria-label="Shelf">
+  <button type="button" id="pasteBtn" data-act="paste">Paste<small>a YouTube link</small></button>
+  <button type="button" id="searchBtn" data-act="search">Search<small>YouTube, plain</small></button>
+  <button type="button" id="statusBtn" data-act="check"><span><span class="dot wait" id="statusDot"></span><span id="statusText">Starting</span></span><small id="statusSub">self-check</small></button>
+</nav>
+
+<!-- Video player -->
+<section class="sheet" id="vsheet" aria-label="Video player" aria-hidden="true">
+  <div class="sh-top"><button type="button" data-act="close-video" aria-label="Close player">↓ Close</button><a id="ytLink" href="#" target="_blank" rel="noopener">YouTube ↗</a></div>
+  <div class="vid"><div id="player"></div><div class="perr" id="perr" hidden></div></div>
+  <div class="info"><div class="ch" id="vCh"></div><h2 id="vTitle"></h2></div>
+  <button type="button" class="scrub" id="vScrub" aria-label="Seek"><span class="line"><i id="vLine"></i></span><span class="nums mono"><span id="vT">0:00</span><span id="vLeft"></span></span></button>
+  <div class="tmr">
+    <div class="lab"><span>Sleep timer</span><span class="mono" id="vStops"></span></div>
+    <div class="seg" id="vSeg" role="group" aria-label="Sleep timer"></div>
+    <div class="cd mono off" id="vCd">Off. Tap a number to stop the video after that many minutes.</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="ctl"><button type="button" data-act="v-back" aria-label="Back 15 seconds">−15</button><button type="button" id="vPlay" data-act="v-toggle" aria-label="Pause" class="on">❚❚</button><button type="button" data-act="v-fwd" aria-label="Forward 15 seconds">+15</button></div>
+</section>
+
+<!-- Night player (podcasts) -->
+<section class="sheet night" id="nsheet" aria-label="Sleep player" aria-hidden="true">
+  <div class="sh-top"><button type="button" data-act="close-night" aria-label="Close player, keep playing">↓ Keep playing</button><span id="nLock">Plays on the lock screen</span></div>
+  <div class="nb">
+    <img class="art" id="nArt" alt="" hidden>
+    <div class="ch" id="nCh"></div>
+    <h2 id="nTitle"></h2>
+    <div class="ep mono" id="nEp"></div>
+    <div class="msg" id="nMsg" hidden></div>
+    <div class="ncd mono off" id="nCd">No sleep timer</div>
+    <div class="seg" id="nSeg" role="group" aria-label="Sleep timer"></div>
+    <button type="button" class="scrub" id="nScrub" aria-label="Seek"><span class="line"><i id="nLine"></i></span><span class="nums mono"><span id="nT">0:00</span><span id="nLeft"></span></span></button>
+    <div class="nctl"><button type="button" data-act="a-back" aria-label="Back 15 seconds">−15</button><button type="button" id="nPlay" data-act="audio-toggle" aria-label="Pause">❚❚</button><button type="button" data-act="a-fwd" aria-label="Forward 30 seconds">+30</button></div>
+    <button type="button" class="rate mono" id="nRate" data-act="a-rate">Speed 1×</button>
+  </div>
+</section>
+
+<audio id="audio" preload="metadata" playsinline></audio>
+
+<dialog id="addDlg" aria-labelledby="addH">
+  <div class="dh"><h2 id="addH">Add a channel</h2><button type="button" data-act="dismiss" aria-label="Close">×</button></div>
+  <form class="db" id="addForm">
+    <p>Paste a YouTube channel link, an @handle, a video from the channel, or a podcast's feed link. A name works too.</p>
+    <input class="field" id="addInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="youtube.com/@DirtyMedicine">
+    <label>Put it in</label>
+    <div class="picks" id="addPicks" role="group" aria-label="Section"></div>
+    <div class="msgline" id="addMsg" role="status"></div>
+    <div class="row2"><button type="submit" class="btn solid" id="addGo">Add</button><button type="button" class="btn" id="addPaste" data-act="add-paste">Paste</button></div>
+  </form>
+</dialog>
+
+<dialog id="secDlg" aria-labelledby="secH">
+  <div class="dh"><h2 id="secH">Section</h2><button type="button" data-act="dismiss" aria-label="Close">×</button></div>
+  <form class="db" id="secForm">
+    <label for="secName">Name</label>
+    <input class="field" id="secName" type="text" autocomplete="off" maxlength="24">
+    <label>Names you type here look up</label>
+    <div class="picks" id="secKind" role="group" aria-label="Kind"><button type="button" data-kind="video" aria-pressed="true">YouTube channels</button><button type="button" data-kind="audio" aria-pressed="false">Podcasts</button></div>
+    <div class="msgline" id="secMsg" role="status"></div>
+    <div class="row2" id="secActs"><button type="submit" class="btn solid">Save</button></div>
+    <div class="row2" id="secMore"><button type="button" class="btn" data-act="sec-up">Move up</button><button type="button" class="btn" data-act="sec-down">Move down</button><button type="button" class="btn danger" data-act="sec-delete" id="secDel">Delete section</button></div>
+  </form>
+</dialog>
+
+<dialog id="pasteDlg" aria-labelledby="pasteH">
+  <div class="dh"><h2 id="pasteH">Paste a link</h2><button type="button" data-act="dismiss" aria-label="Close">×</button></div>
+  <form class="db" id="pasteForm">
+    <p id="pasteIntro">Tap the box, then tap Paste. A YouTube video plays straight away; a channel link opens Add channel.</p>
+    <input class="field" id="pasteInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtu.be/…">
+    <div class="row2"><button type="submit" class="btn solid">Go</button></div>
+  </form>
+</dialog>
+
 <dialog id="checkDlg" aria-labelledby="checkH">
-  <h2 id="checkH">Self-check</h2>
-  <p>What's working, in plain words.</p>
-  <ul id="checkList" class="checks"></ul>
-  <div class="dlg-actions"><button id="toneBtn" class="btn2" type="button" data-act="tone" hidden>Test lock-screen sound</button><button class="resume" type="button" data-act="dismiss" autofocus>Close</button></div>
+  <div class="dh"><h2 id="checkH">Self-check</h2><button type="button" data-act="dismiss" aria-label="Close">×</button></div>
+  <div class="db">
+    <ul class="checks" id="checkList"></ul>
+    <div class="row2">
+      <button type="button" class="btn" id="toneBtn" data-act="tone" hidden>Test lock-screen sound</button>
+      <button type="button" class="btn" data-act="settings">Search key</button>
+      <button type="button" class="btn" data-act="send" id="sendBtn">Copy shelf link</button>
+    </div>
+    <p class="small" id="sendNote">The shelf link carries your spots to Safari on another device. Your private feeds never go in it.</p>
+  </div>
 </dialog>
 
-<dialog id="sendDlg" aria-labelledby="sendH">
-  <h2 id="sendH">Send to iPhone</h2>
-  <p id="sendIntro">Point your iPhone camera at the code and tap the link. Your shelf opens there with the same spots.</p>
-  <div id="qr" class="qr"></div>
-  <p id="qrNote" class="tip" hidden></p>
-  <label id="copyLabel" for="sendLink" class="copy-label">Or copy the link and send it to yourself</label>
-  <div class="copyrow"><input id="sendLink" readonly><button class="btn2" type="button" data-act="copy">Copy link</button></div>
-  <p id="sendTip" class="tip">Using Shelf from your iPhone Home Screen? Copy the link on the phone, open Shelf, and tap Paste.</p>
-  <div class="dlg-actions"><button class="resume" type="button" data-act="dismiss" autofocus>Done</button></div>
+<dialog id="keyDlg" aria-labelledby="keyH">
+  <div class="dh"><h2 id="keyH">Search key</h2><button type="button" data-act="dismiss" aria-label="Close">×</button></div>
+  <form class="db" id="keyForm">
+    <p>Optional. Without a key, Shelf reads YouTube's own results page. With a free Google key ("YouTube Data API v3"), search is steadier and allows about 100 searches a day.</p>
+    <input class="field mono" id="keyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…">
+    <div class="msgline" id="keyMsg" role="status"></div>
+    <div class="row2"><button type="submit" class="btn solid">Save</button><button type="button" class="btn" data-act="key-remove">Remove</button></div>
+  </form>
 </dialog>
 
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script>
-var qrcode = function() {
-  //---------------------------------------------------------------------
-  // qrcode
-  //---------------------------------------------------------------------
-  /**
-   * qrcode
-   * @param typeNumber 1 to 40
-   * @param errorCorrectionLevel 'L','M','Q','H'
-   */
-  var qrcode = function(typeNumber, errorCorrectionLevel) {
-    var PAD0 = 0xEC;
-    var PAD1 = 0x11;
-    var _typeNumber = typeNumber;
-    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
-    var _modules = null;
-    var _moduleCount = 0;
-    var _dataCache = null;
-    var _dataList = [];
-    var _this = {};
-    var makeImpl = function(test, maskPattern) {
-      _moduleCount = _typeNumber * 4 + 17;
-      _modules = function(moduleCount) {
-        var modules = new Array(moduleCount);
-        for (var row = 0; row < moduleCount; row += 1) {
-          modules[row] = new Array(moduleCount);
-          for (var col = 0; col < moduleCount; col += 1) {
-            modules[row][col] = null;
-          }
-        }
-        return modules;
-      }(_moduleCount);
-      setupPositionProbePattern(0, 0);
-      setupPositionProbePattern(_moduleCount - 7, 0);
-      setupPositionProbePattern(0, _moduleCount - 7);
-      setupPositionAdjustPattern();
-      setupTimingPattern();
-      setupTypeInfo(test, maskPattern);
-      if (_typeNumber >= 7) {
-        setupTypeNumber(test);
-      }
-      if (_dataCache == null) {
-        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
-      }
-      mapData(_dataCache, maskPattern);
-    };
-    var setupPositionProbePattern = function(row, col) {
-      for (var r = -1; r <= 7; r += 1) {
-        if (row + r <= -1 || _moduleCount <= row + r) continue;
-        for (var c = -1; c <= 7; c += 1) {
-          if (col + c <= -1 || _moduleCount <= col + c) continue;
-          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
-              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
-              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
-            _modules[row + r][col + c] = true;
-          } else {
-            _modules[row + r][col + c] = false;
-          }
-        }
-      }
-    };
-    var getBestMaskPattern = function() {
-      var minLostPoint = 0;
-      var pattern = 0;
-      for (var i = 0; i < 8; i += 1) {
-        makeImpl(true, i);
-        var lostPoint = QRUtil.getLostPoint(_this);
-        if (i == 0 || minLostPoint > lostPoint) {
-          minLostPoint = lostPoint;
-          pattern = i;
-        }
-      }
-      return pattern;
-    };
-    var setupTimingPattern = function() {
-      for (var r = 8; r < _moduleCount - 8; r += 1) {
-        if (_modules[r][6] != null) {
-          continue;
-        }
-        _modules[r][6] = (r % 2 == 0);
-      }
-      for (var c = 8; c < _moduleCount - 8; c += 1) {
-        if (_modules[6][c] != null) {
-          continue;
-        }
-        _modules[6][c] = (c % 2 == 0);
-      }
-    };
-    var setupPositionAdjustPattern = function() {
-      var pos = QRUtil.getPatternPosition(_typeNumber);
-      for (var i = 0; i < pos.length; i += 1) {
-        for (var j = 0; j < pos.length; j += 1) {
-          var row = pos[i];
-          var col = pos[j];
-          if (_modules[row][col] != null) {
-            continue;
-          }
-          for (var r = -2; r <= 2; r += 1) {
-            for (var c = -2; c <= 2; c += 1) {
-              if (r == -2 || r == 2 || c == -2 || c == 2
-                  || (r == 0 && c == 0) ) {
-                _modules[row + r][col + c] = true;
-              } else {
-                _modules[row + r][col + c] = false;
-              }
-            }
-          }
-        }
-      }
-    };
-    var setupTypeNumber = function(test) {
-      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
-      for (var i = 0; i < 18; i += 1) {
-        var mod = (!test && ( (bits >> i) & 1) == 1);
-        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
-      }
-      for (var i = 0; i < 18; i += 1) {
-        var mod = (!test && ( (bits >> i) & 1) == 1);
-        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
-      }
-    };
-    var setupTypeInfo = function(test, maskPattern) {
-      var data = (_errorCorrectionLevel << 3) | maskPattern;
-      var bits = QRUtil.getBCHTypeInfo(data);
-      // vertical
-      for (var i = 0; i < 15; i += 1) {
-        var mod = (!test && ( (bits >> i) & 1) == 1);
-        if (i < 6) {
-          _modules[i][8] = mod;
-        } else if (i < 8) {
-          _modules[i + 1][8] = mod;
-        } else {
-          _modules[_moduleCount - 15 + i][8] = mod;
-        }
-      }
-      // horizontal
-      for (var i = 0; i < 15; i += 1) {
-        var mod = (!test && ( (bits >> i) & 1) == 1);
-        if (i < 8) {
-          _modules[8][_moduleCount - i - 1] = mod;
-        } else if (i < 9) {
-          _modules[8][15 - i - 1 + 1] = mod;
-        } else {
-          _modules[8][15 - i - 1] = mod;
-        }
-      }
-      // fixed module
-      _modules[_moduleCount - 8][8] = (!test);
-    };
-    var mapData = function(data, maskPattern) {
-      var inc = -1;
-      var row = _moduleCount - 1;
-      var bitIndex = 7;
-      var byteIndex = 0;
-      var maskFunc = QRUtil.getMaskFunction(maskPattern);
-      for (var col = _moduleCount - 1; col > 0; col -= 2) {
-        if (col == 6) col -= 1;
-        while (true) {
-          for (var c = 0; c < 2; c += 1) {
-            if (_modules[row][col - c] == null) {
-              var dark = false;
-              if (byteIndex < data.length) {
-                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
-              }
-              var mask = maskFunc(row, col - c);
-              if (mask) {
-                dark = !dark;
-              }
-              _modules[row][col - c] = dark;
-              bitIndex -= 1;
-              if (bitIndex == -1) {
-                byteIndex += 1;
-                bitIndex = 7;
-              }
-            }
-          }
-          row += inc;
-          if (row < 0 || _moduleCount <= row) {
-            row -= inc;
-            inc = -inc;
-            break;
-          }
-        }
-      }
-    };
-    var createBytes = function(buffer, rsBlocks) {
-      var offset = 0;
-      var maxDcCount = 0;
-      var maxEcCount = 0;
-      var dcdata = new Array(rsBlocks.length);
-      var ecdata = new Array(rsBlocks.length);
-      for (var r = 0; r < rsBlocks.length; r += 1) {
-        var dcCount = rsBlocks[r].dataCount;
-        var ecCount = rsBlocks[r].totalCount - dcCount;
-        maxDcCount = Math.max(maxDcCount, dcCount);
-        maxEcCount = Math.max(maxEcCount, ecCount);
-        dcdata[r] = new Array(dcCount);
-        for (var i = 0; i < dcdata[r].length; i += 1) {
-          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
-        }
-        offset += dcCount;
-        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
-        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
-        var modPoly = rawPoly.mod(rsPoly);
-        ecdata[r] = new Array(rsPoly.getLength() - 1);
-        for (var i = 0; i < ecdata[r].length; i += 1) {
-          var modIndex = i + modPoly.getLength() - ecdata[r].length;
-          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
-        }
-      }
-      var totalCodeCount = 0;
-      for (var i = 0; i < rsBlocks.length; i += 1) {
-        totalCodeCount += rsBlocks[i].totalCount;
-      }
-      var data = new Array(totalCodeCount);
-      var index = 0;
-      for (var i = 0; i < maxDcCount; i += 1) {
-        for (var r = 0; r < rsBlocks.length; r += 1) {
-          if (i < dcdata[r].length) {
-            data[index] = dcdata[r][i];
-            index += 1;
-          }
-        }
-      }
-      for (var i = 0; i < maxEcCount; i += 1) {
-        for (var r = 0; r < rsBlocks.length; r += 1) {
-          if (i < ecdata[r].length) {
-            data[index] = ecdata[r][i];
-            index += 1;
-          }
-        }
-      }
-      return data;
-    };
-    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
-      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
-      var buffer = qrBitBuffer();
-      for (var i = 0; i < dataList.length; i += 1) {
-        var data = dataList[i];
-        buffer.put(data.getMode(), 4);
-        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
-        data.write(buffer);
-      }
-      // calc num max data.
-      var totalDataCount = 0;
-      for (var i = 0; i < rsBlocks.length; i += 1) {
-        totalDataCount += rsBlocks[i].dataCount;
-      }
-      if (buffer.getLengthInBits() > totalDataCount * 8) {
-        throw 'code length overflow. ('
-          + buffer.getLengthInBits()
-          + '>'
-          + totalDataCount * 8
-          + ')';
-      }
-      // end code
-      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
-        buffer.put(0, 4);
-      }
-      // padding
-      while (buffer.getLengthInBits() % 8 != 0) {
-        buffer.putBit(false);
-      }
-      // padding
-      while (true) {
-        if (buffer.getLengthInBits() >= totalDataCount * 8) {
-          break;
-        }
-        buffer.put(PAD0, 8);
-        if (buffer.getLengthInBits() >= totalDataCount * 8) {
-          break;
-        }
-        buffer.put(PAD1, 8);
-      }
-      return createBytes(buffer, rsBlocks);
-    };
-    _this.addData = function(data, mode) {
-      mode = mode || 'Byte';
-      var newData = null;
-      switch(mode) {
-      case 'Numeric' :
-        newData = qrNumber(data);
-        break;
-      case 'Alphanumeric' :
-        newData = qrAlphaNum(data);
-        break;
-      case 'Byte' :
-        newData = qr8BitByte(data);
-        break;
-      case 'Kanji' :
-        newData = qrKanji(data);
-        break;
-      default :
-        throw 'mode:' + mode;
-      }
-      _dataList.push(newData);
-      _dataCache = null;
-    };
-    _this.isDark = function(row, col) {
-      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
-        throw row + ',' + col;
-      }
-      return _modules[row][col];
-    };
-    _this.getModuleCount = function() {
-      return _moduleCount;
-    };
-    _this.make = function() {
-      if (_typeNumber < 1) {
-        var typeNumber = 1;
-        for (; typeNumber < 40; typeNumber++) {
-          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
-          var buffer = qrBitBuffer();
-          for (var i = 0; i < _dataList.length; i++) {
-            var data = _dataList[i];
-            buffer.put(data.getMode(), 4);
-            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
-            data.write(buffer);
-          }
-          var totalDataCount = 0;
-          for (var i = 0; i < rsBlocks.length; i++) {
-            totalDataCount += rsBlocks[i].dataCount;
-          }
-          if (buffer.getLengthInBits() <= totalDataCount * 8) {
-            break;
-          }
-        }
-        _typeNumber = typeNumber;
-      }
-      makeImpl(false, getBestMaskPattern() );
-    };
-    _this.createTableTag = function(cellSize, margin) {
-      cellSize = cellSize || 2;
-      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
-      var qrHtml = '';
-      qrHtml += '<table style="';
-      qrHtml += ' border-width: 0px; border-style: none;';
-      qrHtml += ' border-collapse: collapse;';
-      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
-      qrHtml += '">';
-      qrHtml += '<tbody>';
-      for (var r = 0; r < _this.getModuleCount(); r += 1) {
-        qrHtml += '<tr>';
-        for (var c = 0; c < _this.getModuleCount(); c += 1) {
-          qrHtml += '<td style="';
-          qrHtml += ' border-width: 0px; border-style: none;';
-          qrHtml += ' border-collapse: collapse;';
-          qrHtml += ' padding: 0px; margin: 0px;';
-          qrHtml += ' width: ' + cellSize + 'px;';
-          qrHtml += ' height: ' + cellSize + 'px;';
-          qrHtml += ' background-color: ';
-          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
-          qrHtml += ';';
-          qrHtml += '"/>';
-        }
-        qrHtml += '</tr>';
-      }
-      qrHtml += '</tbody>';
-      qrHtml += '</table>';
-      return qrHtml;
-    };
-    _this.createSvgTag = function(cellSize, margin, alt, title) {
-      var opts = {};
-      if (typeof arguments[0] == 'object') {
-        // Called by options.
-        opts = arguments[0];
-        // overwrite cellSize and margin.
-        cellSize = opts.cellSize;
-        margin = opts.margin;
-        alt = opts.alt;
-        title = opts.title;
-      }
-      cellSize = cellSize || 2;
-      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
-      // Compose alt property surrogate
-      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
-      alt.text = alt.text || null;
-      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
-      // Compose title property surrogate
-      title = (typeof title === 'string') ? {text: title} : title || {};
-      title.text = title.text || null;
-      title.id = (title.text) ? title.id || 'qrcode-title' : null;
-      var size = _this.getModuleCount() * cellSize + margin * 2;
-      var c, mc, r, mr, qrSvg='', rect;
-      rect = 'l' + cellSize + ',0 0,' + cellSize +
-        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
-      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
-      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
-      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
-      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
-      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
-          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
-      qrSvg += '>';
-      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
-          escapeXml(title.text) + '</title>' : '';
-      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
-          escapeXml(alt.text) + '</description>' : '';
-      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
-      qrSvg += '<path d="';
-      for (r = 0; r < _this.getModuleCount(); r += 1) {
-        mr = r * cellSize + margin;
-        for (c = 0; c < _this.getModuleCount(); c += 1) {
-          if (_this.isDark(r, c) ) {
-            mc = c*cellSize+margin;
-            qrSvg += 'M' + mc + ',' + mr + rect;
-          }
-        }
-      }
-      qrSvg += '" stroke="transparent" fill="black"/>';
-      qrSvg += '</svg>';
-      return qrSvg;
-    };
-    _this.createDataURL = function(cellSize, margin) {
-      cellSize = cellSize || 2;
-      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
-      var size = _this.getModuleCount() * cellSize + margin * 2;
-      var min = margin;
-      var max = size - margin;
-      return createDataURL(size, size, function(x, y) {
-        if (min <= x && x < max && min <= y && y < max) {
-          var c = Math.floor( (x - min) / cellSize);
-          var r = Math.floor( (y - min) / cellSize);
-          return _this.isDark(r, c)? 0 : 1;
-        } else {
-          return 1;
-        }
-      } );
-    };
-    _this.createImgTag = function(cellSize, margin, alt) {
-      cellSize = cellSize || 2;
-      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
-      var size = _this.getModuleCount() * cellSize + margin * 2;
-      var img = '';
-      img += '<img';
-      img += '\u0020src="';
-      img += _this.createDataURL(cellSize, margin);
-      img += '"';
-      img += '\u0020width="';
-      img += size;
-      img += '"';
-      img += '\u0020height="';
-      img += size;
-      img += '"';
-      if (alt) {
-        img += '\u0020alt="';
-        img += escapeXml(alt);
-        img += '"';
-      }
-      img += '/>';
-      return img;
-    };
-    var escapeXml = function(s) {
-      var escaped = '';
-      for (var i = 0; i < s.length; i += 1) {
-        var c = s.charAt(i);
-        switch(c) {
-        case '<': escaped += '&lt;'; break;
-        case '>': escaped += '&gt;'; break;
-        case '&': escaped += '&amp;'; break;
-        case '"': escaped += '&quot;'; break;
-        default : escaped += c; break;
-        }
-      }
-      return escaped;
-    };
-    var _createHalfASCII = function(margin) {
-      var cellSize = 1;
-      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
-      var size = _this.getModuleCount() * cellSize + margin * 2;
-      var min = margin;
-      var max = size - margin;
-      var y, x, r1, r2, p;
-      var blocks = {
-        '██': '█',
-        '█ ': '▀',
-        ' █': '▄',
-        '  ': ' '
-      };
-      var blocksLastLineNoMargin = {
-        '██': '▀',
-        '█ ': '▀',
-        ' █': ' ',
-        '  ': ' '
-      };
-      var ascii = '';
-      for (y = 0; y < size; y += 2) {
-        r1 = Math.floor((y - min) / cellSize);
-        r2 = Math.floor((y + 1 - min) / cellSize);
-        for (x = 0; x < size; x += 1) {
-          p = '█';
-          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
-            p = ' ';
-          }
-          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
-            p += ' ';
-          }
-          else {
-            p += '█';
-          }
-          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
-          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
-        }
-        ascii += '\n';
-      }
-      if (size % 2 && margin > 0) {
-        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
-      }
-      return ascii.substring(0, ascii.length-1);
-    };
-    _this.createASCII = function(cellSize, margin) {
-      cellSize = cellSize || 1;
-      if (cellSize < 2) {
-        return _createHalfASCII(margin);
-      }
-      cellSize -= 1;
-      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
-      var size = _this.getModuleCount() * cellSize + margin * 2;
-      var min = margin;
-      var max = size - margin;
-      var y, x, r, p;
-      var white = Array(cellSize+1).join('██');
-      var black = Array(cellSize+1).join('  ');
-      var ascii = '';
-      var line = '';
-      for (y = 0; y < size; y += 1) {
-        r = Math.floor( (y - min) / cellSize);
-        line = '';
-        for (x = 0; x < size; x += 1) {
-          p = 1;
-          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
-            p = 0;
-          }
-          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
-          line += p ? white : black;
-        }
-        for (r = 0; r < cellSize; r += 1) {
-          ascii += line + '\n';
-        }
-      }
-      return ascii.substring(0, ascii.length-1);
-    };
-    _this.renderTo2dContext = function(context, cellSize) {
-      cellSize = cellSize || 2;
-      var length = _this.getModuleCount();
-      for (var row = 0; row < length; row++) {
-        for (var col = 0; col < length; col++) {
-          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
-          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
-        }
-      }
-    }
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // qrcode.stringToBytes
-  //---------------------------------------------------------------------
-  qrcode.stringToBytesFuncs = {
-    'default' : function(s) {
-      var bytes = [];
-      for (var i = 0; i < s.length; i += 1) {
-        var c = s.charCodeAt(i);
-        bytes.push(c & 0xff);
-      }
-      return bytes;
-    }
-  };
-  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
-  //---------------------------------------------------------------------
-  // qrcode.createStringToBytes
-  //---------------------------------------------------------------------
-  /**
-   * @param unicodeData base64 string of byte array.
-   * [16bit Unicode],[16bit Bytes], ...
-   * @param numChars
-   */
-  qrcode.createStringToBytes = function(unicodeData, numChars) {
-    // create conversion map.
-    var unicodeMap = function() {
-      var bin = base64DecodeInputStream(unicodeData);
-      var read = function() {
-        var b = bin.read();
-        if (b == -1) throw 'eof';
-        return b;
-      };
-      var count = 0;
-      var unicodeMap = {};
-      while (true) {
-        var b0 = bin.read();
-        if (b0 == -1) break;
-        var b1 = read();
-        var b2 = read();
-        var b3 = read();
-        var k = String.fromCharCode( (b0 << 8) | b1);
-        var v = (b2 << 8) | b3;
-        unicodeMap[k] = v;
-        count += 1;
-      }
-      if (count != numChars) {
-        throw count + ' != ' + numChars;
-      }
-      return unicodeMap;
-    }();
-    var unknownChar = '?'.charCodeAt(0);
-    return function(s) {
-      var bytes = [];
-      for (var i = 0; i < s.length; i += 1) {
-        var c = s.charCodeAt(i);
-        if (c < 128) {
-          bytes.push(c);
-        } else {
-          var b = unicodeMap[s.charAt(i)];
-          if (typeof b == 'number') {
-            if ( (b & 0xff) == b) {
-              // 1byte
-              bytes.push(b);
-            } else {
-              // 2bytes
-              bytes.push(b >>> 8);
-              bytes.push(b & 0xff);
-            }
-          } else {
-            bytes.push(unknownChar);
-          }
-        }
-      }
-      return bytes;
-    };
-  };
-  //---------------------------------------------------------------------
-  // QRMode
-  //---------------------------------------------------------------------
-  var QRMode = {
-    MODE_NUMBER :    1 << 0,
-    MODE_ALPHA_NUM : 1 << 1,
-    MODE_8BIT_BYTE : 1 << 2,
-    MODE_KANJI :     1 << 3
-  };
-  //---------------------------------------------------------------------
-  // QRErrorCorrectionLevel
-  //---------------------------------------------------------------------
-  var QRErrorCorrectionLevel = {
-    L : 1,
-    M : 0,
-    Q : 3,
-    H : 2
-  };
-  //---------------------------------------------------------------------
-  // QRMaskPattern
-  //---------------------------------------------------------------------
-  var QRMaskPattern = {
-    PATTERN000 : 0,
-    PATTERN001 : 1,
-    PATTERN010 : 2,
-    PATTERN011 : 3,
-    PATTERN100 : 4,
-    PATTERN101 : 5,
-    PATTERN110 : 6,
-    PATTERN111 : 7
-  };
-  //---------------------------------------------------------------------
-  // QRUtil
-  //---------------------------------------------------------------------
-  var QRUtil = function() {
-    var PATTERN_POSITION_TABLE = [
-      [],
-      [6, 18],
-      [6, 22],
-      [6, 26],
-      [6, 30],
-      [6, 34],
-      [6, 22, 38],
-      [6, 24, 42],
-      [6, 26, 46],
-      [6, 28, 50],
-      [6, 30, 54],
-      [6, 32, 58],
-      [6, 34, 62],
-      [6, 26, 46, 66],
-      [6, 26, 48, 70],
-      [6, 26, 50, 74],
-      [6, 30, 54, 78],
-      [6, 30, 56, 82],
-      [6, 30, 58, 86],
-      [6, 34, 62, 90],
-      [6, 28, 50, 72, 94],
-      [6, 26, 50, 74, 98],
-      [6, 30, 54, 78, 102],
-      [6, 28, 54, 80, 106],
-      [6, 32, 58, 84, 110],
-      [6, 30, 58, 86, 114],
-      [6, 34, 62, 90, 118],
-      [6, 26, 50, 74, 98, 122],
-      [6, 30, 54, 78, 102, 126],
-      [6, 26, 52, 78, 104, 130],
-      [6, 30, 56, 82, 108, 134],
-      [6, 34, 60, 86, 112, 138],
-      [6, 30, 58, 86, 114, 142],
-      [6, 34, 62, 90, 118, 146],
-      [6, 30, 54, 78, 102, 126, 150],
-      [6, 24, 50, 76, 102, 128, 154],
-      [6, 28, 54, 80, 106, 132, 158],
-      [6, 32, 58, 84, 110, 136, 162],
-      [6, 26, 54, 82, 110, 138, 166],
-      [6, 30, 58, 86, 114, 142, 170]
-    ];
-    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
-    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
-    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
-    var _this = {};
-    var getBCHDigit = function(data) {
-      var digit = 0;
-      while (data != 0) {
-        digit += 1;
-        data >>>= 1;
-      }
-      return digit;
-    };
-    _this.getBCHTypeInfo = function(data) {
-      var d = data << 10;
-      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
-        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
-      }
-      return ( (data << 10) | d) ^ G15_MASK;
-    };
-    _this.getBCHTypeNumber = function(data) {
-      var d = data << 12;
-      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
-        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
-      }
-      return (data << 12) | d;
-    };
-    _this.getPatternPosition = function(typeNumber) {
-      return PATTERN_POSITION_TABLE[typeNumber - 1];
-    };
-    _this.getMaskFunction = function(maskPattern) {
-      switch (maskPattern) {
-      case QRMaskPattern.PATTERN000 :
-        return function(i, j) { return (i + j) % 2 == 0; };
-      case QRMaskPattern.PATTERN001 :
-        return function(i, j) { return i % 2 == 0; };
-      case QRMaskPattern.PATTERN010 :
-        return function(i, j) { return j % 3 == 0; };
-      case QRMaskPattern.PATTERN011 :
-        return function(i, j) { return (i + j) % 3 == 0; };
-      case QRMaskPattern.PATTERN100 :
-        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
-      case QRMaskPattern.PATTERN101 :
-        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
-      case QRMaskPattern.PATTERN110 :
-        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
-      case QRMaskPattern.PATTERN111 :
-        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
-      default :
-        throw 'bad maskPattern:' + maskPattern;
-      }
-    };
-    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
-      var a = qrPolynomial([1], 0);
-      for (var i = 0; i < errorCorrectLength; i += 1) {
-        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
-      }
-      return a;
-    };
-    _this.getLengthInBits = function(mode, type) {
-      if (1 <= type && type < 10) {
-        // 1 - 9
-        switch(mode) {
-        case QRMode.MODE_NUMBER    : return 10;
-        case QRMode.MODE_ALPHA_NUM : return 9;
-        case QRMode.MODE_8BIT_BYTE : return 8;
-        case QRMode.MODE_KANJI     : return 8;
-        default :
-          throw 'mode:' + mode;
-        }
-      } else if (type < 27) {
-        // 10 - 26
-        switch(mode) {
-        case QRMode.MODE_NUMBER    : return 12;
-        case QRMode.MODE_ALPHA_NUM : return 11;
-        case QRMode.MODE_8BIT_BYTE : return 16;
-        case QRMode.MODE_KANJI     : return 10;
-        default :
-          throw 'mode:' + mode;
-        }
-      } else if (type < 41) {
-        // 27 - 40
-        switch(mode) {
-        case QRMode.MODE_NUMBER    : return 14;
-        case QRMode.MODE_ALPHA_NUM : return 13;
-        case QRMode.MODE_8BIT_BYTE : return 16;
-        case QRMode.MODE_KANJI     : return 12;
-        default :
-          throw 'mode:' + mode;
-        }
-      } else {
-        throw 'type:' + type;
-      }
-    };
-    _this.getLostPoint = function(qrcode) {
-      var moduleCount = qrcode.getModuleCount();
-      var lostPoint = 0;
-      // LEVEL1
-      for (var row = 0; row < moduleCount; row += 1) {
-        for (var col = 0; col < moduleCount; col += 1) {
-          var sameCount = 0;
-          var dark = qrcode.isDark(row, col);
-          for (var r = -1; r <= 1; r += 1) {
-            if (row + r < 0 || moduleCount <= row + r) {
-              continue;
-            }
-            for (var c = -1; c <= 1; c += 1) {
-              if (col + c < 0 || moduleCount <= col + c) {
-                continue;
-              }
-              if (r == 0 && c == 0) {
-                continue;
-              }
-              if (dark == qrcode.isDark(row + r, col + c) ) {
-                sameCount += 1;
-              }
-            }
-          }
-          if (sameCount > 5) {
-            lostPoint += (3 + sameCount - 5);
-          }
-        }
-      };
-      // LEVEL2
-      for (var row = 0; row < moduleCount - 1; row += 1) {
-        for (var col = 0; col < moduleCount - 1; col += 1) {
-          var count = 0;
-          if (qrcode.isDark(row, col) ) count += 1;
-          if (qrcode.isDark(row + 1, col) ) count += 1;
-          if (qrcode.isDark(row, col + 1) ) count += 1;
-          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
-          if (count == 0 || count == 4) {
-            lostPoint += 3;
-          }
-        }
-      }
-      // LEVEL3
-      for (var row = 0; row < moduleCount; row += 1) {
-        for (var col = 0; col < moduleCount - 6; col += 1) {
-          if (qrcode.isDark(row, col)
-              && !qrcode.isDark(row, col + 1)
-              &&  qrcode.isDark(row, col + 2)
-              &&  qrcode.isDark(row, col + 3)
-              &&  qrcode.isDark(row, col + 4)
-              && !qrcode.isDark(row, col + 5)
-              &&  qrcode.isDark(row, col + 6) ) {
-            lostPoint += 40;
-          }
-        }
-      }
-      for (var col = 0; col < moduleCount; col += 1) {
-        for (var row = 0; row < moduleCount - 6; row += 1) {
-          if (qrcode.isDark(row, col)
-              && !qrcode.isDark(row + 1, col)
-              &&  qrcode.isDark(row + 2, col)
-              &&  qrcode.isDark(row + 3, col)
-              &&  qrcode.isDark(row + 4, col)
-              && !qrcode.isDark(row + 5, col)
-              &&  qrcode.isDark(row + 6, col) ) {
-            lostPoint += 40;
-          }
-        }
-      }
-      // LEVEL4
-      var darkCount = 0;
-      for (var col = 0; col < moduleCount; col += 1) {
-        for (var row = 0; row < moduleCount; row += 1) {
-          if (qrcode.isDark(row, col) ) {
-            darkCount += 1;
-          }
-        }
-      }
-      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
-      lostPoint += ratio * 10;
-      return lostPoint;
-    };
-    return _this;
-  }();
-  //---------------------------------------------------------------------
-  // QRMath
-  //---------------------------------------------------------------------
-  var QRMath = function() {
-    var EXP_TABLE = new Array(256);
-    var LOG_TABLE = new Array(256);
-    // initialize tables
-    for (var i = 0; i < 8; i += 1) {
-      EXP_TABLE[i] = 1 << i;
-    }
-    for (var i = 8; i < 256; i += 1) {
-      EXP_TABLE[i] = EXP_TABLE[i - 4]
-        ^ EXP_TABLE[i - 5]
-        ^ EXP_TABLE[i - 6]
-        ^ EXP_TABLE[i - 8];
-    }
-    for (var i = 0; i < 255; i += 1) {
-      LOG_TABLE[EXP_TABLE[i] ] = i;
-    }
-    var _this = {};
-    _this.glog = function(n) {
-      if (n < 1) {
-        throw 'glog(' + n + ')';
-      }
-      return LOG_TABLE[n];
-    };
-    _this.gexp = function(n) {
-      while (n < 0) {
-        n += 255;
-      }
-      while (n >= 256) {
-        n -= 255;
-      }
-      return EXP_TABLE[n];
-    };
-    return _this;
-  }();
-  //---------------------------------------------------------------------
-  // qrPolynomial
-  //---------------------------------------------------------------------
-  function qrPolynomial(num, shift) {
-    if (typeof num.length == 'undefined') {
-      throw num.length + '/' + shift;
-    }
-    var _num = function() {
-      var offset = 0;
-      while (offset < num.length && num[offset] == 0) {
-        offset += 1;
-      }
-      var _num = new Array(num.length - offset + shift);
-      for (var i = 0; i < num.length - offset; i += 1) {
-        _num[i] = num[i + offset];
-      }
-      return _num;
-    }();
-    var _this = {};
-    _this.getAt = function(index) {
-      return _num[index];
-    };
-    _this.getLength = function() {
-      return _num.length;
-    };
-    _this.multiply = function(e) {
-      var num = new Array(_this.getLength() + e.getLength() - 1);
-      for (var i = 0; i < _this.getLength(); i += 1) {
-        for (var j = 0; j < e.getLength(); j += 1) {
-          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
-        }
-      }
-      return qrPolynomial(num, 0);
-    };
-    _this.mod = function(e) {
-      if (_this.getLength() - e.getLength() < 0) {
-        return _this;
-      }
-      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
-      var num = new Array(_this.getLength() );
-      for (var i = 0; i < _this.getLength(); i += 1) {
-        num[i] = _this.getAt(i);
-      }
-      for (var i = 0; i < e.getLength(); i += 1) {
-        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
-      }
-      // recursive call
-      return qrPolynomial(num, 0).mod(e);
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // QRRSBlock
-  //---------------------------------------------------------------------
-  var QRRSBlock = function() {
-    var RS_BLOCK_TABLE = [
-      // L
-      // M
-      // Q
-      // H
-      // 1
-      [1, 26, 19],
-      [1, 26, 16],
-      [1, 26, 13],
-      [1, 26, 9],
-      // 2
-      [1, 44, 34],
-      [1, 44, 28],
-      [1, 44, 22],
-      [1, 44, 16],
-      // 3
-      [1, 70, 55],
-      [1, 70, 44],
-      [2, 35, 17],
-      [2, 35, 13],
-      // 4
-      [1, 100, 80],
-      [2, 50, 32],
-      [2, 50, 24],
-      [4, 25, 9],
-      // 5
-      [1, 134, 108],
-      [2, 67, 43],
-      [2, 33, 15, 2, 34, 16],
-      [2, 33, 11, 2, 34, 12],
-      // 6
-      [2, 86, 68],
-      [4, 43, 27],
-      [4, 43, 19],
-      [4, 43, 15],
-      // 7
-      [2, 98, 78],
-      [4, 49, 31],
-      [2, 32, 14, 4, 33, 15],
-      [4, 39, 13, 1, 40, 14],
-      // 8
-      [2, 121, 97],
-      [2, 60, 38, 2, 61, 39],
-      [4, 40, 18, 2, 41, 19],
-      [4, 40, 14, 2, 41, 15],
-      // 9
-      [2, 146, 116],
-      [3, 58, 36, 2, 59, 37],
-      [4, 36, 16, 4, 37, 17],
-      [4, 36, 12, 4, 37, 13],
-      // 10
-      [2, 86, 68, 2, 87, 69],
-      [4, 69, 43, 1, 70, 44],
-      [6, 43, 19, 2, 44, 20],
-      [6, 43, 15, 2, 44, 16],
-      // 11
-      [4, 101, 81],
-      [1, 80, 50, 4, 81, 51],
-      [4, 50, 22, 4, 51, 23],
-      [3, 36, 12, 8, 37, 13],
-      // 12
-      [2, 116, 92, 2, 117, 93],
-      [6, 58, 36, 2, 59, 37],
-      [4, 46, 20, 6, 47, 21],
-      [7, 42, 14, 4, 43, 15],
-      // 13
-      [4, 133, 107],
-      [8, 59, 37, 1, 60, 38],
-      [8, 44, 20, 4, 45, 21],
-      [12, 33, 11, 4, 34, 12],
-      // 14
-      [3, 145, 115, 1, 146, 116],
-      [4, 64, 40, 5, 65, 41],
-      [11, 36, 16, 5, 37, 17],
-      [11, 36, 12, 5, 37, 13],
-      // 15
-      [5, 109, 87, 1, 110, 88],
-      [5, 65, 41, 5, 66, 42],
-      [5, 54, 24, 7, 55, 25],
-      [11, 36, 12, 7, 37, 13],
-      // 16
-      [5, 122, 98, 1, 123, 99],
-      [7, 73, 45, 3, 74, 46],
-      [15, 43, 19, 2, 44, 20],
-      [3, 45, 15, 13, 46, 16],
-      // 17
-      [1, 135, 107, 5, 136, 108],
-      [10, 74, 46, 1, 75, 47],
-      [1, 50, 22, 15, 51, 23],
-      [2, 42, 14, 17, 43, 15],
-      // 18
-      [5, 150, 120, 1, 151, 121],
-      [9, 69, 43, 4, 70, 44],
-      [17, 50, 22, 1, 51, 23],
-      [2, 42, 14, 19, 43, 15],
-      // 19
-      [3, 141, 113, 4, 142, 114],
-      [3, 70, 44, 11, 71, 45],
-      [17, 47, 21, 4, 48, 22],
-      [9, 39, 13, 16, 40, 14],
-      // 20
-      [3, 135, 107, 5, 136, 108],
-      [3, 67, 41, 13, 68, 42],
-      [15, 54, 24, 5, 55, 25],
-      [15, 43, 15, 10, 44, 16],
-      // 21
-      [4, 144, 116, 4, 145, 117],
-      [17, 68, 42],
-      [17, 50, 22, 6, 51, 23],
-      [19, 46, 16, 6, 47, 17],
-      // 22
-      [2, 139, 111, 7, 140, 112],
-      [17, 74, 46],
-      [7, 54, 24, 16, 55, 25],
-      [34, 37, 13],
-      // 23
-      [4, 151, 121, 5, 152, 122],
-      [4, 75, 47, 14, 76, 48],
-      [11, 54, 24, 14, 55, 25],
-      [16, 45, 15, 14, 46, 16],
-      // 24
-      [6, 147, 117, 4, 148, 118],
-      [6, 73, 45, 14, 74, 46],
-      [11, 54, 24, 16, 55, 25],
-      [30, 46, 16, 2, 47, 17],
-      // 25
-      [8, 132, 106, 4, 133, 107],
-      [8, 75, 47, 13, 76, 48],
-      [7, 54, 24, 22, 55, 25],
-      [22, 45, 15, 13, 46, 16],
-      // 26
-      [10, 142, 114, 2, 143, 115],
-      [19, 74, 46, 4, 75, 47],
-      [28, 50, 22, 6, 51, 23],
-      [33, 46, 16, 4, 47, 17],
-      // 27
-      [8, 152, 122, 4, 153, 123],
-      [22, 73, 45, 3, 74, 46],
-      [8, 53, 23, 26, 54, 24],
-      [12, 45, 15, 28, 46, 16],
-      // 28
-      [3, 147, 117, 10, 148, 118],
-      [3, 73, 45, 23, 74, 46],
-      [4, 54, 24, 31, 55, 25],
-      [11, 45, 15, 31, 46, 16],
-      // 29
-      [7, 146, 116, 7, 147, 117],
-      [21, 73, 45, 7, 74, 46],
-      [1, 53, 23, 37, 54, 24],
-      [19, 45, 15, 26, 46, 16],
-      // 30
-      [5, 145, 115, 10, 146, 116],
-      [19, 75, 47, 10, 76, 48],
-      [15, 54, 24, 25, 55, 25],
-      [23, 45, 15, 25, 46, 16],
-      // 31
-      [13, 145, 115, 3, 146, 116],
-      [2, 74, 46, 29, 75, 47],
-      [42, 54, 24, 1, 55, 25],
-      [23, 45, 15, 28, 46, 16],
-      // 32
-      [17, 145, 115],
-      [10, 74, 46, 23, 75, 47],
-      [10, 54, 24, 35, 55, 25],
-      [19, 45, 15, 35, 46, 16],
-      // 33
-      [17, 145, 115, 1, 146, 116],
-      [14, 74, 46, 21, 75, 47],
-      [29, 54, 24, 19, 55, 25],
-      [11, 45, 15, 46, 46, 16],
-      // 34
-      [13, 145, 115, 6, 146, 116],
-      [14, 74, 46, 23, 75, 47],
-      [44, 54, 24, 7, 55, 25],
-      [59, 46, 16, 1, 47, 17],
-      // 35
-      [12, 151, 121, 7, 152, 122],
-      [12, 75, 47, 26, 76, 48],
-      [39, 54, 24, 14, 55, 25],
-      [22, 45, 15, 41, 46, 16],
-      // 36
-      [6, 151, 121, 14, 152, 122],
-      [6, 75, 47, 34, 76, 48],
-      [46, 54, 24, 10, 55, 25],
-      [2, 45, 15, 64, 46, 16],
-      // 37
-      [17, 152, 122, 4, 153, 123],
-      [29, 74, 46, 14, 75, 47],
-      [49, 54, 24, 10, 55, 25],
-      [24, 45, 15, 46, 46, 16],
-      // 38
-      [4, 152, 122, 18, 153, 123],
-      [13, 74, 46, 32, 75, 47],
-      [48, 54, 24, 14, 55, 25],
-      [42, 45, 15, 32, 46, 16],
-      // 39
-      [20, 147, 117, 4, 148, 118],
-      [40, 75, 47, 7, 76, 48],
-      [43, 54, 24, 22, 55, 25],
-      [10, 45, 15, 67, 46, 16],
-      // 40
-      [19, 148, 118, 6, 149, 119],
-      [18, 75, 47, 31, 76, 48],
-      [34, 54, 24, 34, 55, 25],
-      [20, 45, 15, 61, 46, 16]
-    ];
-    var qrRSBlock = function(totalCount, dataCount) {
-      var _this = {};
-      _this.totalCount = totalCount;
-      _this.dataCount = dataCount;
-      return _this;
-    };
-    var _this = {};
-    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
-      switch(errorCorrectionLevel) {
-      case QRErrorCorrectionLevel.L :
-        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
-      case QRErrorCorrectionLevel.M :
-        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
-      case QRErrorCorrectionLevel.Q :
-        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
-      case QRErrorCorrectionLevel.H :
-        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
-      default :
-        return undefined;
-      }
-    };
-    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
-      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
-      if (typeof rsBlock == 'undefined') {
-        throw 'bad rs block @ typeNumber:' + typeNumber +
-            '/errorCorrectionLevel:' + errorCorrectionLevel;
-      }
-      var length = rsBlock.length / 3;
-      var list = [];
-      for (var i = 0; i < length; i += 1) {
-        var count = rsBlock[i * 3 + 0];
-        var totalCount = rsBlock[i * 3 + 1];
-        var dataCount = rsBlock[i * 3 + 2];
-        for (var j = 0; j < count; j += 1) {
-          list.push(qrRSBlock(totalCount, dataCount) );
-        }
-      }
-      return list;
-    };
-    return _this;
-  }();
-  //---------------------------------------------------------------------
-  // qrBitBuffer
-  //---------------------------------------------------------------------
-  var qrBitBuffer = function() {
-    var _buffer = [];
-    var _length = 0;
-    var _this = {};
-    _this.getBuffer = function() {
-      return _buffer;
-    };
-    _this.getAt = function(index) {
-      var bufIndex = Math.floor(index / 8);
-      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
-    };
-    _this.put = function(num, length) {
-      for (var i = 0; i < length; i += 1) {
-        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
-      }
-    };
-    _this.getLengthInBits = function() {
-      return _length;
-    };
-    _this.putBit = function(bit) {
-      var bufIndex = Math.floor(_length / 8);
-      if (_buffer.length <= bufIndex) {
-        _buffer.push(0);
-      }
-      if (bit) {
-        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
-      }
-      _length += 1;
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // qrNumber
-  //---------------------------------------------------------------------
-  var qrNumber = function(data) {
-    var _mode = QRMode.MODE_NUMBER;
-    var _data = data;
-    var _this = {};
-    _this.getMode = function() {
-      return _mode;
-    };
-    _this.getLength = function(buffer) {
-      return _data.length;
-    };
-    _this.write = function(buffer) {
-      var data = _data;
-      var i = 0;
-      while (i + 2 < data.length) {
-        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
-        i += 3;
-      }
-      if (i < data.length) {
-        if (data.length - i == 1) {
-          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
-        } else if (data.length - i == 2) {
-          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
-        }
-      }
-    };
-    var strToNum = function(s) {
-      var num = 0;
-      for (var i = 0; i < s.length; i += 1) {
-        num = num * 10 + chatToNum(s.charAt(i) );
-      }
-      return num;
-    };
-    var chatToNum = function(c) {
-      if ('0' <= c && c <= '9') {
-        return c.charCodeAt(0) - '0'.charCodeAt(0);
-      }
-      throw 'illegal char :' + c;
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // qrAlphaNum
-  //---------------------------------------------------------------------
-  var qrAlphaNum = function(data) {
-    var _mode = QRMode.MODE_ALPHA_NUM;
-    var _data = data;
-    var _this = {};
-    _this.getMode = function() {
-      return _mode;
-    };
-    _this.getLength = function(buffer) {
-      return _data.length;
-    };
-    _this.write = function(buffer) {
-      var s = _data;
-      var i = 0;
-      while (i + 1 < s.length) {
-        buffer.put(
-          getCode(s.charAt(i) ) * 45 +
-          getCode(s.charAt(i + 1) ), 11);
-        i += 2;
-      }
-      if (i < s.length) {
-        buffer.put(getCode(s.charAt(i) ), 6);
-      }
-    };
-    var getCode = function(c) {
-      if ('0' <= c && c <= '9') {
-        return c.charCodeAt(0) - '0'.charCodeAt(0);
-      } else if ('A' <= c && c <= 'Z') {
-        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
-      } else {
-        switch (c) {
-        case ' ' : return 36;
-        case '$' : return 37;
-        case '%' : return 38;
-        case '*' : return 39;
-        case '+' : return 40;
-        case '-' : return 41;
-        case '.' : return 42;
-        case '/' : return 43;
-        case ':' : return 44;
-        default :
-          throw 'illegal char :' + c;
-        }
-      }
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // qr8BitByte
-  //---------------------------------------------------------------------
-  var qr8BitByte = function(data) {
-    var _mode = QRMode.MODE_8BIT_BYTE;
-    var _data = data;
-    var _bytes = qrcode.stringToBytes(data);
-    var _this = {};
-    _this.getMode = function() {
-      return _mode;
-    };
-    _this.getLength = function(buffer) {
-      return _bytes.length;
-    };
-    _this.write = function(buffer) {
-      for (var i = 0; i < _bytes.length; i += 1) {
-        buffer.put(_bytes[i], 8);
-      }
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // qrKanji
-  //---------------------------------------------------------------------
-  var qrKanji = function(data) {
-    var _mode = QRMode.MODE_KANJI;
-    var _data = data;
-    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
-    if (!stringToBytes) {
-      throw 'sjis not supported.';
-    }
-    !function(c, code) {
-      // self test for sjis support.
-      var test = stringToBytes(c);
-      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
-        throw 'sjis not supported.';
-      }
-    }('\u53cb', 0x9746);
-    var _bytes = stringToBytes(data);
-    var _this = {};
-    _this.getMode = function() {
-      return _mode;
-    };
-    _this.getLength = function(buffer) {
-      return ~~(_bytes.length / 2);
-    };
-    _this.write = function(buffer) {
-      var data = _bytes;
-      var i = 0;
-      while (i + 1 < data.length) {
-        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
-        if (0x8140 <= c && c <= 0x9FFC) {
-          c -= 0x8140;
-        } else if (0xE040 <= c && c <= 0xEBBF) {
-          c -= 0xC140;
-        } else {
-          throw 'illegal char at ' + (i + 1) + '/' + c;
-        }
-        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
-        buffer.put(c, 13);
-        i += 2;
-      }
-      if (i < data.length) {
-        throw 'illegal char at ' + (i + 1);
-      }
-    };
-    return _this;
-  };
-  //=====================================================================
-  // GIF Support etc.
-  //
-  //---------------------------------------------------------------------
-  // byteArrayOutputStream
-  //---------------------------------------------------------------------
-  var byteArrayOutputStream = function() {
-    var _bytes = [];
-    var _this = {};
-    _this.writeByte = function(b) {
-      _bytes.push(b & 0xff);
-    };
-    _this.writeShort = function(i) {
-      _this.writeByte(i);
-      _this.writeByte(i >>> 8);
-    };
-    _this.writeBytes = function(b, off, len) {
-      off = off || 0;
-      len = len || b.length;
-      for (var i = 0; i < len; i += 1) {
-        _this.writeByte(b[i + off]);
-      }
-    };
-    _this.writeString = function(s) {
-      for (var i = 0; i < s.length; i += 1) {
-        _this.writeByte(s.charCodeAt(i) );
-      }
-    };
-    _this.toByteArray = function() {
-      return _bytes;
-    };
-    _this.toString = function() {
-      var s = '';
-      s += '[';
-      for (var i = 0; i < _bytes.length; i += 1) {
-        if (i > 0) {
-          s += ',';
-        }
-        s += _bytes[i];
-      }
-      s += ']';
-      return s;
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // base64EncodeOutputStream
-  //---------------------------------------------------------------------
-  var base64EncodeOutputStream = function() {
-    var _buffer = 0;
-    var _buflen = 0;
-    var _length = 0;
-    var _base64 = '';
-    var _this = {};
-    var writeEncoded = function(b) {
-      _base64 += String.fromCharCode(encode(b & 0x3f) );
-    };
-    var encode = function(n) {
-      if (n < 0) {
-        // error.
-      } else if (n < 26) {
-        return 0x41 + n;
-      } else if (n < 52) {
-        return 0x61 + (n - 26);
-      } else if (n < 62) {
-        return 0x30 + (n - 52);
-      } else if (n == 62) {
-        return 0x2b;
-      } else if (n == 63) {
-        return 0x2f;
-      }
-      throw 'n:' + n;
-    };
-    _this.writeByte = function(n) {
-      _buffer = (_buffer << 8) | (n & 0xff);
-      _buflen += 8;
-      _length += 1;
-      while (_buflen >= 6) {
-        writeEncoded(_buffer >>> (_buflen - 6) );
-        _buflen -= 6;
-      }
-    };
-    _this.flush = function() {
-      if (_buflen > 0) {
-        writeEncoded(_buffer << (6 - _buflen) );
-        _buffer = 0;
-        _buflen = 0;
-      }
-      if (_length % 3 != 0) {
-        // padding
-        var padlen = 3 - _length % 3;
-        for (var i = 0; i < padlen; i += 1) {
-          _base64 += '=';
-        }
-      }
-    };
-    _this.toString = function() {
-      return _base64;
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // base64DecodeInputStream
-  //---------------------------------------------------------------------
-  var base64DecodeInputStream = function(str) {
-    var _str = str;
-    var _pos = 0;
-    var _buffer = 0;
-    var _buflen = 0;
-    var _this = {};
-    _this.read = function() {
-      while (_buflen < 8) {
-        if (_pos >= _str.length) {
-          if (_buflen == 0) {
-            return -1;
-          }
-          throw 'unexpected end of file./' + _buflen;
-        }
-        var c = _str.charAt(_pos);
-        _pos += 1;
-        if (c == '=') {
-          _buflen = 0;
-          return -1;
-        } else if (c.match(/^\s$/) ) {
-          // ignore if whitespace.
-          continue;
-        }
-        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
-        _buflen += 6;
-      }
-      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
-      _buflen -= 8;
-      return n;
-    };
-    var decode = function(c) {
-      if (0x41 <= c && c <= 0x5a) {
-        return c - 0x41;
-      } else if (0x61 <= c && c <= 0x7a) {
-        return c - 0x61 + 26;
-      } else if (0x30 <= c && c <= 0x39) {
-        return c - 0x30 + 52;
-      } else if (c == 0x2b) {
-        return 62;
-      } else if (c == 0x2f) {
-        return 63;
-      } else {
-        throw 'c:' + c;
-      }
-    };
-    return _this;
-  };
-  //---------------------------------------------------------------------
-  // gifImage (B/W)
-  //---------------------------------------------------------------------
-  var gifImage = function(width, height) {
-    var _width = width;
-    var _height = height;
-    var _data = new Array(width * height);
-    var _this = {};
-    _this.setPixel = function(x, y, pixel) {
-      _data[y * _width + x] = pixel;
-    };
-    _this.write = function(out) {
-      //---------------------------------
-      // GIF Signature
-      out.writeString('GIF87a');
-      //---------------------------------
-      // Screen Descriptor
-      out.writeShort(_width);
-      out.writeShort(_height);
-      out.writeByte(0x80); // 2bit
-      out.writeByte(0);
-      out.writeByte(0);
-      //---------------------------------
-      // Global Color Map
-      // black
-      out.writeByte(0x00);
-      out.writeByte(0x00);
-      out.writeByte(0x00);
-      // white
-      out.writeByte(0xff);
-      out.writeByte(0xff);
-      out.writeByte(0xff);
-      //---------------------------------
-      // Image Descriptor
-      out.writeString(',');
-      out.writeShort(0);
-      out.writeShort(0);
-      out.writeShort(_width);
-      out.writeShort(_height);
-      out.writeByte(0);
-      //---------------------------------
-      // Local Color Map
-      //---------------------------------
-      // Raster Data
-      var lzwMinCodeSize = 2;
-      var raster = getLZWRaster(lzwMinCodeSize);
-      out.writeByte(lzwMinCodeSize);
-      var offset = 0;
-      while (raster.length - offset > 255) {
-        out.writeByte(255);
-        out.writeBytes(raster, offset, 255);
-        offset += 255;
-      }
-      out.writeByte(raster.length - offset);
-      out.writeBytes(raster, offset, raster.length - offset);
-      out.writeByte(0x00);
-      //---------------------------------
-      // GIF Terminator
-      out.writeString(';');
-    };
-    var bitOutputStream = function(out) {
-      var _out = out;
-      var _bitLength = 0;
-      var _bitBuffer = 0;
-      var _this = {};
-      _this.write = function(data, length) {
-        if ( (data >>> length) != 0) {
-          throw 'length over';
-        }
-        while (_bitLength + length >= 8) {
-          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
-          length -= (8 - _bitLength);
-          data >>>= (8 - _bitLength);
-          _bitBuffer = 0;
-          _bitLength = 0;
-        }
-        _bitBuffer = (data << _bitLength) | _bitBuffer;
-        _bitLength = _bitLength + length;
-      };
-      _this.flush = function() {
-        if (_bitLength > 0) {
-          _out.writeByte(_bitBuffer);
-        }
-      };
-      return _this;
-    };
-    var getLZWRaster = function(lzwMinCodeSize) {
-      var clearCode = 1 << lzwMinCodeSize;
-      var endCode = (1 << lzwMinCodeSize) + 1;
-      var bitLength = lzwMinCodeSize + 1;
-      // Setup LZWTable
-      var table = lzwTable();
-      for (var i = 0; i < clearCode; i += 1) {
-        table.add(String.fromCharCode(i) );
-      }
-      table.add(String.fromCharCode(clearCode) );
-      table.add(String.fromCharCode(endCode) );
-      var byteOut = byteArrayOutputStream();
-      var bitOut = bitOutputStream(byteOut);
-      // clear code
-      bitOut.write(clearCode, bitLength);
-      var dataIndex = 0;
-      var s = String.fromCharCode(_data[dataIndex]);
-      dataIndex += 1;
-      while (dataIndex < _data.length) {
-        var c = String.fromCharCode(_data[dataIndex]);
-        dataIndex += 1;
-        if (table.contains(s + c) ) {
-          s = s + c;
-        } else {
-          bitOut.write(table.indexOf(s), bitLength);
-          if (table.size() < 0xfff) {
-            if (table.size() == (1 << bitLength) ) {
-              bitLength += 1;
-            }
-            table.add(s + c);
-          }
-          s = c;
-        }
-      }
-      bitOut.write(table.indexOf(s), bitLength);
-      // end code
-      bitOut.write(endCode, bitLength);
-      bitOut.flush();
-      return byteOut.toByteArray();
-    };
-    var lzwTable = function() {
-      var _map = {};
-      var _size = 0;
-      var _this = {};
-      _this.add = function(key) {
-        if (_this.contains(key) ) {
-          throw 'dup key:' + key;
-        }
-        _map[key] = _size;
-        _size += 1;
-      };
-      _this.size = function() {
-        return _size;
-      };
-      _this.indexOf = function(key) {
-        return _map[key];
-      };
-      _this.contains = function(key) {
-        return typeof _map[key] != 'undefined';
-      };
-      return _this;
-    };
-    return _this;
-  };
-  var createDataURL = function(width, height, getPixel) {
-    var gif = gifImage(width, height);
-    for (var y = 0; y < height; y += 1) {
-      for (var x = 0; x < width; x += 1) {
-        gif.setPixel(x, y, getPixel(x, y) );
-      }
-    }
-    var b = byteArrayOutputStream();
-    gif.write(b);
-    var base64 = base64EncodeOutputStream();
-    var bytes = b.toByteArray();
-    for (var i = 0; i < bytes.length; i += 1) {
-      base64.writeByte(bytes[i]);
-    }
-    base64.flush();
-    return 'data:image/gif;base64,' + base64;
-  };
-  //---------------------------------------------------------------------
-  // returns qrcode function.
-  return qrcode;
-}();
-!function() {
-  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
-    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
-    function toUTF8Array(str) {
-      var utf8 = [];
-      for (var i=0; i < str.length; i++) {
-        var charcode = str.charCodeAt(i);
-        if (charcode < 0x80) utf8.push(charcode);
-        else if (charcode < 0x800) {
-          utf8.push(0xc0 | (charcode >> 6),
-              0x80 | (charcode & 0x3f));
-        }
-        else if (charcode < 0xd800 || charcode >= 0xe000) {
-          utf8.push(0xe0 | (charcode >> 12),
-              0x80 | ((charcode>>6) & 0x3f),
-              0x80 | (charcode & 0x3f));
-        }
-        // surrogate pair
-        else {
-          i++;
-          // UTF-16 encodes 0x10000-0x10FFFF by
-          // subtracting 0x10000 and splitting the
-          // 20 bits of 0x0-0xFFFFF into two halves
-          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
-            | (str.charCodeAt(i) & 0x3ff));
-          utf8.push(0xf0 | (charcode >>18),
-              0x80 | ((charcode>>12) & 0x3f),
-              0x80 | ((charcode>>6) & 0x3f),
-              0x80 | (charcode & 0x3f));
-        }
-      }
-      return utf8;
-    }
-    return toUTF8Array(s);
-  };
-}();
-(function (factory) {
-  if (typeof define === 'function' && define.amd) {
-      define([], factory);
-  } else if (typeof exports === 'object') {
-      module.exports = factory();
-  }
-}(function () {
-    return qrcode;
-}));
-</script>
 <script>// Pure logic: no DOM, no YouTube. Tested in test/core.test.mjs.
 var Core = (function () {
   var ID = /^[A-Za-z0-9_-]{11}$/;
@@ -2569,6 +841,7 @@ var Library = (function () {
       if (!s || !name) return false;
       s.name = name; save(); return true;
     }
+    function setKind(id, kind) { var s = section(id); if (!s) return false; s.kind = kind === 'audio' ? 'audio' : 'video'; save(); return true; }
     // Channels in a removed section move to the first remaining one, so nothing is lost by accident
     function removeSection(id) {
       if (state.sections.length < 2) throw new Error("Shelf needs at least one section.");
@@ -2746,7 +1019,7 @@ var Library = (function () {
     loadCache();
 
     return {
-      sections: sections, section: section, addSection: addSection, renameSection: renameSection, removeSection: removeSection, moveSection: moveSection,
+      sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
       sources: sources, source: source, setSection: setSection, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
       markSeen: markSeen, fresh: fresh, saveCache: saveCache, get seedMisses() { return state.seedMisses || []; }
@@ -3020,97 +1293,332 @@ var Search = (function () {
 })();
 if (typeof module !== 'undefined') module.exports = Search;
 </script>
-<script>// App: storage, YouTube player, shelf, self-check, Send to iPhone.
+<script>// Shelf v2 (Day Sheet): Home bands, section/channel/search pages, YouTube player, night player, self-check.
 (function () {
-  var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1';
+  var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1', AKEY = 'shelf.v2.audio';
   var $ = function (s) { return document.querySelector(s); };
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var reduced = function () { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+  var isPhone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  var feedsOn = Native.inApp; // browsers can't read YouTube's channel lists (no cross-site permission); the app can
 
   // ---------- storage ----------
   var canSave = (function () {
-    try { localStorage.setItem('resume.probe', '1'); var ok = localStorage.getItem('resume.probe') === '1'; localStorage.removeItem('resume.probe'); return ok; }
+    try { localStorage.setItem('shelf.probe', '1'); var ok = localStorage.getItem('shelf.probe') === '1'; localStorage.removeItem('shelf.probe'); return ok; }
     catch (e) { return false; }
   })();
   var mem = {};
-  function load(k, d) {
-    try { var s = canSave ? localStorage.getItem(k) : mem[k]; var v = s ? JSON.parse(s) : d; return v && typeof v === 'object' ? v : d; } catch (e) { return d; }
-  }
+  function rawGet(k) { try { return canSave ? localStorage.getItem(k) : (k in mem ? mem[k] : null); } catch (e) { return null; } }
   var lastSaveError = '';
-  function store(k, v) {
-    var s = JSON.stringify(v);
-    Native.prefSet(k, s);
+  function rawSet(k, s, mirror) {
+    if (mirror !== false) Native.prefSet(k, s);
     if (!canSave) { mem[k] = s; return Native.inApp; }
-    try { localStorage.setItem(k, s); lastSaveError = ''; return true; }
-    catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
+    try { localStorage.setItem(k, s); lastSaveError = ''; return true; } catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
   }
-  var videos = load(KEY, {});
-  var prefs = load(PREF, {});
-  var lastSavedAt = 0, lastCaptureAt = 0;
-  function save() { if (store(KEY, videos)) { lastSavedAt = Date.now(); pulse(); } updateDot(); }
+  function load(k, d) { try { var v = JSON.parse(rawGet(k) || 'null'); return v && typeof v === 'object' ? v : d; } catch (e) { return d; } }
+  function store(k, v) { return rawSet(k, JSON.stringify(v)); }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
 
-  // Another tab changed the shelf
-  window.addEventListener('storage', function (e) {
-    if (e.key === KEY) { videos = load(KEY, {}); render(); }
-  });
+  var videos, prefs, arec, lib, aMeta = {};
+  var lastSavedAt = 0;
+  function saveVideos() { if (store(KEY, videos)) lastSavedAt = Date.now(); renderSoon(); }
+  function saveAudio() { if (store(AKEY, arec)) lastSavedAt = Date.now(); }
+  function savePrefs() { store(PREF, prefs); }
 
-  // ---------- titles and pictures ----------
-  function fetchTitle(id) {
-    if (!window.fetch) return;
-    var url = 'https://noembed.com/embed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id);
-    fetch(url).then(function (r) { return r.json(); }).then(function (j) {
-      var v = videos[id];
-      if (!v || !j || j.error) return;
-      if (j.title && !v.title) v.title = j.title;
-      if (j.author_name && !v.author) v.author = j.author_name;
-      save(); render();
-    }).catch(function () {});
+  // ---------- network ----------
+  function withTimeout(p, ms, msg) {
+    return new Promise(function (res, rej) { var t = setTimeout(function () { rej(new Error(msg)); }, ms); p.then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); }); });
   }
-  function thumb(id, big) { return 'https://i.ytimg.com/vi/' + id + '/' + (big ? 'maxresdefault' : 'mqdefault') + '.jpg'; }
-  // maxresdefault doesn't exist for every video; YouTube then sends a tiny 120px grey image
-  function fixPoster(img) {
-    var fallback = function () { var id = img.getAttribute('data-id'); if (id && img.src.indexOf('hqdefault') === -1) img.src = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'; };
-    img.onerror = fallback;
-    img.onload = function () { if (img.naturalWidth && img.naturalWidth <= 120) fallback(); };
+  function netError(e) {
+    if (e && e.name === 'TypeError') return new Error(Native.inApp ? "Couldn't reach the internet. Check your connection." : 'This needs the Shelf app on your iPhone. Browsers aren\'t allowed to read YouTube\'s channel lists.');
+    return e;
   }
-  function ytLink(v) { return 'https://www.youtube.com/watch?v=' + v.id + (v.t > 5 && !v.done ? '&t=' + Math.floor(v.t) + 's' : ''); }
+  function fetchText(url, headers) {
+    return withTimeout(fetch(url, { headers: headers || {}, credentials: 'omit' }), 20000, 'No answer after 20 seconds. Check your internet.')
+      .then(function (r) { if (!r.ok) throw new Error(r.status === 404 ? 'Not found (it may have moved or been deleted).' : 'The server said ' + r.status + '.'); return r.text(); }, function (e) { throw netError(e); });
+  }
+  function fetchJSON(url) {
+    return withTimeout(fetch(url, { credentials: 'omit' }), 20000, 'No answer after 20 seconds. Check your internet.')
+      .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; }); }, function (e) { throw netError(e); });
+  }
 
-  // ---------- adding ----------
-  function add(text, opts) {
-    var shelf = String(text || '').match(/#shelf=([A-Za-z0-9_-]+)/);
-    if (shelf) { importShelf(shelf[1]); render(); return true; }
-    var found = Core.findLinks(text);
-    if (!found.length) {
-      toast(text && String(text).trim() ? "That doesn't look like a YouTube link. Copy the address from YouTube and paste it here." : 'Paste a YouTube link first.', 'warn');
-      return false;
-    }
-    var now = Date.now(), fresh = [];
-    found.forEach(function (f, i) {
-      var v = videos[f.id];
-      if (!v) {
-        v = videos[f.id] = { id: f.id, t: f.t || 0, dur: 0, title: '', author: '', added: now + i, updated: now + found.length - i, done: false };
-        fetchTitle(f.id); fresh.push(f.id);
-      } else {
-        v.updated = now + found.length - i;
-        if (f.t) { v.t = f.t; v.done = false; }
-      }
+  // ---------- model helpers ----------
+  function sectionIndex(id) { var s = lib.sections(); for (var i = 0; i < s.length; i++) if (s[i].id === id) return i; return -1; }
+  function bandClass(id) { var i = sectionIndex(id); return i < 0 ? 'c0' : 'c' + (i % 3 + 1); }
+  function videoSection(v) {
+    if (v.channelId && lib.source(v.channelId)) return lib.source(v.channelId).section;
+    if (v.section && lib.section(v.section)) return v.section;
+    if (v.author) { var a = v.author.toLowerCase(), hit = lib.sources().filter(function (s) { return s.name.toLowerCase() === a; })[0]; if (hit) return hit.section; }
+    return null;
+  }
+  function entryFromItem(src, it) {
+    if (src.type === 'podcast') return { type: 'audio', key: it.guid, title: it.title, src: src.id, srcName: src.name, published: it.published, dur: it.duration, image: it.image || src.image, url: it.url, section: src.section };
+    var v = videos[it.id];
+    return { type: 'video', key: it.id, title: it.title, src: src.id, srcName: src.name, published: it.published, dur: (v && v.dur) || 0, thumb: it.thumb, section: src.section };
+  }
+  function entryFromVideo(v) { return { type: 'video', key: v.id, title: v.title || 'YouTube video', src: v.channelId || '', srcName: v.author || '', published: v.added || 0, dur: v.dur, section: videoSection(v), updated: v.updated }; }
+  function entryFromAudio(g, r) { var s = r.source && lib.source(r.source); return { type: 'audio', key: g, title: r.title || 'Episode', src: r.source || '', srcName: r.podcast || (s && s.name) || '', published: r.published || 0, dur: r.dur, image: r.image || (s && s.image) || '', url: r.url, section: s ? s.section : null, updated: r.updated }; }
+  function prog(e) { return e.type === 'video' ? videos[e.key] : arec[e.key]; }
+  function started(e) { var p = prog(e); return !!p && !p.done && p.t > 5; }
+  function isDoneE(e) { var p = prog(e); return !!p && !!p.done; }
+  function isNew(e) { var s = lib.source(e.src), p = prog(e); return !!s && e.published > (s.seenUpTo || 0) && !(p && (p.t > 5 || p.done)); }
+  function feedEntries(sectionId) {
+    var out = [];
+    lib.sources(sectionId).forEach(function (s) { lib.items(s.id).forEach(function (it) { out.push(entryFromItem(s, it)); }); });
+    return out.sort(function (a, b) { return b.published - a.published; });
+  }
+  function startedEntries(sectionId) {
+    var out = [];
+    Object.keys(videos).forEach(function (id) { var e = entryFromVideo(videos[id]); if (started(e) && e.section === sectionId) out.push(e); });
+    Object.keys(arec).forEach(function (g) { var e = entryFromAudio(g, arec[g]); if (started(e) && (sectionId === undefined || e.section === sectionId)) out.push(e); });
+    return out.sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+  }
+  function newCountFor(sectionId) { return feedEntries(sectionId).filter(isNew).length; }
+  function srcNewCount(id) { var s = lib.source(id); return s ? lib.items(id).map(function (it) { return entryFromItem(s, it); }).filter(isNew).length : 0; }
+  function thumbOf(e) { return e.type === 'video' ? (e.thumb || 'https://i.ytimg.com/vi/' + e.key + '/mqdefault.jpg') : (e.image || ''); }
+
+  // Entries on screen, looked up by the code on each button
+  var reg = { h: [], p: [] };
+  function regE(scope, e) { reg[scope].push(e); return scope + (reg[scope].length - 1); }
+  function regGet(code) { return code ? reg[code[0]][+code.slice(1)] : null; }
+
+  // ---------- Home ----------
+  var renderTimer = null;
+  function renderSoon() { clearTimeout(renderTimer); renderTimer = setTimeout(renderAll, 60); }
+  function renderAll() { renderHome(); if (stack.length) renderPage(); }
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function durText(e) {
+    var p = prog(e), d = (p && p.dur) || e.dur;
+    if (started(e)) return d ? Core.fmt(p.t) + ' / ' + Core.fmt(d) : Core.fmt(p.t);
+    return d ? Core.fmt(d) : shortAgo(e.published);
+  }
+  function agoLong(ts) { var s = (Date.now() - ts) / 1000; return s < 3600 ? Math.max(1, Math.round(s / 60)) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Core.ago(ts); }
+  // "3h", "2d": fits the narrow number column
+  function shortAgo(ts) {
+    if (!ts) return '';
+    var s = (Date.now() - ts) / 1000;
+    return s < 3600 ? Math.max(1, Math.round(s / 60)) + 'm' : s < 86400 ? Math.round(s / 3600) + 'h' : Math.round(s / 86400) + 'd';
+  }
+  function bandRow(e, scope) {
+    var p = prog(e), pc = p && p.dur ? Core.pct(p) : 0;
+    return '<li><button type="button" data-act="play" data-e="' + regE(scope, e) + '"><span>' + (isNew(e) ? '<span class="nw">NEW</span>' : '') +
+      '<b>' + esc(e.title) + '</b><br><span class="src">' + esc(e.srcName) + (started(e) && p.dur ? ' · ' + esc(Core.left(p.t, p.dur).toLowerCase()) : '') + '</span>' +
+      (started(e) ? '<span class="pr"><i style="width:' + pc.toFixed(1) + '%"></i></span>' : '') +
+      '</span><span class="n mono">' + esc(durText(e)) + '</span></button></li>';
+  }
+  var refreshing = false;
+  function renderHome() {
+    reg.h = [];
+    var d = new Date();
+    $('#dayNum').textContent = (d.getDate() < 10 ? '0' : '') + d.getDate();
+    $('#dayName').textContent = DAYS[d.getDay()];
+    $('#monthName').textContent = MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+    var allNew = 0, unfinished = startedEntries(undefined).length;
+    Object.keys(videos).forEach(function (id) { var e = entryFromVideo(videos[id]); if (started(e)) unfinished++; });
+    var html = '';
+    lib.sections().forEach(function (sec) {
+      var fresh = feedEntries(sec.id).filter(isNew), go = startedEntries(sec.id);
+      allNew += fresh.length;
+      var list = fresh.slice(0, 2).concat(go.slice(0, 2));
+      fresh.slice(2).concat(go.slice(2)).forEach(function (e) { if (list.length < 4) list.push(e); });
+      var srcs = lib.sources(sec.id).length;
+      html += '<section class="band ' + bandClass(sec.id) + '" aria-label="' + esc(sec.name) + '">' +
+        '<button type="button" class="hd" data-act="open-section" data-id="' + esc(sec.id) + '"><h2>' + esc(sec.name) + '</h2><span class="tm mono">' +
+        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>';
+      if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
+      else if (!srcs && !feedsOn) html += '<p class="empty">Your channels show here in the Shelf app on your iPhone.</p>';
+      else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
+      else html += '<p class="empty">' + (refreshing && !lib.sources(sec.id).some(function (s) { return lib.items(s.id).length; }) ? 'Checking for new uploads…' : 'Nothing new. All caught up.') + '</p>';
+      html += '</section>';
     });
-    justAdded = fresh;
-    save(); render();
-    if (found.length === 1) { if (!opts || opts.play !== false) play(found[0].id); }
-    else toast('Added ' + found.length + ' videos to your shelf.');
-    return true;
+    // Pasted videos that belong to no section
+    var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
+      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+    if (loose.length) {
+      html += '<section class="band c0" aria-label="Pasted"><button type="button" class="hd" data-act="open-pasted"><h2>Pasted</h2><span class="tm mono">' + loose.length + ' ›</span></button>' +
+        '<ul>' + loose.slice(0, 4).map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul></section>';
+    }
+    $('#bands').innerHTML = html;
+    fitAll($('#bands'));
+    // Resume strip: the most recent unfinished thing anywhere
+    var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(started))
+      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+    var top = all[0];
+    $('#cont').hidden = !top;
+    if (top) {
+      var p = prog(top);
+      $('#cont').setAttribute('data-e', regE('h', top));
+      $('#contTitle').textContent = top.title;
+      $('#contMeta').textContent = (top.srcName ? top.srcName + ' · ' : '') + Core.fmt(p.t) + (p.dur ? ' / ' + Core.fmt(p.dur) : '');
+      $('#contBar').style.width = 'calc((100% - 2 * var(--g)) * ' + (Core.pct(p) / 100).toFixed(3) + ')';
+      $('#cont').setAttribute('aria-label', 'Resume ' + top.title + ' from ' + Core.fmt(p.t));
+    }
+    $('#summary').textContent = refreshing ? 'Checking for new uploads…' : allNew + ' new · ' + unfinished + ' unfinished';
+    var wn = $('#webNote');
+    if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can paste a link and pick up where you left off.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can paste a link (⌘V) and pick up where you left off.'; }
+    else wn.hidden = true;
   }
-  var justAdded = [];
-  var isPhone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  var standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
 
-  // ---------- player ----------
+  // ---------- Pages ----------
+  var stack = [];
+  function push(view) { stack.push(view); renderPage(); $('#page').scrollTop = 0; try { history.pushState({ shelf: stack.length }, ''); } catch (e) {} }
+  function pop() { stack.pop(); if (stack.length) renderPage(); else { $('#page').hidden = true; renderHome(); } }
+  window.addEventListener('popstate', function () { if (stack.length) pop(); });
+  function back() { try { history.back(); } catch (e) { pop(); } }
+  function itemHTML(e, scope, opts) {
+    opts = opts || {};
+    var p = prog(e), done = isDoneE(e), pc = p && p.dur ? Core.pct(p) : 0, th = thumbOf(e);
+    var meta;
+    if (started(e)) meta = '<b>' + esc(Core.fmt(p.t)) + (p.dur ? ' / ' + esc(Core.fmt(p.dur)) : '') + '</b> · resume';
+    else meta = [e.dur ? '<b>' + esc(Core.fmt(e.dur)) + '</b>' : '', e.published ? esc(agoLong(e.published)) : '', done ? 'finished' : ''].filter(Boolean).join(' · ');
+    return '<button type="button" class="item' + (done ? ' watched' : '') + '" data-act="play" data-e="' + regE(scope, e) + '">' +
+      '<span class="th">' + (th ? '<img src="' + esc(th) + '" alt="" loading="lazy" decoding="async" onerror="this.remove()">' : '') + '</span>' +
+      '<span><span class="ch"><span>' + esc(e.srcName || (e.type === 'audio' ? 'Podcast' : 'YouTube')) + '</span>' + (opts.fresh || isNew(e) ? '<span class="nw">NEW</span>' : '') + '</span>' +
+      '<span class="t" style="display:block">' + esc(e.title) + '</span>' +
+      '<span class="meta mono" style="display:block">' + meta + '</span>' +
+      (started(e) ? '<span class="pr"><i style="width:' + pc.toFixed(1) + '%"></i></span>' : '') + '</span></button>';
+  }
+  function eyebrow(backLabel, right) {
+    return '<div class="eyebrow mono"><button type="button" data-act="back">← ' + esc(backLabel) + '</button><span>' + esc(right) + '</span></div>';
+  }
+  function shortDate() { var d = new Date(); return (d.getDate() < 10 ? '0' : '') + d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3).toUpperCase(); }
+  function h1(name) { return '<h1 class="fit">' + esc(name) + '</h1>'; }
+  // Long names get narrower letters first (Archivo has a width axis), then smaller, so a word never breaks mid-way
+  function fit(el, maxSize, minSize) {
+    el.style.fontStretch = ''; el.style.fontSize = ''; el.classList.remove('wrap');
+    if (el.scrollWidth <= el.clientWidth + 1) return;
+    var stretch = 125, size = maxSize;
+    while (el.scrollWidth > el.clientWidth + 1 && stretch > 75) { stretch -= 10; el.style.fontStretch = stretch + '%'; }
+    while (el.scrollWidth > el.clientWidth + 1 && size > minSize) { size -= 2; el.style.fontSize = size + 'px'; }
+    if (el.scrollWidth > el.clientWidth + 1) el.classList.add('wrap'); // several words: let it wrap between them
+  }
+  function fitAll(scope) {
+    Array.prototype.forEach.call(scope.querySelectorAll('.band .hd h2'), function (h) { fit(h, innerWidth >= 900 ? 58 : 46, 26); });
+    Array.prototype.forEach.call(scope.querySelectorAll('.top h1.fit'), function (h) { fit(h, 62, 30); });
+  }
+  window.addEventListener('resize', function () { fitAll(document); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(document); });
+  var chanNew = {}; // keys that were new when the channel page opened
+  var confirmRemove = null;
+  function renderPage() {
+    var v = stack[stack.length - 1], pg = $('#page'), html = '';
+    if (!v) return;
+    reg.p = [];
+    pg.hidden = false;
+    if (v.name === 'section') {
+      var sec = lib.section(v.id);
+      if (!sec) { stack.pop(); return renderPage(); }
+      var srcs = lib.sources(sec.id), nn = newCountFor(sec.id);
+      html += '<div class="top band ' + bandClass(sec.id) + '">' + eyebrow(shortDate(), srcs.length + (srcs.length === 1 ? ' CHANNEL' : ' CHANNELS') + (nn ? ' · ' + nn + ' NEW' : '')) + h1(sec.name) +
+        '<p>Newest first. Finished ones drop off this sheet and stay in their channel.</p><div class="acts">' +
+        '<button type="button" class="btn" data-act="add-channel" data-id="' + esc(sec.id) + '">+ Add channel</button>' +
+        (nn ? '<button type="button" class="btn" data-act="seen-section" data-id="' + esc(sec.id) + '">Mark all seen</button>' : '') +
+        '<button type="button" class="btn" data-act="edit-section" data-id="' + esc(sec.id) + '">Edit</button></div></div>';
+      lib.seedMisses.filter(function (m) { return m.section === sec.id && !alreadyHave(m.input); }).forEach(function (m) {
+        html += '<p class="pnote err">Couldn\'t find ' + esc(m.input) + ' automatically (' + esc(m.error) + ') <button type="button" data-act="fix-seed" data-in="' + esc(m.input) + '" data-id="' + esc(sec.id) + '">Fix</button></p>';
+      });
+      if (!feedsOn) html += '<p class="pnote">Channels load in the Shelf app on your iPhone.</p>';
+      var items = feedEntries(sec.id).filter(function (e) { return !isDoneE(e); });
+      var have = {}; items.forEach(function (e) { have[e.key] = 1; });
+      startedEntries(sec.id).forEach(function (e) { if (!have[e.key]) items.unshift(e); });
+      if (srcs.length && !items.length) html += '<p class="pnote">' + (refreshing ? 'Checking for new uploads…' : 'Nothing waiting here. Open a channel below to see older videos.') + '</p>';
+      html += items.slice(0, 40).map(function (e) { return itemHTML(e, 'p'); }).join('');
+      html += '<h2 class="sub-h"><span>Channels</span><span class="mono">' + srcs.length + '</span></h2>';
+      if (!srcs.length) html += '<p class="pnote">No channels here yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
+      srcs.forEach(function (s) {
+        var st = lib.status(s.id), n = srcNewCount(s.id);
+        var sub = st && !st.ok ? '<span class="err">Couldn\'t update: ' + esc(st.error) + '</span>' : n ? n + ' new' : st ? 'Updated ' + esc(Core.ago(st.fetched)) : 'Not checked yet';
+        html += '<button type="button" class="chrow" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="av">' + (s.image ? '<img src="' + esc(s.image) + '" alt="" loading="lazy" onerror="this.remove()">' : esc(s.name.charAt(0))) + '</span>' +
+          '<span><b>' + esc(s.name) + '</b><small>' + (s.type === 'podcast' ? (s.private ? 'Private podcast · ' : 'Podcast · ') : '') + sub + '</small></span><span aria-hidden="true">›</span></button>';
+      });
+      html += '<button type="button" class="more" data-act="add-channel" data-id="' + esc(sec.id) + '"><span>+ Add channel</span><span class="mono">paste a channel link</span></button>';
+    } else if (v.name === 'channel') {
+      var s = lib.source(v.id);
+      if (!s) { stack.pop(); return renderPage(); }
+      var sec2 = lib.section(s.section), st2 = lib.status(s.id), list = lib.items(s.id).map(function (it) { return entryFromItem(s, it); });
+      html += '<div class="top band ' + bandClass(s.section) + '">' + eyebrow(sec2 ? sec2.name.toUpperCase() : 'BACK', s.type === 'podcast' ? (s.private ? 'PRIVATE PODCAST' : 'PODCAST') : 'YOUTUBE') + h1(s.name) +
+        '<p>' + (st2 && !st2.ok ? 'Couldn\'t update: ' + esc(st2.error) : (s.type === 'podcast' ? 'Latest episodes.' : 'Latest ' + list.length + ' videos.') + (st2 ? ' Updated ' + esc(Core.ago(st2.fetched)) + '.' : '')) + '</p>' +
+        '<div class="acts"><button type="button" class="btn" data-act="refresh-channel" data-id="' + esc(s.id) + '">Refresh</button>' +
+        '<button type="button" class="btn danger" data-act="remove-channel" data-id="' + esc(s.id) + '">' + (confirmRemove === s.id ? 'Tap again to remove' : 'Remove') + '</button></div>' +
+        '<div class="acts">' + lib.sections().map(function (x) { return '<button type="button" class="btn' + (x.id === s.section ? ' solid' : '') + '" data-act="move-channel" data-id="' + esc(s.id) + '" data-to="' + esc(x.id) + '" aria-pressed="' + (x.id === s.section) + '">' + esc(x.name) + '</button>'; }).join('') + '</div></div>';
+      if (!list.length) html += '<p class="pnote">' + (st2 && !st2.ok ? 'Nothing loaded. Tap Refresh to try again.' : 'Loading…') + '</p>';
+      html += list.map(function (e) { return itemHTML(e, 'p', { fresh: chanNew[e.key] }); }).join('');
+      if (s.type === 'youtube') html += '<p class="pnote">YouTube lists only the latest 15 uploads here. For older ones, use Search.</p>';
+    } else if (v.name === 'pasted') {
+      var vids = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section; })
+        .sort(function (a, b) { return (isDoneE(a) - isDoneE(b)) || (b.updated || 0) - (a.updated || 0); });
+      html += '<div class="top band c0">' + eyebrow(shortDate(), vids.length + ' VIDEOS') + h1('Pasted') + '<p>Links you pasted from channels you don\'t follow. Finished ones stay at the bottom.</p></div>';
+      if (!vids.length) html += '<p class="pnote">Nothing pasted yet.</p>';
+      vids.forEach(function (e) { html += itemHTML(e, 'p') + '<button type="button" class="more" data-act="remove-video" data-id="' + esc(e.key) + '"><span class="mono">Remove ' + esc(e.title.slice(0, 40)) + '</span><span>×</span></button>'; });
+    } else if (v.name === 'search') {
+      html += '<div class="top band c2">' + eyebrow(shortDate(), prefs.apiKey ? 'GOOGLE KEY' : 'NO KEY NEEDED') + h1('Search') +
+        '<form class="sform" id="sform"><input id="sq" type="search" enterkeyhint="search" autocomplete="off" placeholder="hyperkalemia, Emu War…" value="' + esc(v.q || '') + '" aria-label="Search YouTube"><button type="submit">Go</button></form></div>';
+      if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
+      (v.results || []).forEach(function (r) {
+        if (r.kind === 'channel') {
+          var have2 = !!lib.source(r.id);
+          html += '<div class="item"><span class="th">' + (r.thumb ? '<img src="' + esc(r.thumb) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span><span><span class="ch"><span>Channel</span></span><span class="t" style="display:block">' + esc(r.title) + '</span>' +
+            (have2 ? '<span class="meta" style="display:block">Already on your shelf</span>' : '<button type="button" class="btn addch" data-act="add-channel" data-in="' + esc(r.id) + '">+ Add channel</button>') + '</span></div>';
+        } else {
+          var e = { type: 'video', key: r.id, title: r.title, src: r.channelId, srcName: r.channel, published: r.published || 0, dur: r.dur || 0, thumb: r.thumb, section: lib.source(r.channelId) ? lib.source(r.channelId).section : null };
+          html += itemHTML(e, 'p');
+        }
+      });
+    }
+    pg.className = 'page' + ({ c1: ' d1', c2: ' d2' }[v.name === 'section' ? bandClass(v.id) : v.name === 'channel' && lib.source(v.id) ? bandClass(lib.source(v.id).section) : ''] || '');
+    pg.innerHTML = html;
+    fitAll(pg);
+    if (v.name === 'search') {
+      var f = $('#sform');
+      f.addEventListener('submit', function (ev) { ev.preventDefault(); runSearch($('#sq').value); });
+      if (!v.results && !v.msg) setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50);
+    }
+  }
+  function alreadyHave(input) {
+    var lc = String(input).toLowerCase().replace(/^@/, '');
+    return lib.sources().some(function (s) { return (s.handle || '').toLowerCase().replace(/^@/, '') === lc || s.name.toLowerCase().replace(/\s+/g, '') === lc.replace(/\s+/g, '') || s.url === input; });
+  }
+  function openSection(id) { push({ name: 'section', id: id }); }
+  function openChannel(id) {
+    var s = lib.source(id); chanNew = {};
+    if (s) lib.items(id).forEach(function (it) { var e = entryFromItem(s, it); if (isNew(e)) chanNew[e.key] = 1; });
+    confirmRemove = null;
+    push({ name: 'channel', id: id });
+    lib.markSeen(id);
+    if (feedsOn) lib.refresh(id).then(function () { lib.saveCache(); renderAll(); });
+  }
+
+  // ---------- Search ----------
+  var searchSeq = 0;
+  function runSearch(q) {
+    var v = stack[stack.length - 1]; if (!v || v.name !== 'search') return;
+    v.q = q; v.msg = 'Searching…'; v.err = false; v.results = null; renderPage();
+    var my = ++searchSeq;
+    Search.run({ fetchJSON: fetchJSON, fetchText: fetchText }, q, prefs.apiKey).then(function (r) {
+      if (my !== searchSeq) return;
+      v.results = r; v.msg = r.length ? '' : 'No results for "' + q + '".'; renderPage();
+    }, function (e) {
+      if (my !== searchSeq) return;
+      var m = e && e.message || 'Search failed.';
+      if (!Native.inApp && !prefs.apiKey && /Shelf app/.test(m)) m = 'Search without a key works in the Shelf app on your iPhone. Here, add a Google key (self-check, Search key), or search on YouTube and paste the link.';
+      v.msg = m; v.err = true; renderPage();
+    });
+  }
+
+  // ---------- Feeds ----------
+  function refreshAll(force) {
+    if (!feedsOn || refreshing) return Promise.resolve();
+    refreshing = true; renderSoon();
+    var first = lib.seed();
+    return first.then(function () { return lib.refreshAll(force, function () { renderSoon(); }); })
+      .then(function () { refreshing = false; lib.saveCache(); lastRefresh = Date.now(); renderAll(); updateDot(); }, function () { refreshing = false; renderAll(); });
+  }
+  var lastRefresh = 0;
+
+  // ---------- Video player ----------
   var player = null, playerReady = false, ytLoaded = false, ytFailed = false, current = null, pending = null, tick = null, lastErr = '';
-  // A spot is only trusted once this video is really playing near where we asked it to start
-  // (stops ads and the previous video's time from overwriting it)
-  var armed = false, sawPlaying = false, loadStart = 0, startTimer = null;
+  var armed = false, sawPlaying = false, loadStart = 0, startTimer = null, lastCaptureAt = 0, vTimer = null, vTimerMsg = '', wake = null, uiTick = null;
   window.onYouTubeIframeAPIReady = function () {
     ytLoaded = true; updateDot();
     var vars = { rel: 0, playsinline: 1, modestbranding: 1, autoplay: 1 };
@@ -3118,102 +1626,119 @@ if (typeof module !== 'undefined') module.exports = Search;
     player = new YT.Player('player', {
       width: '100%', height: '100%', playerVars: vars,
       events: {
-        onReady: function () { playerReady = true; if (pending) { var p = pending; pending = null; play(p); } },
+        onReady: function () { playerReady = true; if (pending) { var p = pending; pending = null; loadVideo(p); } },
         onStateChange: onState,
-        onPlaybackRateChange: function (e) { prefs.rate = e.data; store(PREF, prefs); },
+        onPlaybackRateChange: function (e) { prefs.rate = e.data; savePrefs(); },
         onError: onError
       }
     });
   };
-  (function loadYT() {
+  function loadYT() {
     var s = document.createElement('script');
     s.src = 'https://www.youtube.com/iframe_api';
     s.onerror = function () { ytFailed = true; updateDot(); };
     document.head.appendChild(s);
     setTimeout(function () { if (!ytLoaded) { ytFailed = true; updateDot(); } }, 12000);
-  })();
-
-  function play(id) {
-    var v = videos[id]; if (!v) return;
-    if (current && current !== id) capture(true);
-    lastErr = '';
-    $('#playerError').hidden = true;
+  }
+  function ytLink(v) { return 'https://www.youtube.com/watch?v=' + v.id + (v.t > 5 && !v.done ? '&t=' + Math.floor(v.t) + 's' : ''); }
+  function ensureVideo(o) {
+    var now = Date.now(), v = videos[o.id];
+    if (!v) v = videos[o.id] = { id: o.id, t: o.t || 0, dur: o.dur || 0, title: o.title || '', author: o.author || '', added: now, updated: now, done: false };
+    if (o.title && !v.title) v.title = o.title;
+    if (o.author && !v.author) v.author = o.author;
+    if (o.channelId && !v.channelId) v.channelId = o.channelId;
+    if (o.section && !v.section) v.section = o.section;
+    if (o.t) { v.t = o.t; v.done = false; }
+    return v;
+  }
+  function openSheet(id) {
+    var el = $(id); el.classList.add('open'); el.setAttribute('aria-hidden', 'false');
+    var b = el.querySelector('[data-act^="close"]'); if (b) setTimeout(function () { try { b.focus({ preventScroll: true }); } catch (e) {} }, 300);
+  }
+  function closeSheet(id) { var el = $(id); el.classList.remove('open'); el.setAttribute('aria-hidden', 'true'); }
+  function openVideo(o) {
+    if (engine && engine.state().playing) engine.pause();
+    var v = ensureVideo(o);
+    if (current && current !== v.id) capture(true);
+    lastErr = ''; $('#perr').hidden = true;
+    v.updated = Date.now(); saveVideos();
+    $('#vTitle').textContent = v.title || 'YouTube video';
+    $('#vCh').textContent = v.author || '';
+    $('#ytLink').href = ytLink(v);
+    openSheet('#vsheet');
+    clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
+    renderTimerUI('v');
     if (ytFailed && !playerReady) {
-      // No player: say so where they're looking, and offer YouTube itself
-      current = null; document.body.classList.remove('playing'); render();
-      showError("Can't reach YouTube from this page. Check your internet, or turn off any ad blocker or content blocker for this page, then reload.", v);
+      current = null;
+      showError("Can't reach YouTube. Check your internet, or turn off any content blocker, then reopen Shelf.", v);
       return;
     }
-    current = id; armed = false; sawPlaying = false;
-    v.updated = Date.now(); save();
-    document.body.classList.add('playing');
-    render();
-    var hero = $('#hero');
-    if (hero.scrollIntoView && hero.getBoundingClientRect().top < 0) hero.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
-    if (!playerReady) { pending = id; hint('Loading the YouTube player…'); return; }
+    current = v.id; armed = false; sawPlaying = false;
+    if (!playerReady) { pending = v.id; return; }
+    loadVideo(v.id);
+  }
+  function loadVideo(id) {
+    var v = videos[id]; if (!v) return;
     var start = Core.resumeAt(v);
-    if (v.done) { v.done = false; v.t = 0; save(); }
+    if (v.done) { v.done = false; v.t = 0; saveVideos(); }
     loadStart = start;
     player.loadVideoById({ videoId: id, startSeconds: start });
     if (prefs.rate && prefs.rate !== 1) { try { player.setPlaybackRate(prefs.rate); } catch (e) {} }
-    // Safari sometimes wants a tap on the video itself before it plays
     clearTimeout(startTimer);
-    startTimer = setTimeout(function () { if (current === id && !sawPlaying) hint('Tap the video to start.'); }, 3000);
+    startTimer = setTimeout(function () { if (current === id && !sawPlaying) $('#vCh').textContent = 'Tap the video to start.'; }, 3500);
   }
-  function hint(text) { $('#heroMeta').textContent = text; }
   function capture(final) {
     if (!player || !current || !playerReady || !videos[current]) return;
     var v = videos[current], t, d;
     try {
-      // Only trust the player once it is on this video
       var vd = player.getVideoData && player.getVideoData();
       if (vd && vd.video_id && vd.video_id !== current) return;
       t = player.getCurrentTime(); d = player.getDuration();
-      if (vd) { if (vd.title && !v.title) v.title = vd.title; if (vd.author && !v.author) v.author = vd.author; }
+      if (vd) { if (vd.title && !v.title) { v.title = vd.title; $('#vTitle').textContent = v.title; } if (vd.author && !v.author) v.author = vd.author; }
     } catch (e) { return; }
     if (typeof t !== 'number' || isNaN(t)) return;
     if (!armed) {
       if (!sawPlaying || t < loadStart - 3 || t > loadStart + 60) return;
       armed = true;
     }
-    // A much shorter duration than before means an ad or another video is reporting
-    if (v.dur > 0 && d > 0 && d < v.dur * 0.9) return;
+    if (v.dur > 0 && d > 0 && d < v.dur * 0.9) return; // an ad or another video reporting
     if (d > 0) v.dur = d;
-    // Ignore the 0 the player reports while a video loads
-    if (t < 1 && v.t > 5) return;
-    v.t = t;
-    v.updated = Date.now();
-    lastCaptureAt = Date.now();
-    save(); renderSoon();
+    if (t < 1 && v.t > 5) return; // the 0 reported while loading
+    v.t = t; v.updated = Date.now(); lastCaptureAt = Date.now();
+    saveVideos();
   }
   function onState(e) {
     var S = YT.PlayerState;
-    if (e.data === S.PLAYING) {
+    var playing = e.data === S.PLAYING;
+    $('#vPlay').textContent = playing ? '❚❚' : '▶';
+    $('#vPlay').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    $('#vPlay').classList.toggle('on', playing);
+    if (playing) {
       sawPlaying = true; clearTimeout(startTimer);
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (prefs.rate && player.getPlaybackRate && player.getPlaybackRate() !== prefs.rate) { try { player.setPlaybackRate(prefs.rate); } catch (er) {} }
-      capture();
+      capture(); keepAwake(true);
+      var v = videos[current]; if (v) $('#vCh').textContent = (v.author ? v.author + ' · ' : '') + (wake ? 'screen stays on' : 'saving your spot');
     } else {
-      clearInterval(tick);
+      clearInterval(tick); keepAwake(false);
       if (e.data === S.ENDED && current && videos[current] && armed) {
-        var v = videos[current]; v.t = v.dur || v.t; v.done = true; v.updated = Date.now();
-        current = null; document.body.classList.remove('playing');
-        save(); render();
-        toast('Finished. Moved to your Finished list.');
+        var w = videos[current]; w.t = w.dur || w.t; w.done = true; w.updated = Date.now();
+        if (vTimer && vTimer.mode === 'end') vTimer = null;
+        saveVideos(); closeVideo(true);
+        toast('Finished. It stays in its channel, marked as watched.');
       } else if (e.data === S.PAUSED) capture(true);
     }
   }
   function onError(e) {
-    // The empty player can complain before anything is played; ignore that
     if (!current) return;
     var v = videos[current];
     var msg = {
       2: "That link doesn't point to a real video. Check you copied the whole address.",
-      5: "Your browser couldn't play this video. Try opening it on YouTube.",
+      5: "This video couldn't play here. Try opening it on YouTube.",
       100: 'This video was removed or made private by its owner.',
       101: "This video's owner only lets it play on YouTube itself.",
       150: "This video's owner only lets it play on YouTube itself.",
-      153: 'YouTube needs this page opened from its web address, not as a file.'
+      153: 'YouTube needs Shelf opened from its web address. Close and reopen Shelf.'
     }[e.data] || 'YouTube had a problem playing this video (code ' + e.data + ').';
     clearTimeout(startTimer);
     showError(msg, e.data !== 153 ? v : null);
@@ -3222,133 +1747,315 @@ if (typeof module !== 'undefined') module.exports = Search;
     lastErr = msg;
     var html = '<span>' + esc(msg) + '</span>';
     if (v) html += '<a href="' + esc(ytLink(v)) + '" target="_blank" rel="noopener">Open on YouTube' + (v.t > 5 && !v.done ? ' at ' + Core.fmt(v.t) : '') + '</a>';
-    var box = $('#playerError'); box.innerHTML = html; box.hidden = false;
+    var box = $('#perr'); box.innerHTML = html; box.hidden = false;
     updateDot();
   }
-  // Save on the way out
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState !== 'hidden') return;
-    capture(true);
-    // YouTube doesn't allow its videos to keep playing in the background, so pause when the app is hidden
-    if ((Native.inApp || isPhone) && current) { try { player.pauseVideo(); } catch (e) {} }
-  });
-  window.addEventListener('pagehide', function () { capture(true); });
-
-  function closeNow() {
+  function closeVideo(silent) {
     capture(true);
     try { player && player.pauseVideo(); } catch (e) {}
-    clearInterval(tick); current = null;
-    document.body.classList.remove('playing');
-    $('#playerError').hidden = true;
-    render();
+    clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); keepAwake(false);
+    current = null; vTimer = null; vTimerMsg = '';
+    closeSheet('#vsheet');
+    renderAll();
   }
-
-  // ---------- shelf ----------
-  var renderTimer = null;
-  function renderSoon() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 60); }
-  function featured(s) { return (current && videos[current]) || s.watching[0] || null; }
-  function leftHTML(v) {
-    if (v.dur) {
-      var r = Math.max(0, v.dur - (v.t || 0)), m = Math.round(r / 60);
-      var big = r < 60 ? '<1 min' : m < 60 ? m + ' min' : Math.floor(m / 60) + ' hr ' + (m % 60 ? (m % 60) + ' min' : '');
-      return '<b>' + esc(big.trim()) + '</b>left';
-    }
-    return v.t > 5 ? '<b>' + Core.fmt(v.t) + '</b>stopped' : '<b>New</b>';
+  function keepAwake(on) {
+    try {
+      if (on && !wake && navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { wake = w; w.addEventListener('release', function () { wake = null; }); }, function () {});
+      else if (!on && wake) { wake.release(); wake = null; }
+    } catch (e) {}
   }
-  function row(v) {
-    var p = Core.pct(v), fresh = justAdded.indexOf(v.id) !== -1;
-    var sub = v.done ? 'Finished ' + Core.ago(v.updated) : (v.author ? v.author + ' · ' : '') + (v.t > 5 ? 'stopped at ' + Core.fmt(v.t) : 'not started');
-    var label = (v.done ? 'Watch again: ' : v.t > 5 ? 'Resume from ' + Core.fmt(v.t) + ': ' : 'Play: ') + (v.title || 'YouTube video');
-    return '<li class="row' + (fresh ? ' fresh' : '') + '" data-id="' + esc(v.id) + '">' +
-      '<button class="row-main" type="button" data-act="play" aria-label="' + esc(label) + '">' +
-        '<span class="th"><img data-id="' + esc(v.id) + '" src="' + thumb(v.id) + '" alt="" loading="lazy" decoding="async"></span>' +
-        '<span class="row-text"><span class="row-title">' + esc(v.title || 'YouTube video') + '</span>' +
-        '<span class="row-sub">' + esc(sub) + '</span>' +
-        (v.done ? '' : '<span class="bar"><i style="width:' + p.toFixed(1) + '%"></i></span>') + '</span>' +
-        (v.done ? '<span class="ring" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M3 6.3l2 2 4-4.6"/></svg></span>'
-          : '<span class="left">' + leftHTML(v) + '</span>') +
-      '</button>' +
-      '<span class="row-tools">' +
-        (v.done ? '' : '<button class="tool" type="button" data-act="done" title="Mark as finished" aria-label="Mark as finished"><svg viewBox="0 0 16 16"><path d="M3.5 8.4l3 3 6-6.8"/></svg></button>') +
-        '<button class="tool" type="button" data-act="remove" title="Remove from shelf" aria-label="Remove from shelf"><svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button>' +
-      '</span></li>';
+  function videoTick() {
+    if (!player || !current || !playerReady) return;
+    var t = 0, d = 0, st = -1;
+    try { t = player.getCurrentTime() || 0; d = player.getDuration() || 0; st = player.getPlayerState(); } catch (e) {}
+    $('#vLine').style.width = d ? Math.min(100, t / d * 100).toFixed(2) + '%' : '0';
+    $('#vT').textContent = Core.fmt(t);
+    $('#vLeft').textContent = d ? '−' + Core.fmt(Math.max(0, d - t)) : '';
+    if (vTimer && SleepTimer.tick(vTimer, Date.now(), false) === 'stop') {
+      vTimer = null; capture(true);
+      try { player.pauseVideo(); } catch (e) {}
+      vTimerMsg = 'Paused by the sleep timer. Sleep well.';
+      renderTimerUI('v');
+      return;
+    }
+    renderTimerUI('v');
   }
-  var heroId = null;
-  function render() {
-    var s = Core.sorted(videos), f = featured(s), playing = !!current;
-    var any = s.watching.length + s.finished.length;
-    // header
-    $('#count').textContent = s.watching.length ? '· ' + s.watching.length + ' to finish' : any ? '· all caught up' : '';
-    // hero
-    $('#hero').hidden = !f;
-    $('#empty').hidden = !!any;
-    $('#caught').hidden = !(any && !f);
-    if (f) {
-      var img = $('#posterImg');
-      if (heroId !== f.id) { img.setAttribute('data-id', f.id); fixPoster(img); img.src = thumb(f.id, true); heroId = f.id; }
-      $('#poster').hidden = playing;
-      $('#poster').setAttribute('aria-label', (f.t > 5 ? 'Resume from ' + Core.fmt(f.t) : 'Play') + ': ' + (f.title || 'video'));
-      $('#chip').hidden = !(f.t > 5 && !f.done);
-      $('#chipTime').textContent = Core.fmt(f.t);
-      $('#heroBar').style.width = Core.pct(f).toFixed(2) + '%';
-      $('#heroTitle').textContent = f.title || 'YouTube video';
-      var meta = [];
-      if (f.author) meta.push(esc(f.author));
-      if (playing) meta.push(lastCaptureAt && armed && f.t > 1 ? 'Spot saved at <b>' + Core.fmt(f.t) + '</b>' : 'Saves your spot as you watch');
-      else {
-        if (f.dur) meta.push('<b>' + esc(Core.left(f.t, f.dur)) + '</b>');
-        if (f.t > 5) meta.push('you stopped here ' + esc(Core.ago(f.updated)));
-      }
-      $('#heroMeta').innerHTML = meta.join(' · ');
-      $('#resumeText').textContent = f.t > 5 ? 'Resume from ' + Core.fmt(f.t) : 'Play';
-      $('#heroYouTube').href = ytLink(f);
-    }
-    // lists
-    var rest = s.watching.filter(function (v) { return !f || v.id !== f.id; });
-    $('#watching').innerHTML = rest.map(row).join('');
-    $('#watchingWrap').hidden = !rest.length;
-    var total = rest.reduce(function (a, v) { return a + Math.max(0, (v.dur || 0) - (v.t || 0)); }, 0);
-    $('#watchingSum').textContent = rest.length + (rest.length === 1 ? ' video' : ' videos') + (total > 60 ? ' · ' + Core.left(0, total) : '');
-    $('#finished').innerHTML = s.finished.map(row).join('');
-    $('#finishedWrap').hidden = !s.finished.length;
-    $('#finishedCount').textContent = s.finished.length;
-    $('#sendBtn').disabled = !any;
-    Array.prototype.forEach.call(document.querySelectorAll('.row .th img'), function (im) {
-      im.onerror = function () { im.style.visibility = 'hidden'; };
-    });
-    justAdded = [];
-    updateFoot();
-  }
-  var undo = null;
-  document.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-act]'); if (!b) return;
-    var li = b.closest('[data-id]'), id = li && li.getAttribute('data-id'), act = b.getAttribute('data-act');
-    var f = featured(Core.sorted(videos));
-    if (act === 'play' && id) play(id);
-    else if (act === 'play-featured' && f) play(f.id);
-    else if ((act === 'done' && id) || (act === 'done-featured' && f)) {
-      var did = id || f.id;
-      if (did === current) { capture(true); try { player.pauseVideo(); } catch (er) {} current = null; document.body.classList.remove('playing'); }
-      videos[did].done = true; videos[did].updated = Date.now(); save(); render(); toast('Moved to Finished.');
-    }
-    else if (act === 'remove' && id) {
-      undo = { id: id, v: videos[id] }; if (id === current) closeNow();
-      delete videos[id]; save(); render();
-      toast('Removed from your shelf.', '', { label: 'Undo', fn: function () { if (undo) { videos[undo.id] = undo.v; undo = null; save(); render(); } } });
-    }
-    else if (act === 'close') closeNow();
-    else if (act === 'check') openCheck();
-    else if (act === 'send') openSend();
-    else if (act === 'dismiss') { var d = b.closest('dialog'); if (d) d.close(); }
-    else if (act === 'copy') copyText($('#sendLink').value, $('#sendLink'));
-    else if (act === 'tone') {
-      if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
-      if (current) closeNow();
-      Native.playTone().then(function () { b.textContent = 'Stop the sound test'; fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },
-        function () { toast("The sound test couldn't start. Turn the volume up and try again.", 'warn'); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      capture(true);
+      if (engine) engine.capture(true);
+      // YouTube doesn't allow its videos to keep playing in the background, so pause when Shelf is hidden
+      if ((Native.inApp || isPhone) && current) { try { player.pauseVideo(); } catch (e) {} }
+    } else {
+      if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
+      renderAll();
     }
   });
-  // Click on the dimmed backdrop closes a dialog
+  window.addEventListener('pagehide', function () { capture(true); if (engine) engine.capture(true); });
+
+  // ---------- Sleep timer UI (shared by both players) ----------
+  var SEGS = [15, 30, 45, 60, 'end'];
+  function buildSeg(sel, which) {
+    $(sel).innerHTML = SEGS.map(function (m) { return '<button type="button" data-act="timer" data-p="' + which + '" data-m="' + m + '" aria-pressed="false">' + (m === 'end' ? 'End' : m) + '</button>'; }).join('');
+  }
+  function timerFor(which) { return which === 'v' ? vTimer : engine.state().timer; }
+  function setTimer(which, m) {
+    var cur = timerFor(which), same = cur && (cur.mode === 'end' ? m === 'end' : cur.minutes === +m);
+    var val = same ? null : m === 'end' ? 'end' : +m;
+    if (which === 'v') { vTimer = val == null ? null : SleepTimer.start(val); vTimerMsg = ''; }
+    else engine.setTimer(val);
+    renderTimerUI(which);
+    if (which === 'a') renderAudio();
+  }
+  function renderTimerUI(which, msg) {
+    var t = timerFor(which), now = Date.now();
+    var seg = which === 'v' ? '#vSeg' : '#nSeg', cd = which === 'v' ? '#vCd' : '#nCd';
+    Array.prototype.forEach.call(document.querySelectorAll(seg + ' button'), function (b) {
+      var m = b.getAttribute('data-m');
+      b.setAttribute('aria-pressed', String(!!t && (t.mode === 'end' ? m === 'end' : String(t.minutes) === m)));
+    });
+    var el = $(cd);
+    if (!t) {
+      el.className = (which === 'v' ? 'cd' : 'ncd') + ' mono off';
+      el.textContent = msg || (which === 'v' && vTimerMsg) || (which === 'v' ? 'Off. Tap a number to stop the video after that many minutes.' : 'No sleep timer');
+      if (which === 'v') $('#vStops').textContent = '';
+      return;
+    }
+    el.className = (which === 'v' ? 'cd' : 'ncd') + ' mono';
+    var small = which === 'v' ? 'remaining' : 'lights out in';
+    if (t.mode === 'end') el.innerHTML = '<small>' + small + '</small>' + (which === 'v' ? 'End of video' : 'End');
+    else el.innerHTML = '<small>' + small + '</small>' + SleepTimer.countdown(SleepTimer.remaining(t, now));
+    if (t.mode === 'end') el.style.fontSize = which === 'v' ? '40px' : '64px'; else el.style.fontSize = '';
+    if (which === 'v') $('#vStops').textContent = t.mode === 'min' ? 'stops at ' + SleepTimer.clock(t.endsAt).replace('about ', '') : 'stops when it ends';
+  }
+
+  // ---------- Night player (podcasts) ----------
+  var engine = null, aTick = null, nightOpen = false;
+  var RATES = [1, 1.25, 1.5, 2, 0.8];
+  function initAudio() {
+    engine = AudioEngine.create({
+      el: $('#audio'),
+      load: function (g) { return arec[g] || null; },
+      save: function (g, r) { arec[g] = Object.assign({}, arec[g] || {}, aMeta[g] || {}, r); saveAudio(); },
+      onChange: function () { renderAudio(); renderSoon(); }
+    });
+    if (prefs.arate) engine.setRate(prefs.arate);
+    $('#audio').addEventListener('play', function () { clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
+    $('#audio').addEventListener('pause', function () { clearInterval(aTick); renderAudio(); });
+  }
+  function openAudio(e) {
+    if (current) closeVideo(true);
+    aMeta[e.key] = { source: e.src, image: e.image || '', published: e.published || 0, podcast: e.srcName };
+    nightOpen = true; openSheet('#nsheet');
+    var st = engine.state();
+    if (st.episode && st.episode.guid === e.key) { if (!st.playing) engine.toggle(); renderAudio(); return; }
+    engine.play({ guid: e.key, url: e.url, title: e.title, podcast: e.srcName, image: e.image, duration: e.dur });
+    renderAudio();
+  }
+  function renderAudio() {
+    if (!engine) return;
+    var st = engine.state(), ep = st.episode;
+    var mini = $('#mini');
+    mini.hidden = !ep || nightOpen;
+    document.body.classList.toggle('mini-on', !mini.hidden);
+    if (!ep) return;
+    var left = st.dur ? Math.max(0, st.dur - st.t) : 0;
+    $('#miniTitle').textContent = ep.title;
+    $('#miniSub').textContent = (st.timer ? (st.timer.mode === 'end' ? 'stops at the end' : SleepTimer.countdown(SleepTimer.remaining(st.timer)) + ' to sleep') : (ep.podcast || '')) + (st.dur ? ' · ' + Core.fmt(left) + ' left' : '');
+    $('#miniPlay').textContent = st.playing ? '❚❚' : '▶';
+    $('#miniPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
+    if (!nightOpen) return;
+    var r = arec[ep.guid] || {}, m = aMeta[ep.guid] || {};
+    var src = lib.source(r.source || m.source);
+    $('#nCh').textContent = 'Sleep · ' + (ep.podcast || '') + (src && src.private ? ' · Private' : '');
+    $('#nTitle').textContent = ep.title;
+    $('#nEp').textContent = Core.fmt(st.t) + (st.dur ? ' / ' + Core.fmt(st.dur) : '') + (Native.inApp ? '' : ' · keep this tab open');
+    var art = $('#nArt'); if (ep.image) { if (art.getAttribute('src') !== ep.image) art.src = ep.image; art.hidden = false; } else art.hidden = true;
+    $('#nMsg').hidden = !st.message; $('#nMsg').textContent = st.message || '';
+    $('#nLine').style.width = st.dur ? Math.min(100, st.t / st.dur * 100).toFixed(2) + '%' : '0';
+    $('#nT').textContent = Core.fmt(st.t);
+    $('#nLeft').textContent = st.dur ? '−' + Core.fmt(left) : '';
+    $('#nPlay').textContent = st.playing ? '❚❚' : '▶';
+    $('#nPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
+    $('#nRate').textContent = 'Speed ' + st.rate + '×';
+    $('#nLock').textContent = Native.inApp ? 'Plays on the lock screen' : '';
+    renderTimerUI('a');
+  }
+  function closeNight() { nightOpen = false; closeSheet('#nsheet'); renderAudio(); renderAll(); }
+
+  // ---------- Play anything ----------
+  function play(e) {
+    if (!e) return;
+    if (e.type === 'audio') {
+      if (!e.url) { var r = arec[e.key]; if (r && r.url) e.url = r.url; }
+      if (!e.url) { toast("This episode's audio link is missing. Open its podcast and play it from there.", 'warn'); return; }
+      openAudio(e);
+    } else openVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur });
+  }
+
+  // ---------- Paste ----------
+  function handleText(text, from) {
+    text = String(text || '').trim();
+    var shelf = text.match(/#shelf=([A-Za-z0-9_-]+)/);
+    if (shelf) { importShelf(shelf[1]); renderAll(); return true; }
+    var found = Core.findLinks(text);
+    if (found.length === 1) {
+      openVideo({ id: found[0].id, t: found[0].t });
+      return true;
+    }
+    if (found.length > 1) {
+      found.forEach(function (f) { ensureVideo({ id: f.id, t: f.t }); });
+      saveVideos(); toast('Added ' + found.length + ' videos. They\'re under Pasted.');
+      return true;
+    }
+    var c = text && Feeds.parseChannelInput(text);
+    if (c && c.kind !== 'name') { openAdd(text); return true; }
+    toast(text ? "That doesn't look like a YouTube link. Copy the address from YouTube and try again." : 'Nothing to paste. Copy a YouTube link first.', 'warn');
+    return false;
+  }
+  function doPaste() {
+    var fallback = function () { openDlg($('#pasteDlg')); $('#pasteInput').value = ''; setTimeout(function () { $('#pasteInput').focus(); }, 50); };
+    try {
+      Native.readClipboard().then(function (txt) {
+        if (txt && txt.trim()) return handleText(txt);
+        // Universal Clipboard can take a moment to arrive from the Mac: try once more
+        setTimeout(function () { Native.readClipboard().then(function (t2) { if (t2 && t2.trim()) handleText(t2); else fallback(); }, fallback); }, 1200);
+      }, fallback);
+    } catch (e) { fallback(); }
+  }
+  $('#pasteForm').addEventListener('submit', function (e) { e.preventDefault(); if (handleText($('#pasteInput').value)) $('#pasteDlg').close(); });
+  document.addEventListener('paste', function (e) {
+    var t = e.target, cd = e.clipboardData || window.clipboardData, txt = cd ? cd.getData('text') : '';
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) return;
+    if (txt) { e.preventDefault(); handleText(txt); }
+  });
+
+  // ---------- Add channel ----------
+  var addSec = null, adding = false;
+  function openAdd(prefill, sectionId) {
+    var secs = lib.sections();
+    addSec = sectionId && lib.section(sectionId) ? sectionId : (stack.length && stack[stack.length - 1].name === 'section' ? stack[stack.length - 1].id : secs[0].id);
+    $('#addPicks').innerHTML = secs.map(function (s) { return '<button type="button" data-act="add-pick" data-id="' + esc(s.id) + '" aria-pressed="' + (s.id === addSec) + '">' + esc(s.name) + '</button>'; }).join('');
+    $('#addInput').value = prefill || '';
+    $('#addMsg').textContent = feedsOn ? '' : 'Adding channels works in the Shelf app on your iPhone.';
+    $('#addMsg').className = 'msgline';
+    openDlg($('#addDlg'));
+    if (!prefill && !isPhone) setTimeout(function () { $('#addInput').focus(); }, 50);
+  }
+  $('#addForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (adding) return;
+    var val = $('#addInput').value.trim(), msg = $('#addMsg');
+    if (!val) { msg.textContent = 'Paste a channel link first.'; msg.className = 'msgline err'; return; }
+    adding = true; msg.textContent = 'Looking it up…'; msg.className = 'msgline'; $('#addGo').disabled = true;
+    lib.add(val, addSec).then(function (s) {
+      adding = false; $('#addGo').disabled = false;
+      msg.textContent = 'Added ' + s.name + ' to ' + lib.section(s.section).name + '.'; msg.className = 'msgline ok';
+      lib.saveCache(); renderAll();
+      setTimeout(function () { if ($('#addDlg').open) $('#addDlg').close(); }, 900);
+    }, function (err) {
+      adding = false; $('#addGo').disabled = false;
+      msg.textContent = (err && err.message) || "Couldn't add that."; msg.className = 'msgline err';
+    });
+  });
+
+  // ---------- Sections ----------
+  var editing = null, secKind = 'video', confirmDel = false;
+  function openSec(id) {
+    editing = id || null; confirmDel = false;
+    var s = id && lib.section(id);
+    $('#secH').textContent = s ? 'Edit section' : 'New section';
+    $('#secName').value = s ? s.name : '';
+    secKind = s ? s.kind : 'video'; paintKind();
+    $('#secMore').hidden = !s;
+    $('#secDel').textContent = 'Delete section';
+    $('#secMsg').textContent = ''; $('#secMsg').className = 'msgline';
+    openDlg($('#secDlg'));
+    if (!s && !isPhone) setTimeout(function () { $('#secName').focus(); }, 50);
+  }
+  function paintKind() { Array.prototype.forEach.call(document.querySelectorAll('#secKind button'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-kind') === secKind)); }); }
+  $('#secKind').addEventListener('click', function (e) { var b = e.target.closest('[data-kind]'); if (b) { secKind = b.getAttribute('data-kind'); paintKind(); } });
+  $('#secForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('#secMsg');
+    try {
+      if (editing) { if (!lib.renameSection(editing, $('#secName').value)) throw new Error('Give the section a name.'); lib.setKind(editing, secKind); }
+      else { var s = lib.addSection($('#secName').value, secKind); toast('Added ' + s.name + '. Tap it to add channels.'); }
+      $('#secDlg').close(); renderAll();
+    } catch (err) { msg.textContent = err.message; msg.className = 'msgline err'; }
+  });
+
+  // ---------- Clicks ----------
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
+    switch (act) {
+      case 'play': case 'resume': play(regGet(b.getAttribute('data-e'))); break;
+      case 'open-section': openSection(id); break;
+      case 'open-channel': openChannel(id); break;
+      case 'open-pasted': push({ name: 'pasted' }); break;
+      case 'back': back(); break;
+      case 'search': if (!stack.length || stack[stack.length - 1].name !== 'search') push({ name: 'search', q: prefs.lastQ || '' }); else { var q = $('#sq'); if (q) q.focus(); } break;
+      case 'paste': doPaste(); break;
+      case 'refresh': refreshAll(true); break;
+      case 'refresh-channel': lib.refresh(id, true).then(function () { lib.saveCache(); renderAll(); }); toast('Checking for new uploads…'); break;
+      case 'add-channel': openAdd(b.getAttribute('data-in') || '', id); break;
+      case 'fix-seed': openAdd(b.getAttribute('data-in'), id); break;
+      case 'add-pick': addSec = id; Array.prototype.forEach.call(document.querySelectorAll('#addPicks button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); break;
+      case 'add-paste': Native.readClipboard().then(function (t) { $('#addInput').value = (t || '').trim(); }, function () { $('#addInput').focus(); toast('Tap the box, then tap Paste.'); }); break;
+      case 'add-section': openSec(null); break;
+      case 'edit-section': openSec(id); break;
+      case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
+      case 'sec-delete':
+        if (!confirmDel) { confirmDel = true; var to = lib.sections().filter(function (s) { return s.id !== editing; })[0]; b.textContent = 'Tap again: channels move to ' + (to ? to.name : '?'); break; }
+        try { lib.removeSection(editing); $('#secDlg').close(); if (stack.length) { stack = []; $('#page').hidden = true; } renderAll(); toast('Section deleted. Its channels moved.'); }
+        catch (err) { $('#secMsg').textContent = err.message; $('#secMsg').className = 'msgline err'; }
+        break;
+      case 'seen-section': lib.sources(id).forEach(function (s) { lib.markSeen(s.id); }); renderAll(); break;
+      case 'move-channel': lib.setSection(id, b.getAttribute('data-to')); renderAll(); break;
+      case 'remove-channel':
+        if (confirmRemove !== id) { confirmRemove = id; renderPage(); break; }
+        var nm = lib.source(id).name; lib.remove(id); confirmRemove = null; lib.saveCache(); back(); toast('Removed ' + nm + '.'); break;
+      case 'remove-video':
+        var gone = videos[id]; delete videos[id]; saveVideos(); renderAll();
+        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; saveVideos(); renderAll(); } });
+        break;
+      case 'close-video': closeVideo(); break;
+      case 'v-toggle': try { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); } catch (er) {} break;
+      case 'v-back': case 'v-fwd': try { player.seekTo(Math.max(0, player.getCurrentTime() + (act === 'v-back' ? -15 : 15)), true); videoTick(); } catch (er) {} break;
+      case 'timer': setTimer(b.getAttribute('data-p'), b.getAttribute('data-m')); break;
+      case 'open-night': nightOpen = true; openSheet('#nsheet'); renderAudio(); break;
+      case 'close-night': closeNight(); break;
+      case 'audio-toggle': engine.toggle(); break;
+      case 'a-back': engine.seekBy(-engine.BACK); break;
+      case 'a-fwd': engine.seekBy(engine.FWD); break;
+      case 'a-rate': var cr = engine.state().rate, nr = RATES[(RATES.indexOf(cr) + 1) % RATES.length]; engine.setRate(nr); prefs.arate = nr; savePrefs(); break;
+      case 'check': openCheck(); break;
+      case 'dismiss': var d = b.closest('dialog'); if (d) d.close(); break;
+      case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
+      case 'key-remove': delete prefs.apiKey; savePrefs(); $('#keyInput').value = ''; $('#keyMsg').textContent = 'Removed. Search reads YouTube\'s results page.'; $('#keyMsg').className = 'msgline ok'; break;
+      case 'send': copyShelf(b); break;
+      case 'tone':
+        if (Native.tonePlaying) { Native.stopTone(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
+        if (engine.state().playing) engine.pause();
+        if (current) closeVideo();
+        Native.playTone().then(function () { b.textContent = 'Stop the sound test'; fillCheck(); toast('Now lock your phone for 10 seconds, then come back.'); },
+          function () { toast("The sound test couldn't start. Turn the volume up and try again.", 'warn'); });
+        break;
+    }
+  });
+  // Tap on a scrub line seeks
+  function scrubAt(el, ev, dur, fn) { var r = el.getBoundingClientRect(); if (!dur || !r.width) return; fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * dur); }
+  $('#vScrub').addEventListener('click', function (ev) { try { var d = player.getDuration(); scrubAt(this, ev, d, function (t) { player.seekTo(t, true); videoTick(); }); } catch (e) {} });
+  $('#nScrub').addEventListener('click', function (ev) { var st = engine.state(); scrubAt(this, ev, st.dur, function (t) { engine.seek(t); }); });
+  $('#keyForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var k = $('#keyInput').value.trim();
+    if (k && !/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) { $('#keyMsg').textContent = 'That doesn\'t look like a Google key. They start with "AIza".'; $('#keyMsg').className = 'msgline err'; return; }
+    if (k) prefs.apiKey = k; else delete prefs.apiKey;
+    savePrefs(); $('#keyDlg').close(); toast(k ? 'Saved. Search now uses your Google key.' : 'No key. Search reads YouTube\'s results page.');
+  });
+  // Backdrop click closes a dialog
   Array.prototype.forEach.call(document.querySelectorAll('dialog'), function (d) {
     d.addEventListener('click', function (e) {
       if (e.target !== d) return;
@@ -3356,73 +2063,56 @@ if (typeof module !== 'undefined') module.exports = Search;
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close();
     });
   });
-
-  // ---------- paste ----------
-  var form = $('#addForm'), input = $('#paste'), addBtn = $('#addBtn');
-  function syncBtn() { addBtn.textContent = input.value.trim() ? 'Add' : 'Paste'; }
-  input.addEventListener('input', syncBtn);
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    if (input.value.trim()) { if (add(input.value)) input.value = ''; syncBtn(); return; }
-    // Empty box: read the clipboard (Safari shows a small Paste bubble to tap)
-    var touch = /iPhone|iPad|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent) && !matchMedia('(pointer: fine)').matches);
-    var fallback = function () { input.focus(); toast(touch ? 'Tap the box, then tap Paste.' : 'Press ⌘V to paste your link.'); };
-    try {
-      Native.readClipboard().then(function (txt) {
-        if (txt && txt.trim()) return add(txt);
-        // Universal Clipboard can take a moment to arrive from the Mac: try once more
-        setTimeout(function () { Native.readClipboard().then(function (t2) { if (t2 && t2.trim()) add(t2); else fallback(); }, fallback); }, 1200);
-      }, fallback);
-    } catch (er) { fallback(); }
-  });
-  document.addEventListener('paste', function (e) {
-    var t = e.target, cd = e.clipboardData || window.clipboardData;
-    var txt = cd ? cd.getData('text') : '';
-    if (t && t.id === 'paste') {
-      if (Core.findLinks(txt).length || /#shelf=/.test(txt)) { e.preventDefault(); add(txt); t.value = ''; syncBtn(); }
-      return;
-    }
-    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) return;
-    if (txt) { e.preventDefault(); add(txt); }
-  });
   document.addEventListener('keydown', function (e) {
-    var t = e.target, editable = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
-    // Safari only pastes into a text field, so move focus to the box first
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'v' || e.key === 'V') && !editable && !document.querySelector('dialog[open]')) input.focus({ preventScroll: true });
-    if (e.key === 'Escape' && !document.querySelector('dialog[open]') && current) closeNow();
+    if (e.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+    if ($('#vsheet').classList.contains('open')) closeVideo();
+    else if (nightOpen) closeNight();
+    else if (stack.length) back();
   });
+  function openDlg(d) { if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute('open', ''); }
 
-  // ---------- toast ----------
+  // ---------- Toast ----------
   var toastTimer = null;
   function toast(msg, kind, action) {
     var t = $('#toast');
     t.className = 'toast show' + (kind ? ' ' + kind : '');
-    t.innerHTML = '<span>' + esc(msg) + '</span>' + (action ? '<button type="button" class="toast-act">' + esc(action.label) + '</button>' : '');
+    t.innerHTML = '<span>' + esc(msg) + '</span>' + (action ? '<button type="button">' + esc(action.label) + '</button>' : '');
     if (action) t.querySelector('button').onclick = function () { action.fn(); t.className = 'toast'; };
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, action ? 6000 : 4000);
   }
 
-  // ---------- self-check ----------
+  // ---------- Self-check ----------
   function checks() {
     var out = [];
-    var web = /^https?:$/.test(location.protocol);
-    out.push(web ? { ok: 1, text: 'Opened from its web address' }
-      : { ok: 0, text: 'You opened the file directly. YouTube only plays when this page is opened from its web address, so use the link instead.' });
-    out.push(canSave && !lastSaveError ? { ok: 1, text: 'Saves your spots in this browser (a private window forgets them when it closes)' }
-      : !canSave ? { ok: 0, text: 'Your browser is blocking saving, so nothing will be remembered. In Safari, go to Settings, Privacy, and turn off "Block all cookies".' }
-      : { ok: 0, text: 'Saving just failed. Your browser storage may be full; remove a few finished videos.' });
-    out.push(navigator.onLine === false ? { ok: 0, text: "You're offline. Videos need the internet, but your shelf is safe." } : { ok: 1, text: 'Connected to the internet' });
+    out.push(/^https?:$/.test(location.protocol) ? { ok: 1, text: 'Opened from its web address' }
+      : { ok: 0, text: 'You opened the file directly. YouTube only plays when Shelf is opened from its web address.' });
+    out.push(canSave && !lastSaveError ? { ok: 1, text: 'Saving works' }
+      : !canSave && !Native.inApp ? { ok: 0, text: 'Your browser is blocking saving, so nothing will be remembered. In Safari, go to Settings, Privacy, and turn off "Block all cookies".' }
+      : lastSaveError ? { ok: 0, text: 'Saving just failed. Storage may be full; remove a few pasted videos.' } : { ok: 1, text: 'Saving works' });
+    out.push(navigator.onLine === false ? { ok: 0, text: "You're offline. Videos and new uploads need the internet; your spots are safe." } : { ok: 1, text: 'Connected to the internet' });
     out.push(ytLoaded ? { ok: 1, text: 'YouTube player is ready' }
-      : ytFailed ? { ok: 0, text: "Can't reach YouTube. Check your internet, or turn off any ad blocker or content blocker for this page, then reload." }
+      : ytFailed ? { ok: 0, text: "Can't reach YouTube. Check your internet, or turn off any content blocker, then reopen Shelf." }
       : { ok: 2, text: 'Still loading the YouTube player…' });
     if (lastErr) out.push({ ok: 2, text: 'Last video: ' + lastErr });
     if (current) {
-      var ago = lastCaptureAt && armed ? Math.round((Date.now() - lastCaptureAt) / 1000) : null;
-      var playingNow = false; try { playingNow = player && player.getPlayerState() === 1; } catch (e) {}
+      var ago = lastCaptureAt && armed ? Math.round((Date.now() - lastCaptureAt) / 1000) : null, playingNow = false;
+      try { playingNow = player && player.getPlayerState() === 1; } catch (e) {}
       out.push(ago == null ? { ok: 2, text: 'Your spot saves a few seconds after the video starts' }
-        : playingNow && ago > 20 ? { ok: 0, text: "Your spot hasn't saved for " + ago + ' seconds. Reload the page; your last spot is kept.' }
+        : playingNow && ago > 20 ? { ok: 0, text: "Your spot hasn't saved for " + ago + ' seconds. Close the video and open it again; your last spot is kept.' }
         : { ok: 1, text: 'Saved your spot ' + (ago < 3 ? 'just now' : ago + ' seconds ago') });
     }
+    if (feedsOn) {
+      var srcs = lib.sources(), failed = srcs.filter(function (s) { var st = lib.status(s.id); return st && !st.ok; });
+      if (refreshing) out.push({ ok: 2, text: 'Checking your channels for new uploads…' });
+      else if (srcs.length && failed.length === srcs.length) out.push({ ok: 0, text: "Couldn't check any of your channels. Check your internet, then tap the date's \"new\" line to try again." });
+      else if (failed.length) out.push({ ok: 0, text: "Couldn't update " + failed.map(function (s) { return s.name + ' (' + lib.status(s.id).error + ')'; }).join(', ') + '. Open the channel and tap Refresh.' });
+      else if (srcs.length) out.push({ ok: 1, text: 'Checked ' + srcs.length + ' channels for new uploads' + (lastRefresh ? ' ' + Core.ago(lastRefresh) : '') });
+      lib.seedMisses.filter(function (m) { return !alreadyHave(m.input); }).forEach(function (m) {
+        var sec = lib.section(m.section);
+        out.push({ ok: 0, text: "Couldn't find " + m.input + ' automatically. Open ' + (sec ? sec.name : 'its section') + ' and tap Fix next to it.' });
+      });
+    } else out.push({ ok: 1, text: 'Channels and new uploads load in the Shelf app on your iPhone; here you can paste and resume' });
+    out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
@@ -3430,120 +2120,93 @@ if (typeof module !== 'undefined') module.exports = Search;
       out.push(fs.state === 'ok' ? { ok: 1, text: fs.text } : fs.state === 'bad' ? { ok: 0, text: fs.text } : { ok: 2, text: 'Checking podcast feeds…' });
       var tr = Native.toneResult;
       out.push(Native.tonePlaying ? { ok: 2, text: 'Sound test playing. Lock your phone for 10 seconds, then come back.' }
-        : !tr ? { ok: 2, text: 'Lock-screen sound not tested yet. Tap "Test lock-screen sound" below, lock the phone for 10 seconds, then come back.' }
+        : !tr ? { ok: 1, text: 'Lock-screen sound not tested yet. Tap "Test lock-screen sound" below, lock the phone for 10 seconds, then come back.' }
         : tr.ok ? { ok: 1, text: 'Sound keeps playing on the lock screen' }
         : { ok: 0, text: 'Sound stopped when the screen locked. The app shell needs a fix and a rebuild in Xcode; tell Claude.' });
     }
-    var n = Object.keys(videos).length;
-    out.push({ ok: 1, text: n + ' video' + (n === 1 ? '' : 's') + ' on your shelf, saved ' + (Native.inApp ? 'on this phone' : 'in this browser') });
+    var n = Object.keys(videos).length + Object.keys(arec).length, ch = lib.sources().length;
+    out.push({ ok: 1, text: ch + ' channel' + (ch === 1 ? '' : 's') + ' in ' + lib.sections().length + ' sections, ' + n + ' saved spot' + (n === 1 ? '' : 's') + ', kept ' + (Native.inApp ? 'on this phone' : 'in this browser') });
     return out;
   }
+  var checkedAt = 0;
   function updateDot() {
-    var dot = $('#statusDot'); if (!dot) return;
     var c = checks(), bad = c.filter(function (x) { return x.ok === 0; }), wait = c.some(function (x) { return x.ok === 2; });
     var state = bad.length ? 'bad' : wait ? 'wait' : 'good';
-    dot.className = 'dot ' + state;
-    var label = bad.length ? 'Needs a look' : wait ? 'Getting ready' : current ? 'All good: saving your spot' : 'All good';
+    $('#statusDot').className = 'dot ' + state;
+    var label = bad.length ? 'Needs a look' : wait ? 'Getting ready' : 'All good';
     $('#statusText').textContent = label;
+    checkedAt = Date.now();
+    var d = new Date(checkedAt);
+    $('#statusSub').textContent = 'checked ' + (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
     $('#statusBtn').setAttribute('aria-label', 'Self-check: ' + label + '. Show details.');
     if ($('#checkDlg').open) fillCheck();
-    updateFoot();
-  }
-  function pulse() { var d = $('#statusDot'); if (!d || reduced()) return; d.classList.remove('pulse'); void d.offsetWidth; d.classList.add('pulse'); }
-  function updateFoot() {
-    var el = $('#lastSaved'); if (!el) return;
-    if (!lastSavedAt) { el.textContent = ''; return; }
-    var s = Math.round((Date.now() - lastSavedAt) / 1000);
-    el.textContent = 'Last saved ' + (s < 5 ? 'just now' : s < 60 ? s + ' seconds ago' : Core.ago(lastSavedAt));
   }
   function fillCheck() {
     $('#checkList').innerHTML = checks().map(function (x) {
       return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + '</span></li>';
     }).join('');
   }
-  function openDlg(d) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
-  if (!window.HTMLDialogElement) document.addEventListener('click', function (e) { if (e.target.closest('[data-act="dismiss"]')) { var d = e.target.closest('dialog'); if (d) d.removeAttribute('open'); } });
-  function openCheck() { fillCheck(); openDlg($('#checkDlg')); }
-  setInterval(updateDot, 5000);
-  window.addEventListener('online', updateDot); window.addEventListener('offline', updateDot);
+  function openCheck() { updateDot(); fillCheck(); openDlg($('#checkDlg')); }
 
-  // ---------- Send to iPhone ----------
-  function openSend() {
+  // ---------- Shelf link (spots to another device) ----------
+  function copyShelf(btn) {
     capture(true);
-    var base = location.origin + location.pathname + '#shelf=';
-    var total = Object.keys(videos).length;
-    var full = Core.encodeShelf(videos), inLink = Object.keys(Core.decodeShelf(full)).length;
-    $('#sendLink').value = base + full;
-    var note = [];
-    if (!isPhone) {
-      var box = $('#qr');
-      try {
-        // The code leaves out titles and old videos so a camera can read it easily; the phone looks titles up
-        var small = Core.encodeShelf(videos, 600, false), inCode = Object.keys(Core.decodeShelf(small)).length;
-        var q = qrcode(0, 'L'); q.addData(base + small); q.make();
-        box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
-        if (inCode < total) note.push('The code carries your ' + inCode + ' most recent videos. The link below carries ' + (inLink < total ? inLink : 'all ' + total) + '.');
-      } catch (e) { box.innerHTML = '<p class="qr-fail">Your shelf is too big for one code. Use Copy link and send it to yourself instead.</p>'; }
-    }
-    if (inLink < total && (isPhone || !note.length)) note.push('The link carries your ' + inLink + ' most recent videos.');
-    $('#qrNote').textContent = note.join(' ');
-    $('#qrNote').hidden = !note.length;
-    openDlg($('#sendDlg'));
-  }
-  function copyText(text, el) {
-    var manual = function () { el.focus(); el.select(); toast(isPhone ? 'Tap and hold the link to copy it.' : 'Press ⌘C to copy the selected link.'); };
-    try { navigator.clipboard.writeText(text).then(function () { toast(isPhone ? 'Link copied. Send it to your Mac (AirDrop or Messages) and open it there.' : 'Link copied. Send it to your iPhone and open it there.'); }, manual); }
-    catch (e) { manual(); }
-  }
-  function importFromHash() {
-    var m = location.hash.match(/^#shelf=([A-Za-z0-9_-]+)/);
-    if (!m) return;
-    importShelf(m[1]);
-    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    var link = location.origin + location.pathname + '#shelf=' + Core.encodeShelf(videos);
+    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy shelf link'; }, 2000); toast(isPhone ? 'Copied. Send it to your Mac and open it in Safari.' : 'Copied. Send it to your iPhone and paste it into Shelf.'); };
+    try { navigator.clipboard.writeText(link).then(done, function () { Native.call('Clipboard', 'write', { string: link }).then(done, function () { toast("Couldn't copy. Try again.", 'warn'); }); }); }
+    catch (e) { toast("Couldn't copy. Try again.", 'warn'); }
   }
   function importShelf(code) {
     try {
       var r = Core.merge(videos, Core.decodeShelf(code));
-      videos = r.videos; save();
-      Object.keys(videos).forEach(function (id) { if (!videos[id].title) fetchTitle(id); });
+      videos = r.videos; saveVideos();
       var n = r.added + r.updated;
-      toast(n ? 'Got your shelf: ' + r.added + ' new, ' + r.updated + ' updated.' : 'Your shelf was already up to date.');
-    } catch (e) { toast('That shelf link looks broken. Make a new one on your Mac with Send to iPhone.', 'warn'); }
+      toast(n ? 'Got your spots: ' + r.added + ' new, ' + r.updated + ' updated.' : 'Your spots were already up to date.');
+    } catch (e) { toast('That shelf link looks broken. Make a new one with Copy shelf link.', 'warn'); }
   }
 
-  // ---------- start ----------
-  if (Native.inApp) {
-    $('#toneBtn').hidden = false;
-    $('#saveWhere').textContent = 'Saved on this phone';
-    // The phone's own storage is the safe copy: bring anything it has into this page
-    Promise.all([Native.prefGet(KEY), Native.prefGet(PREF)]).then(function (r) {
+  // ---------- Start ----------
+  function restoreFromPhone() {
+    if (!Native.inApp) return Promise.resolve();
+    var keys = [KEY, PREF, AKEY, Library.KEY];
+    return withTimeout(Promise.all(keys.map(Native.prefGet)), 2000, 'slow').then(function (r) {
       try {
-        var changed = false;
-        if (r[0]) { var m = Core.merge(videos, JSON.parse(r[0])); if (m.added || m.updated) { videos = m.videos; changed = true; } }
-        if (r[1]) { var p = JSON.parse(r[1]); for (var k in p) if (!(k in prefs)) prefs[k] = p[k]; }
-        if (changed) { save(); render(); }
-        else if (!r[0] && Object.keys(videos).length) save();
+        if (r[0]) { var local = load(KEY, {}), m = Core.merge(local, JSON.parse(r[0])); if (m.added || m.updated || !rawGet(KEY)) rawSet(KEY, JSON.stringify(m.videos), false); }
+        if (r[1] && !rawGet(PREF)) rawSet(PREF, r[1], false);
+        if (r[2]) { var la = load(AKEY, {}), pa = JSON.parse(r[2]); Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); rawSet(AKEY, JSON.stringify(la), false); }
+        if (r[3] && !rawGet(Library.KEY)) rawSet(Library.KEY, r[3], false);
       } catch (e) {}
+    }, function () {});
+  }
+  function boot() {
+    videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    lib = Library.create({
+      load: rawGet,
+      save: function (k, v) { rawSet(k, v, k === Library.KEY); }, // the feed cache stays in the web view; the library itself is mirrored to the phone
+      fetchText: fetchText
     });
+    // Keep the phone's copy complete even before anything changes
+    if (Native.inApp) { Native.prefSet(KEY, JSON.stringify(videos)); if (rawGet(Library.KEY)) Native.prefSet(Library.KEY, rawGet(Library.KEY)); }
+    buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a');
+    initAudio();
+    if (Native.inApp) $('#toneBtn').hidden = false;
+    $('#pasteIntro').textContent = isPhone ? 'Tap the box, then tap Paste. A YouTube video plays straight away; a channel link opens Add channel.' : 'Press ⌘V. A YouTube video plays straight away; a channel link opens Add channel.';
+    if (!isPhone) $('#pasteBtn').querySelector('small').textContent = 'or press ⌘V';
+    var m = location.hash.match(/^#shelf=([A-Za-z0-9_-]+)/);
+    if (m) { importShelf(m[1]); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
+    renderHome(); renderAudio();
+    loadYT();
+    updateDot();
+    setInterval(updateDot, 5000);
+    setInterval(function () { if (!stack.length && document.visibilityState === 'visible') renderHome(); }, 60000);
+    window.addEventListener('online', updateDot); window.addEventListener('offline', updateDot);
+    if (!canSave && !Native.inApp) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Tap the self-check for how to fix it.', 'warn'); }, 600);
+    refreshAll(false);
+    // Test hook
+    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture,
+      get current() { return current; }, get vTimer() { return vTimer; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get busy() { return refreshing || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
-  if (isPhone) {
-    // On the phone the button sends the other way
-    $('#sendLabel').textContent = 'Send to Mac';
-    $('#sendH').textContent = 'Send to Mac';
-    $('#sendIntro').textContent = "Copy this link and open it on your Mac, for example with AirDrop or Messages. Your Mac's shelf picks up the spots you reached on this phone.";
-    $('#qr').hidden = true; $('#sendTip').hidden = true;
-    $('#copyLabel').textContent = 'Your shelf link';
-  }
-  if (standalone) $('#homeHint').hidden = false;
-  importFromHash();
-  render();
-  syncBtn();
-  updateDot();
-  // On a Mac the box is ready for ⌘V straight away (not on phones: it would pop up the keyboard)
-  try { if (matchMedia('(hover: hover) and (pointer: fine)').matches) input.focus({ preventScroll: true }); } catch (e) {}
-  if (!canSave) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Click the dot for how to fix it.', 'warn'); }, 600);
-  // Test hook
-  window.__resume = { get videos() { return videos; }, checks: checks, capture: capture, get current() { return current; } };
+  restoreFromPhone().then(boot);
 })();
 </script>
 </body>

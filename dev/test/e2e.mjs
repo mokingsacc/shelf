@@ -1,270 +1,217 @@
-// End-to-end run of the "done" test in Chromium, with YouTube faked (no internet here).
-// Usage: node test/e2e.mjs  (serves dist/ on :8765)
-import { chromium, webkit } from 'playwright';
+// End-to-end run of the v2 "done" test (done-test.md) in Chromium, with the iPhone shell and the internet faked.
+// Usage: node dev/test/e2e.mjs
+import { chromium } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import { installFakes, CAP, CHANNELS } from './fakenet.mjs';
 
 const root = new URL('../../', import.meta.url).pathname;
 const server = http.createServer((req, res) => {
   const f = path.join(root, decodeURIComponent(req.url.split('?')[0]).replace(/\/$/, '/index.html'));
   fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(d); });
 }).listen(8765);
-
-const FAKE_YT = `
-window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 } };
-YT.Player = function (el, opts) {
-  var self = this, node = document.getElementById(el);
-  node.innerHTML = '<div id="fakeplayer" style="width:100%;height:100%;background:#000;color:#fff;display:grid;place-items:center">fake player</div>';
-  var t0 = 0, base = 0, state = -1, id = null, rate = 1, dur = 600;
-  window.__fake = self;
-  function now() { return state === 1 ? base + (Date.now() - t0) / 1000 * rate * (window.__speed || 1) : base; }
-  function set(s) { state = s; opts.events.onStateChange && opts.events.onStateChange({ data: s, target: self }); }
-  self.loadVideoById = function (o) {
-    if (window.__lag) { var oldT = now(); id = o.videoId; state = 3; base = oldT; dur = 600; setTimeout(function () { base = o.startSeconds || 0; t0 = Date.now(); set(1); }, 400); return; }
-    if (window.__ad) { id = o.videoId; dur = 30; base = 25; t0 = Date.now(); set(1); setTimeout(function () { dur = 600; base = o.startSeconds || 0; t0 = Date.now(); set(1); }, 400); return; }
-    id = o.videoId; base = o.startSeconds || 0; t0 = Date.now(); window.__lastStart = base; window.__lastId = id;
-    if (id === 'blockedxxxx') { setTimeout(function(){ opts.events.onError({ data: 150 }); }, 50); return; }
-    setTimeout(function () { t0 = Date.now(); set(1); }, 50); };
-  self.getCurrentTime = function () { var t = now(); if (t >= dur) { t = dur; } return t; };
-  self.getDuration = function () { return id ? dur : 0; };
-  self.getPlayerState = function () { return state; };
-  self.getVideoData = function () { return { video_id: id || '', title: 'Fake title ' + id, author: 'Fake channel' }; };
-  self.getPlaybackRate = function () { return rate; };
-  self.setPlaybackRate = function (r) { rate = r; };
-  self.stopVideo = function () { base = now(); set(5); };
-  self.pauseVideo = function () { base = now(); set(2); };
-  self.advance = function (n) { base += n; };
-  self.seekTo = function (s) { base = s; t0 = Date.now(); if (s >= dur) { base = dur; set(0); } };
-  setTimeout(function () { opts.events.onReady && opts.events.onReady({ target: self }); if (window.__errOnCreate) opts.events.onError({ data: 2 }); }, 30);
-};
-setTimeout(function(){ window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady(); }, 20);
-`;
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+const URL0 = 'http://localhost:8765/';
+const SHOTS = '/tmp/claude-0/-home-claude/37d1ef24-0e4b-56e8-ae27-d473dfebb3f7/scratchpad';
 
 let failures = 0;
 const ok = (cond, msg) => { console.log((cond ? '  PASS ' : '  FAIL ') + msg); if (!cond) failures++; };
+const errors = [];
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
+const phone = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
 
-async function setup(ctx, { ytDown = false } = {}) {
-  await ctx.route('https://www.youtube.com/iframe_api', (r) => ytDown ? r.abort() : r.fulfill({ contentType: 'text/javascript', body: FAKE_YT }));
-  await ctx.route('https://i.ytimg.com/**', (r) => r.fulfill({ contentType: 'image/png', body: PNG }));
-  await ctx.route('https://noembed.com/**', (r) => { const u = new URL(r.request().url()); const id = new URL(u.searchParams.get('url')).searchParams.get('v'); r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ title: 'Noembed title for ' + id, author_name: 'Channel ' + id }) }); });
-  await ctx.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ contentType: 'text/css', body: '' }));
+async function appPage({ prefs = {}, clip = '', fakes = {}, ctxOpts = {} } = {}) {
+  const ctx = await browser.newContext({ ...phone, ...ctxOpts });
+  await installFakes(ctx, fakes);
+  await ctx.addInitScript(CAP(prefs, clip));
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => errors.push(e.message));
+  p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push(m.text()); });
+  await p.goto(URL0);
+  return { ctx, p };
 }
+const settle = (p) => p.waitForFunction(() => window.__shelf && !window.__shelf.busy, null, { timeout: 10000 }).then(() => p.waitForTimeout(150)).catch(() => {});
+const shelf = (p, fn) => p.evaluate(fn);
 
-async function run(browserType, name) {
-  console.log(`\n== ${name}`);
-  const browser = await browserType.launch(browserType === chromium ? { executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' } : {}).catch((e) => { console.log('  skip: ' + e.message.split('\n')[0]); return null; });
-  if (!browser) return;
-  const ctx = await browser.newContext({ permissions: name === 'chromium' ? ['clipboard-read', 'clipboard-write'] : [] });
-  await setup(ctx);
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
-  await page.goto('http://localhost:8765/');
-  await page.waitForTimeout(400);
+console.log('\n== 1 Open');
+let { ctx, p } = await appPage({ fakes: { fresh: true } });
+await settle(p);
+const names = await p.locator('.band .hd h2').allTextContents();
+ok(names.join(',') === 'Medicine,Entertainment,Sleep', '1 sections in day order: ' + names.join(', '));
+ok(await shelf(p, () => window.__shelf.lib.sources().length) === 6, '1 all six of Mo\'s channels found on first run');
+await p.waitForFunction(() => document.querySelector('#statusDot').classList.contains('good'), null, { timeout: 6000 }).catch(() => {});
+ok(await p.locator('#statusDot.good').count() === 1 && (await p.locator('#statusText').textContent()) === 'All good', '1 corner says All good');
+ok(await p.locator('.band .nw').count() === 0, '1 nothing marked new on the very first run');
 
-  // 1 Open
-  ok(await page.locator('#empty').isVisible(), '1 empty shelf shows a friendly start');
-  await page.waitForFunction(() => document.querySelector('#statusDot').classList.contains('good'), null, { timeout: 4000 }).catch(() => {});
-  ok(await page.locator('#statusDot.good').count() === 1, '1 status dot is green');
+console.log('\n== 2 New uploads');
+await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
+ok(await p.locator('.band.c1 .nw').count() === 2, '2 Medicine shows 2 NEW uploads');
+ok((await p.locator('.band.c1 .tm').textContent()).includes('2 new'), '2 Medicine header says 2 new');
+ok(/6 new/.test(await p.locator('#summary').textContent()), '2 date line counts new uploads: ' + await p.locator('#summary').textContent());
+await p.locator('.band.c1 .hd').click();
+ok(await p.locator('#page .top h1').textContent() === 'Medicine' && await p.locator('#page .chrow').count() === 2, '2 Medicine page lists its 2 channels');
+await p.locator('#page .chrow', { hasText: 'Dirty Medicine' }).click();
+ok(await p.locator('#page .item').count() === 3 && await p.locator('#page .item .nw').count() === 1, '2 channel shows its latest videos with the new one marked (' + await p.locator('#page .item').count() + ' items, ' + await p.locator('#page .item .nw').count() + ' new)');
+ok(!(await p.content()).toLowerCase().includes('recommended'), '2 no recommendations anywhere');
+await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
+await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
+ok(await p.locator('.band.c1 .nw').count() === 1, '2 opening the channel clears its new mark');
+const savedPrefs = await shelf(p, () => window.__prefs);
+ok(!!savedPrefs['shelf.v2.library'], '2 channel list saved on the phone');
 
-  // 2 Add by Cmd+V anywhere
-  await page.evaluate(() => {
-    const dt = new DataTransfer(); dt.setData('text/plain', 'https://youtu.be/dQw4w9WgXcQ?si=xyz');
-    document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
-  });
-  await page.waitForTimeout(300);
-  ok(await page.evaluate(() => Object.keys(window.__resume.videos).length) === 1, '2 pasted link is on the shelf');
-  ok(await page.locator('#hero').isVisible() && await page.evaluate(() => document.body.classList.contains('playing')) && !(await page.locator('#poster').isVisible()), '2 player opens and plays');
-  await page.waitForTimeout(400);
-  ok((await page.locator('#heroTitle').textContent()).includes('title'), '2 shows a title: ' + await page.locator('#heroTitle').textContent());
+console.log('\n== 3 Paste');
+await p.evaluate(() => { window.__clip = 'https://youtu.be/dQw4w9WgXcQ?si=xyz'; });
+await p.locator('#pasteBtn').click(); await p.waitForTimeout(500);
+ok(await p.locator('#vsheet.open').count() === 1 && await shelf(p, () => window.__shelf.current) === 'dQw4w9WgXcQ', '3 Paste plays the copied video');
+ok(await shelf(p, () => window.__fake.getPlayerState()) === 1, '3 it is playing');
 
-  // 3 Remember: speed up fake time to ~60s then leave
-  await page.evaluate(() => { window.__fake.advance(60); });
-  await page.waitForTimeout(5300); // let the 5-second autosave fire on its own
-  const t = await page.evaluate(() => window.__resume.videos.dQw4w9WgXcQ.t);
-  ok(t > 50 && t < 90, '3 spot saved around 1:00 (got ' + t.toFixed(1) + ')');
-  await page.close();
+console.log('\n== 4 Resume');
+await p.evaluate(() => window.__fake.advance(60));
+await p.waitForTimeout(5400);
+const t = await shelf(p, () => window.__shelf.videos.dQw4w9WgXcQ.t);
+ok(t > 55 && t < 80, '4 spot saved around 1:00 (got ' + t.toFixed(1) + ')');
+await p.waitForTimeout(400);
+const prefs4 = await shelf(p, () => window.__prefs);
+await ctx.close();
+({ ctx, p } = await appPage({ prefs: prefs4 })); // web storage gone, phone storage kept: like a fresh launch
+await p.waitForTimeout(1200);
+ok(await p.locator('#cont').isVisible() && /1:\d\d/.test(await p.locator('#contMeta').textContent()), '4 Resume strip shows it at ' + await p.locator('#contMeta').textContent());
+await p.locator('#cont').click(); await p.waitForTimeout(400);
+const start = await shelf(p, () => window.__lastStart);
+ok(Math.abs(start - (t - 3)) < 2, '4 one tap carries on from the saved spot (start ' + start + ')');
 
-  // 4 Resume in a new tab
-  const p2 = await ctx.newPage();
-  p2.on('pageerror', (e) => errors.push(e.message));
-  await p2.goto('http://localhost:8765/');
-  await p2.waitForTimeout(400);
-  const cta = await p2.locator('#resumeText').textContent();
-  ok(/^Resume from 1:\d\d$/.test(cta), '4 button says "' + cta + '"');
-  ok(await p2.locator('#chip').isVisible() && /1:\d\d/.test(await p2.locator('#chip').textContent()), '4 poster chip: ' + await p2.locator('#chip').textContent());
-  ok(await p2.locator('#heroBar').evaluate((e) => parseFloat(e.style.width) > 5), '4 progress bar shows');
-  await p2.locator('#poster').click();
-  await p2.waitForTimeout(300);
-  const start = await p2.evaluate(() => window.__lastStart);
-  ok(Math.abs(start - (t - 3)) < 2, '4 resumes from saved spot (start ' + start + ')');
+console.log('\n== 5 Sleep timer (video)');
+await p.locator('#vSeg [data-m="15"]').click();
+ok(/14:5\d|15:00/.test(await p.locator('#vCd').textContent()) && (await p.locator('#vStops').textContent()).startsWith('stops at'), '5 countdown shows: ' + (await p.locator('#vCd').textContent()).replace('remaining', ''));
+await p.evaluate(() => { window.__shelf.vTimer.endsAt = Date.now() + 1200; });
+await p.waitForTimeout(2600);
+ok(await shelf(p, () => window.__fake.getPlayerState()) === 2, '5 video pauses when the timer hits zero');
+ok((await p.locator('#vCd').textContent()).includes('Paused by the sleep timer'), '5 says it was the sleep timer');
+await p.locator('#vSeg [data-m="30"]').click(); await p.locator('#vSeg [data-m="30"]').click();
+ok((await p.locator('#vCd').textContent()).startsWith('Off'), '5 tapping the chosen number again turns the timer off');
+// guards from v1: video swap and pre-roll ads must not overwrite a spot
+await p.evaluate(() => { window.__lag = true; window.__clip = 'https://youtu.be/swapswapswa'; });
+await p.locator('[data-act="close-video"]').click();
+await p.locator('#pasteBtn').click(); await p.waitForTimeout(100);
+await shelf(p, () => window.__shelf.capture(true));
+ok((await shelf(p, () => window.__shelf.videos.swapswapswa.t)) < 5, 'swap: the new video keeps its own spot');
+await p.waitForTimeout(600); await p.evaluate(() => { window.__lag = false; window.__ad = true; });
+await p.locator('[data-act="close-video"]').click();
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ'));
+await shelf(p, () => window.__shelf.capture(true));
+const adV = await shelf(p, () => ({ ...window.__shelf.videos.dQw4w9WgXcQ }));
+ok(!adV.done && adV.t > 50 && adV.dur === 600, 'ad: spot kept (t ' + adV.t.toFixed(0) + ', dur ' + adV.dur + ')');
+await p.waitForTimeout(600); await p.evaluate(() => { window.__ad = false; });
+await p.locator('[data-act="close-video"]').click();
+await ctx.close();
 
-  // Swapping videos: the old video's time must not land on the new one
-  await p2.evaluate(() => { window.__lag = true; });
-  await p2.evaluate(() => {
-    const dt = new DataTransfer(); dt.setData('text/plain', 'https://youtu.be/swapswapswa');
-    document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
-  });
-  await p2.evaluate(() => window.__resume.capture(true));
-  const swapT = await p2.evaluate(() => window.__resume.videos.swapswapswa.t);
-  ok(swapT < 5, 'swap: new video keeps its own spot (got ' + swapT + ')');
-  await p2.waitForTimeout(600);
-  await p2.evaluate(() => { window.__lag = false; });
-  // A pre-roll ad must not overwrite the spot or finish the video
-  await p2.evaluate(() => { window.__ad = true; });
-  await p2.locator('#watching .row[data-id="dQw4w9WgXcQ"] .row-main').click();
-  await p2.evaluate(() => window.__resume.capture(true));
-  const adV = await p2.evaluate(() => ({ ...window.__resume.videos.dQw4w9WgXcQ }));
-  ok(!adV.done && adV.t > 50 && adV.dur === 600, 'ad: spot kept (t ' + adV.t.toFixed(0) + ', dur ' + adV.dur + ', done ' + adV.done + ')');
-  await p2.waitForTimeout(600);
-  await p2.evaluate(() => { window.__ad = false; });
+console.log('\n== 6 Sleep audio and lock screen');
+({ ctx, p } = await appPage({ fakes: { fresh: false } }));
+await settle(p);
+ok((await p.locator('.band.c3').textContent()).includes('All caught up'), '6 Sleep band shows nothing new when nothing is new');
+await p.locator('.band.c3 .hd').click();
+await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTimeout(1200);
+ok(await p.locator('#nsheet.open').count() === 1, '6 night player opens');
+ok(await p.evaluate(() => !document.querySelector('#audio').paused), '6 episode is playing');
+ok(await p.evaluate(() => navigator.mediaSession && navigator.mediaSession.metadata && navigator.mediaSession.metadata.title) === 'Rome: The Fall of the Western Empire', '6 lock screen shows the episode title');
+await p.locator('#nSeg [data-m="15"]').click();
+ok(/1[45]:\d\d/.test(await p.locator('#nCd').textContent()), '6 "lights out in" countdown shows');
+await p.locator('[data-act="close-night"]').click();
+await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
+ok(await p.locator('#mini').isVisible() && /to sleep/.test(await p.locator('#miniSub').textContent()), '6 keeps playing with a mini bar after closing: ' + await p.locator('#miniSub').textContent());
+await p.evaluate(() => { window.__shelf.engine.state().timer.endsAt = Date.now() + 1500; });
+await p.waitForTimeout(3000);
+ok(await p.evaluate(() => document.querySelector('#audio').paused), '6 stops when the timer runs out');
+const ep = await shelf(p, () => Object.values(window.__shelf.audio)[0]);
+ok(ep && ep.t > 1 && ep.source, '6 episode spot saved (' + (ep && ep.t.toFixed(1)) + 's)');
+ok(await p.evaluate(() => document.querySelector('#audio').volume) === 1, '6 volume back to normal for next time');
 
-  // 5 Finish
-  await p2.evaluate(() => { window.__fake.seekTo(600); });
-  await p2.waitForTimeout(300);
-  ok(await p2.locator('#finished .row[data-id="dQw4w9WgXcQ"]').count() === 1 && !(await p2.evaluate(() => window.__resume.current)), '5 finished video moves to Finished');
+console.log('\n== 7 Search and add');
+await p.locator('#searchBtn').click();
+await p.fill('#sq', 'renal'); await p.press('#sq', 'Enter'); await p.waitForTimeout(500);
+ok(await p.locator('#page .item').count() >= 1 && (await p.locator('#page .item').first().textContent()).includes('Renal'), '7 search shows results');
+await p.locator('#page .item').first().click(); await p.waitForTimeout(400);
+ok(await p.locator('#vsheet.open').count() === 1 && await shelf(p, () => window.__fake.getPlayerState()) === 1, '7 a result plays');
+await p.locator('[data-act="close-video"]').click();
+await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
+await p.locator('[data-act="add-section"]').click();
+await p.fill('#secName', 'Revision'); await p.locator('#secForm [type="submit"]').click(); await p.waitForTimeout(150);
+ok((await p.locator('.band .hd h2').allTextContents()).includes('Revision'), '7 new section appears');
+await p.locator('.band', { hasText: 'Revision' }).locator('[data-act="add-channel"]').click();
+await p.fill('#addInput', 'https://www.youtube.com/@MehlmanMedical'); await p.locator('#addGo').click();
+await p.waitForTimeout(600);
+ok(/Added Mehlman Medical to Revision/.test(await p.locator('#addMsg').textContent()), '7 add channel by pasting its link: ' + await p.locator('#addMsg').textContent());
+await p.waitForTimeout(800);
+await p.locator('.band', { hasText: 'Revision' }).locator('.hd').click();
+await p.locator('[data-act="add-channel"]').first().click();
+await p.fill('#addInput', 'https://www.youtube.com/@NoSuchChannel'); await p.locator('#addGo').click(); await p.waitForTimeout(500);
+ok(/Not found/.test(await p.locator('#addMsg').textContent()), '7 a bad channel is explained: ' + await p.locator('#addMsg').textContent());
+await p.keyboard.press('Escape');
+await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
 
-  // Add by typing in the box, multiple links, bad link
-  await p2.fill('#paste', 'https://www.youtube.com/watch?v=9bZkp7q19f0&t=1m and https://youtu.be/kJQP7kiw5Fk');
-  await p2.press('#paste', 'Enter');
-  await p2.waitForTimeout(300);
-  ok(await p2.evaluate(() => !!(window.__resume.videos['9bZkp7q19f0'] && window.__resume.videos['kJQP7kiw5Fk'])) && (await p2.locator('#heroTitle').textContent()).includes('9bZkp7q19f0'), 'box adds two links at once (first one featured)');
-  ok((await p2.locator('#resumeText').textContent()) === 'Resume from 1:00', 'a link with &t=1m starts at 1:00');
-  await p2.fill('#paste', 'https://vimeo.com/123');
-  await p2.press('#paste', 'Enter');
-  await p2.waitForTimeout(200);
-  ok((await p2.locator('#toast').textContent()).includes("doesn't look like a YouTube link"), 'bad link explained in plain words');
+console.log('\n== 8 Self-check');
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+const txt = await p.locator('#checkList').textContent();
+ok(await p.locator('#checkList li.ok').count() >= 6 && txt.includes('Running inside the Shelf app'), '8 green ticks in the app');
+ok(await p.locator('#toneBtn').isVisible(), '8 lock-screen sound test is offered in the app');
+await p.screenshot({ path: SHOTS + '/e2e-check.png' });
+await p.keyboard.press('Escape');
+ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'phone: no sideways scroll');
+await ctx.close();
 
-  // Real keyboard paste with focus elsewhere (Safari-style path: focus moves to the box)
-  if (name === 'chromium') {
-    await p2.evaluate(() => navigator.clipboard.writeText('https://www.youtube.com/watch?v=3JZ_D3ELwOQ'));
-    await p2.locator('h1').click();
-    await p2.keyboard.press('ControlOrMeta+V');
-    await p2.waitForTimeout(300);
-    ok(await p2.evaluate(() => !!window.__resume.videos['3JZ_D3ELwOQ']), 'keyboard paste with nothing focused adds the video');
-    await p2.locator('.only-playing[data-act="close"]').click();
-    // Paste button reads the clipboard
-    await p2.evaluate(() => navigator.clipboard.writeText('https://youtu.be/L_jWHffIx5E'));
-    await p2.locator('#addBtn').click();
-    await p2.waitForTimeout(300);
-    ok(await p2.evaluate(() => !!window.__resume.videos['L_jWHffIx5E']), 'Paste button adds from the clipboard');
-    await p2.locator('.only-playing[data-act="close"]').click();
-  }
+// Problems are explained in plain words
+({ ctx, p } = await appPage({ fakes: { ytDown: true } }));
+await p.waitForTimeout(13000);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok((await p.locator('#checkList').textContent()).includes("Can't reach YouTube"), '8 YouTube blocked is explained');
+await p.keyboard.press('Escape');
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ'));
+ok(await p.locator('#perr').isVisible() && (await p.locator('#perr').textContent()).includes('Open on YouTube'), '8 playing then offers Open on YouTube');
+await ctx.close();
+({ ctx, p } = await appPage());
+await settle(p);
+await ctx.route('https://www.youtube.com/feeds/**', (r) => r.abort());
+await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+const ft = await p.locator('#checkList').textContent();
+ok(/Couldn't update .*Dirty Medicine/.test(ft) && await p.locator('#statusDot.bad').count() === 1, '8 channel update failures name the channels');
+await p.keyboard.press('Escape');
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/blockedxxxx')); await p.waitForTimeout(300);
+ok((await p.locator('#perr').textContent()).includes('only lets it play on YouTube'), 'embed-blocked video explained, with Open on YouTube');
+await ctx.close();
 
-  // Blocked-embed video
-  await p2.fill('#paste', 'https://youtu.be/blockedxxxx');
-  await p2.press('#paste', 'Enter');
-  await p2.waitForTimeout(400);
-  ok(await p2.locator('#playerError').isVisible() && (await p2.locator('#playerError').textContent()).includes('Open on YouTube'), 'embed-blocked video offers Open on YouTube');
-  await p2.locator('.only-playing[data-act="close"]').click();
+console.log('\n== Mac browser (no app)');
+const mctx = await browser.newContext({ viewport: { width: 1280, height: 820 }, permissions: ['clipboard-read', 'clipboard-write'] });
+await installFakes(mctx);
+const m = await mctx.newPage(); m.on('pageerror', (e) => errors.push('mac: ' + e.message));
+await m.goto(URL0); await m.waitForTimeout(500);
+ok(await m.locator('#webNote').isVisible(), 'mac: says channels load in the iPhone app');
+await m.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', 'https://www.youtube.com/watch?v=9bZkp7q19f0&t=1m'); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true })); });
+await m.waitForTimeout(400);
+ok(await m.evaluate(() => window.__shelf.current) === '9bZkp7q19f0' && await m.evaluate(() => window.__lastStart) === 57, 'mac: ⌘V plays the link from its &t= time');
+await m.keyboard.press('Escape');
+ok(await m.locator('.band.c0').count() === 1, 'mac: pasted video shows under Pasted');
+await m.locator('#statusBtn').click();
+ok(!(await m.locator('#toneBtn').isVisible()) && await m.locator('#statusDot.good').count() === 1, 'mac: all good, no app-only buttons');
+await m.locator('#sendBtn').click(); await m.waitForTimeout(200);
+const link = await m.evaluate(() => navigator.clipboard.readText());
+ok(/#shelf=/.test(link), 'mac: shelf link copied');
+await m.keyboard.press('Escape');
+await m.screenshot({ path: SHOTS + '/e2e-mac.png' });
+// the link carries the spot into the phone app
+({ ctx, p } = await appPage({ clip: link }));
+await p.waitForTimeout(800);
+await p.locator('#pasteBtn').click(); await p.waitForTimeout(300);
+ok(await shelf(p, () => !!window.__shelf.videos['9bZkp7q19f0']), 'phone: pasting the shelf link brings the spots over');
+await ctx.close();
+// opened as a file
+const fctx = await browser.newContext(); await installFakes(fctx);
+const fp = await fctx.newPage(); await fp.goto('file://' + root + 'index.html'); await fp.waitForTimeout(400);
+await fp.locator('#statusBtn').click(); await fp.waitForTimeout(150);
+ok((await fp.locator('#checkList').textContent()).includes('opened the file directly'), 'file: opened-as-file is explained');
 
-  // Remove + undo
-  const count = (pg) => pg.evaluate(() => Object.keys(window.__resume.videos).length);
-  const before = await count(p2);
-  await p2.locator('#watching .row').first().hover();
-  await p2.locator('#watching .row [data-act="remove"]').first().click();
-  ok(await count(p2) === before - 1, 'remove works');
-  await p2.locator('#toast .toast-act').click();
-  ok(await count(p2) === before, 'undo brings it back');
-
-  // 6 Send to iPhone
-  await p2.locator('#sendBtn').click();
-  await p2.waitForTimeout(200);
-  ok(await p2.locator('#sendDlg[open] #qr svg').count() === 1, '6 QR code shows');
-  const link = await p2.locator('#sendLink').inputValue();
-  await p2.locator('#sendDlg [data-act="dismiss"]').first().click();
-  const phoneCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: name === 'chromium', hasTouch: true });
-  await setup(phoneCtx);
-  const phone = await phoneCtx.newPage();
-  phone.on('pageerror', (e) => errors.push('phone: ' + e.message));
-  await phone.goto(link);
-  await phone.waitForTimeout(500);
-  ok(await count(phone) === before, '6 phone gets the same shelf (' + await count(phone) + '/' + before + ')');
-  ok(!(await phone.evaluate(() => location.hash)), '6 phone link cleaned from address bar');
-  // Home Screen app path: paste the shelf link into the box
-  const p3ctx = await browser.newContext(); await setup(p3ctx); const p3 = await p3ctx.newPage();
-  await p3.goto('http://localhost:8765/'); await p3.waitForTimeout(300);
-  await p3.fill('#paste', link); await p3.press('#paste', 'Enter'); await p3.waitForTimeout(300);
-  ok(await count(p3) === before, '6 pasting the shelf link into the box imports it');
-  const overflow = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
-  ok(!overflow, 'phone: no sideways scroll');
-  await phone.screenshot({ path: `/tmp/claude-0/-home-claude/37d1ef24-0e4b-56e8-ae27-d473dfebb3f7/scratchpad/shot-${name}-phone.png`, fullPage: true });
-
-  // 7 Self-check
-  await p2.locator('#statusDot').click();
-  await p2.waitForTimeout(150);
-  ok(await p2.locator('#checkDlg[open] #checkList li.ok').count() >= 3, '7 self-check shows green ticks');
-  await p2.screenshot({ path: `/tmp/claude-0/-home-claude/37d1ef24-0e4b-56e8-ae27-d473dfebb3f7/scratchpad/shot-${name}-check.png` });
-  await p2.keyboard.press('Escape');
-  await p2.screenshot({ path: `/tmp/claude-0/-home-claude/37d1ef24-0e4b-56e8-ae27-d473dfebb3f7/scratchpad/shot-${name}-desk.png`, fullPage: true });
-
-  // An empty player complaining before anything is played shows nothing
-  const eCtx = await browser.newContext(); await setup(eCtx); const ep = await eCtx.newPage();
-  await ep.addInitScript(() => { window.__errOnCreate = true; });
-  await ep.goto(link); await ep.waitForTimeout(500);
-  ok(!(await ep.locator('#playerError').isVisible()) && await ep.locator('#statusDot.good').count() === 1, 'early player error ignored, dot green');
-
-  // Self-check when YouTube is blocked
-  const badCtx = await browser.newContext();
-  await setup(badCtx, { ytDown: true });
-  const bad = await badCtx.newPage();
-  await bad.goto('http://localhost:8765/');
-  await bad.waitForTimeout(500);
-  await bad.locator('#statusDot').click();
-  await bad.waitForTimeout(150);
-  ok((await bad.locator('#checkList').textContent()).includes("Can't reach YouTube"), '7 YouTube blocked is explained');
-  await bad.keyboard.press('Escape');
-  await bad.waitForTimeout(12500);
-  await bad.fill('#paste', 'https://youtu.be/dQw4w9WgXcQ'); await bad.press('#paste', 'Enter'); await bad.waitForTimeout(200);
-  ok(await bad.locator('#playerError').isVisible() && (await bad.locator('#playerError').textContent()).includes("Can't reach YouTube") && await bad.locator('#poster').isVisible(), 'YouTube blocked: Play explains it and offers YouTube');
-
-  // Self-check when opened as a file
-  const fileCtx = await browser.newContext();
-  await setup(fileCtx);
-  const fp = await fileCtx.newPage();
-  await fp.goto('file://' + root + 'index.html');
-  await fp.waitForTimeout(400);
-  await fp.locator('#statusDot').click();
-  await fp.waitForTimeout(150);
-  ok((await fp.locator('#checkList').textContent()).includes('opened the file directly'), '7 opened-as-file is explained');
-
-  // Inside the iPhone shell (Capacitor faked): phone storage, clipboard plugin, feed check
-  const capCtx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await setup(capCtx);
-  await capCtx.route('https://feeds.megaphone.fm/**', (r) => r.fulfill({ contentType: 'application/rss+xml', body: '<?xml version="1.0"?><rss><channel><title>Fin vs History</title></channel></rss>' }));
-  const CAP = (seed) => `window.__prefs = ${JSON.stringify(seed)};
-    window.Capacitor = { isNativePlatform: () => true, Plugins: {
-      Preferences: { get: async ({ key }) => ({ value: key in window.__prefs ? window.__prefs[key] : null }), set: async ({ key, value }) => { window.__prefs[key] = value; } },
-      Clipboard: { read: async () => ({ value: 'https://youtu.be/capcapcapca', type: 'text/plain' }) } } };`;
-  const cp = await capCtx.newPage(); cp.on('pageerror', (e) => errors.push('app: ' + e.message));
-  await cp.addInitScript(CAP({}));
-  await cp.goto('http://localhost:8765/'); await cp.waitForTimeout(2200);
-  await cp.locator('#addBtn').click(); await cp.waitForTimeout(400);
-  ok(await cp.evaluate(() => !!window.__resume.videos.capcapcapca), 'app: Paste uses the phone clipboard');
-  await cp.waitForTimeout(500);
-  ok(await cp.evaluate(() => (window.__prefs['resume.shelf.v1'] || '').includes('capcapcapca')), 'app: shelf saved to phone storage');
-  await cp.locator('.only-playing[data-act="close"]').click();
-  await cp.locator('#statusBtn').click(); await cp.waitForTimeout(200);
-  const capText = await cp.locator('#checkList').textContent();
-  ok(capText.includes('Running inside the Shelf app') && capText.includes('Can read podcast feeds') && capText.includes('Lock-screen sound not tested'), 'app: self-check shows app, feed and sound-test lines');
-  ok(await cp.locator('#toneBtn').isVisible(), 'app: sound test button shows');
-  const savedPrefs = await cp.evaluate(() => window.__prefs);
-  // Web storage wiped, phone storage kept: the shelf comes back
-  const cap2 = await browser.newContext(); await setup(cap2);
-  const cp2 = await cap2.newPage(); await cp2.addInitScript(CAP(savedPrefs));
-  await cp2.goto('http://localhost:8765/'); await cp2.waitForTimeout(600);
-  ok(await cp2.evaluate(() => !!window.__resume.videos.capcapcapca), 'app: shelf restored from phone storage after web storage loss');
-  // Plain browser shows no app-only lines
-  ok(!(await p2.locator('#toneBtn').isVisible()), 'web: no sound test button outside the app');
-
-  ok(errors.length === 0, 'no script errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
-  await browser.close();
-}
-
-await run(chromium, 'chromium');
-await run(webkit, 'webkit');
+ok(errors.length === 0, 'no script errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+await browser.close();
 server.close();
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');
 process.exit(failures ? 1 : 0);
