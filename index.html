@@ -2371,6 +2371,440 @@ var Native = (function () {
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; } };
 })();
 </script>
+<script>// Feeds: YouTube channel Atom feeds, podcast RSS, channel pages. Pure parsing (no DOM), tested in test/feeds.test.cjs.
+var Feeds = (function () {
+  var ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  function decode(s) {
+    if (s == null) return '';
+    s = String(s);
+    var cdata = s.match(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/);
+    if (cdata) return cdata[1].trim();
+    return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, function (m, e) {
+      if (e[0] === '#') { var n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); return isNaN(n) ? m : String.fromCodePoint(n); }
+      return ENT[e.toLowerCase()] != null ? ENT[e.toLowerCase()] : m;
+    }).trim();
+  }
+  function esc(name) { return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  // Inner text of the first <tag>…</tag> (namespaced names allowed)
+  function tag(xml, name) {
+    var m = xml.match(new RegExp('<' + esc(name) + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + esc(name) + '>', 'i'));
+    return m ? decode(m[1]) : '';
+  }
+  // Attribute of the first <tag …>
+  function attr(xml, name, a) {
+    var m = xml.match(new RegExp('<' + esc(name) + '\\s[^>]*?\\b' + esc(a) + '\\s*=\\s*("([^"]*)"|\'([^\']*)\')', 'i'));
+    return m ? decode(m[2] != null ? m[2] : m[3]) : '';
+  }
+  function blocks(xml, name) {
+    return xml.match(new RegExp('<' + esc(name) + '(?:\\s[^>]*)?>[\\s\\S]*?</' + esc(name) + '>', 'gi')) || [];
+  }
+  function stripHtml(s) { return decode(String(s || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim(); }
+
+  // "1:02:03", "62:03", "3723", "3723.5" -> seconds
+  function duration(v) {
+    v = String(v || '').trim();
+    if (!v) return 0;
+    if (/^\d+(\.\d+)?$/.test(v)) return Math.round(parseFloat(v));
+    if (/^\d+(:\d{1,2}){1,2}$/.test(v)) return v.split(':').reduce(function (a, p) { return a * 60 + parseInt(p, 10); }, 0);
+    return 0;
+  }
+
+  // ----- YouTube channel feed (Atom) -----
+  function parseYouTube(xml) {
+    if (!/<feed[\s>]/i.test(xml)) throw new Error('not a YouTube feed');
+    var head = xml.split(/<entry[\s>]/i)[0];
+    var out = { channelId: tag(head, 'yt:channelId'), title: tag(head, 'title'), author: tag(tag(head, 'author'), 'name'), items: [] };
+    if (out.channelId && !/^UC/.test(out.channelId)) out.channelId = 'UC' + out.channelId;
+    blocks(xml, 'entry').forEach(function (e) {
+      var id = tag(e, 'yt:videoId');
+      if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+      out.items.push({
+        id: id,
+        title: tag(e, 'title') || tag(e, 'media:title'),
+        published: Date.parse(tag(e, 'published')) || 0,
+        thumb: attr(e, 'media:thumbnail', 'url') || 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg',
+        description: tag(e, 'media:description').slice(0, 400),
+        author: tag(e, 'name')
+      });
+    });
+    out.items.sort(function (a, b) { return b.published - a.published; });
+    return out;
+  }
+  // Uploads without Shorts first; plain channel feed as the fallback
+  function youtubeFeedUrls(channelId) {
+    var rest = channelId.replace(/^UC/, '');
+    return ['https://www.youtube.com/feeds/videos.xml?playlist_id=UULF' + rest, 'https://www.youtube.com/feeds/videos.xml?channel_id=' + channelId];
+  }
+
+  // ----- Podcast RSS -----
+  function parsePodcast(xml) {
+    if (!/<rss[\s>]|<channel[\s>]/i.test(xml)) throw new Error('not a podcast feed');
+    var head = xml.split(/<item[\s>]/i)[0];
+    var out = {
+      title: tag(head, 'title'),
+      image: attr(head, 'itunes:image', 'href') || tag(tag(head, 'image'), 'url'),
+      author: tag(head, 'itunes:author'),
+      items: []
+    };
+    blocks(xml, 'item').forEach(function (it) {
+      var url = attr(it, 'enclosure', 'url');
+      if (!url) return;
+      var title = tag(it, 'title');
+      out.items.push({
+        guid: tag(it, 'guid') || url,
+        title: title,
+        url: url,
+        type: attr(it, 'enclosure', 'type'),
+        duration: duration(tag(it, 'itunes:duration')),
+        published: Date.parse(tag(it, 'pubDate')) || 0,
+        image: attr(it, 'itunes:image', 'href') || out.image,
+        description: stripHtml(tag(it, 'itunes:summary') || tag(it, 'description')).slice(0, 400),
+        episode: parseInt(tag(it, 'itunes:episode'), 10) || 0
+      });
+    });
+    out.items.sort(function (a, b) { return b.published - a.published; });
+    return out;
+  }
+
+  // ----- What did Mo paste into "Add channel"? -----
+  function parseChannelInput(text) {
+    text = String(text || '').trim();
+    if (!text) return null;
+    if (/^UC[A-Za-z0-9_-]{22}$/.test(text)) return { kind: 'id', value: text };
+    if (/^@[\w.-]{2,}$/.test(text)) return { kind: 'handle', value: text };
+    var u; try { u = new URL(/^[a-z]+:\/\//i.test(text) ? text : 'https://' + text); } catch (e) { return { kind: 'name', value: text }; }
+    if (/(^|\.)(youtube\.com|youtu\.be)$/i.test(u.hostname)) {
+      var parts = u.pathname.split('/').filter(Boolean);
+      if (parts[0] === 'channel' && /^UC[A-Za-z0-9_-]{22}$/.test(parts[1] || '')) return { kind: 'id', value: parts[1] };
+      if (parts[0] && parts[0][0] === '@') return { kind: 'handle', value: decodeURIComponent(parts[0]) };
+      if ((parts[0] === 'c' || parts[0] === 'user') && parts[1]) return { kind: 'page', value: 'https://www.youtube.com/' + parts[0] + '/' + parts[1] };
+      if (Core.parseLink(text)) return { kind: 'video', value: Core.parseLink(text).id };
+      return null;
+    }
+    if (/^https?:/i.test(text) || /\.(xml|rss)|feed|rss|megaphone|libsyn|anchor|buzzsprout|patreon|podbean|simplecast|acast|transistor/i.test(u.hostname + u.pathname)) return { kind: 'feed', value: u.href };
+    return { kind: 'name', value: text };
+  }
+  function pageUrl(input) {
+    if (input.kind === 'handle') return 'https://www.youtube.com/' + input.value;
+    if (input.kind === 'page') return input.value;
+    if (input.kind === 'video') return 'https://www.youtube.com/watch?v=' + input.value;
+    return '';
+  }
+
+  // ----- Channel page -> id, name, picture -----
+  function channelFromHtml(html) {
+    var id = (html.match(/<meta\s+itemprop="(?:identifier|channelId)"\s+content="(UC[A-Za-z0-9_-]{22})"/i) || [])[1]
+      || (html.match(/<link\s+rel="alternate"\s+type="application\/rss\+xml"[^>]*channel_id=(UC[A-Za-z0-9_-]{22})/i) || [])[1]
+      || (html.match(/"externalId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"/) || [])[1]
+      || (html.match(/"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"/) || [])[1]
+      || (html.match(/youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})/) || [])[1];
+    if (!id) return null;
+    var name = (html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i) || [])[1] || (html.match(/<title>([^<]*)<\/title>/i) || [])[1] || '';
+    name = decode(name).replace(/\s*-\s*YouTube\s*$/, '');
+    var avatar = (html.match(/<meta\s+property="og:image"\s+content="([^"]*)"/i) || [])[1] || '';
+    var handle = (html.match(/"canonicalBaseUrl"\s*:\s*"\/(@[^"]+)"/) || [])[1] || '';
+    return { id: id, name: name, avatar: decode(avatar), handle: handle };
+  }
+  // Consent page instead of the channel (served in some regions without the SOCS cookie)
+  function isConsentPage(html) { return /consent\.youtube\.com|consent\.google\.com/i.test(html) && !/itemprop="identifier"/i.test(html); }
+
+  return { decode: decode, duration: duration, parseYouTube: parseYouTube, youtubeFeedUrls: youtubeFeedUrls, parsePodcast: parsePodcast,
+    parseChannelInput: parseChannelInput, pageUrl: pageUrl, channelFromHtml: channelFromHtml, isConsentPage: isConsentPage, stripHtml: stripHtml };
+})();
+if (typeof module !== 'undefined') module.exports = Feeds;
+</script>
+<script>// Library: sections, channels and podcasts, plus feed refresh and "new upload" counts.
+// No DOM. Storage and networking are passed in, so node tests can drive it (test/library.test.cjs).
+var Library = (function () {
+  var KEY = 'shelf.v2.library';
+  var TTL = 30 * 60000; // refresh a feed at most every 30 minutes unless asked
+  var SEED_SECTIONS = [
+    { id: 'med', name: 'Medicine', kind: 'video' },
+    { id: 'ent', name: 'Entertainment', kind: 'video' },
+    { id: 'sleep', name: 'Sleep', kind: 'audio' }
+  ];
+  // Mo's channels, looked up on first run in the app. A miss shows as "Couldn't find …" with a Fix button.
+  var SEED_SOURCES = [
+    { input: '@DirtyMedicine', section: 'med' },
+    { input: '@MehlmanMedical', section: 'med' },
+    { input: '@BreakingPoints', section: 'ent' },
+    { input: 'The Ezra Klein Show', section: 'ent', audio: true },
+    { input: 'https://feeds.megaphone.fm/finvshistory', section: 'sleep' },
+    { input: 'Fall of Civilizations', section: 'sleep', audio: true }
+  ];
+  var CONSENT = { Cookie: 'SOCS=CAI; CONSENT=YES+1' };
+
+  function hash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return 'p' + (h >>> 0).toString(36); }
+  function slug(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'section'; }
+
+  // io: { load(key) -> string|null, save(key, string), fetchText(url, headers) -> Promise<string>, now() }
+  function create(io) {
+    var now = io.now || Date.now;
+    var state = read();
+    var cache = {}; // sourceId -> { fetched, ok, error, items }
+
+    function read() {
+      var s = null;
+      try { s = JSON.parse(io.load(KEY) || 'null'); } catch (e) { s = null; }
+      if (!s || !Array.isArray(s.sections)) s = { sections: SEED_SECTIONS.map(function (x) { return Object.assign({}, x); }), sources: {}, seeded: false };
+      s.sources = s.sources || {};
+      return s;
+    }
+    function save() { io.save(KEY, JSON.stringify(state)); }
+
+    // ----- Sections -----
+    function sections() { return state.sections.slice(); }
+    function section(id) { return state.sections.filter(function (s) { return s.id === id; })[0] || null; }
+    function addSection(name, kind) {
+      name = String(name || '').trim();
+      if (!name) throw new Error('Give the section a name.');
+      if (state.sections.some(function (s) { return s.name.toLowerCase() === name.toLowerCase(); })) throw new Error('You already have a section called ' + name + '.');
+      var id = slug(name), n = 2;
+      while (section(id)) id = slug(name) + '-' + n++;
+      var s = { id: id, name: name, kind: kind === 'audio' ? 'audio' : 'video' };
+      state.sections.push(s); save(); return s;
+    }
+    function renameSection(id, name) {
+      var s = section(id); name = String(name || '').trim();
+      if (!s || !name) return false;
+      s.name = name; save(); return true;
+    }
+    // Channels in a removed section move to the first remaining one, so nothing is lost by accident
+    function removeSection(id) {
+      if (state.sections.length < 2) throw new Error("Shelf needs at least one section.");
+      state.sections = state.sections.filter(function (s) { return s.id !== id; });
+      var to = state.sections[0].id;
+      Object.keys(state.sources).forEach(function (k) { if (state.sources[k].section === id) state.sources[k].section = to; });
+      save(); return to;
+    }
+    function moveSection(id, delta) {
+      var i = state.sections.findIndex(function (s) { return s.id === id; }), j = i + delta;
+      if (i < 0 || j < 0 || j >= state.sections.length) return false;
+      var t = state.sections[i]; state.sections[i] = state.sections[j]; state.sections[j] = t; save(); return true;
+    }
+
+    // ----- Sources (YouTube channels and podcasts) -----
+    function sources(sectionId) {
+      return Object.keys(state.sources).map(function (k) { return state.sources[k]; })
+        .filter(function (s) { return !sectionId || s.section === sectionId; })
+        .sort(function (a, b) { return a.added - b.added; });
+    }
+    function source(id) { return state.sources[id] || null; }
+    function setSection(id, sectionId) { var s = source(id); if (!s || !section(sectionId)) return false; s.section = sectionId; save(); return true; }
+    function remove(id) { if (!state.sources[id]) return false; delete state.sources[id]; delete cache[id]; save(); return true; }
+    // A private feed (Patreon) is never put in Send links or shown in full
+    function isPrivate(url) { return /patreon|[?&](auth|token|key)=/i.test(url); }
+
+    function fetchFirst(urls, headers) {
+      var i = 0, lastErr;
+      function next() {
+        if (i >= urls.length) return Promise.reject(lastErr || new Error('no feed'));
+        return io.fetchText(urls[i++], headers).catch(function (e) { lastErr = e; return next(); });
+      }
+      return next();
+    }
+    function youtubeFeed(channelId) {
+      var urls = Feeds.youtubeFeedUrls(channelId);
+      // The Shorts-free list can be empty for channels that only post Shorts or live streams
+      return fetchFirst(urls).then(function (xml) {
+        var f = Feeds.parseYouTube(xml);
+        if (f.items.length) return f;
+        return io.fetchText(urls[1]).then(Feeds.parseYouTube, function () { return f; });
+      });
+    }
+    function channelIdFromPage(url) {
+      return io.fetchText(url, CONSENT).then(function (html) {
+        if (Feeds.isConsentPage(html)) throw new Error('YouTube showed its cookie page instead of the channel. Try again in a minute.');
+        var c = Feeds.channelFromHtml(html);
+        if (!c) throw new Error("Couldn't find a channel at that link.");
+        return c;
+      });
+    }
+    function findPodcast(name) {
+      return io.fetchText('https://itunes.apple.com/search?media=podcast&limit=5&term=' + encodeURIComponent(name)).then(function (t) {
+        var r = JSON.parse(t).results || [];
+        var hit = r.filter(function (x) { return x.feedUrl; })[0];
+        if (!hit) throw new Error('No podcast called "' + name + '" found.');
+        return hit.feedUrl;
+      });
+    }
+    // Without a Google key: YouTube's own channel search page, first result
+    function findChannel(name) {
+      return io.fetchText('https://www.youtube.com/results?sp=EgIQAg%253D%253D&search_query=' + encodeURIComponent(name), CONSENT).then(function (html) {
+        var id = (html.match(/"channelRenderer"\s*:\s*\{\s*"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"/) || [])[1];
+        if (!id) throw new Error('No YouTube channel called "' + name + '" found. Paste a link to the channel instead.');
+        return { id: id };
+      });
+    }
+
+    // Add whatever Mo pasted: a channel link, @handle, video link, podcast feed, or a name.
+    // Resolves to the stored source. opts: { audio: true } makes a bare name search podcasts.
+    function add(input, sectionId, opts) {
+      opts = opts || {};
+      var sec = section(sectionId) || state.sections[0];
+      var p = Feeds.parseChannelInput(input);
+      if (!p) return Promise.reject(new Error("That doesn't look like a channel, a podcast, or a name."));
+      var audio = opts.audio || (p.kind === 'name' && sec.kind === 'audio');
+      if (p.kind === 'feed' || (p.kind === 'name' && audio)) {
+        var feedUrl = p.kind === 'feed' ? Promise.resolve(p.value) : findPodcast(p.value);
+        return feedUrl.then(function (url) {
+          return io.fetchText(url).then(function (xml) {
+            var f = Feeds.parsePodcast(xml), id = hash(url);
+            var s = state.sources[id] = Object.assign(state.sources[id] || {}, {
+              id: id, type: 'podcast', url: url, name: f.title || 'Podcast', image: f.image, section: sec.id,
+              private: isPrivate(url), added: (state.sources[id] && state.sources[id].added) || now(), seenUpTo: newest(f.items)
+            });
+            cache[id] = { fetched: now(), ok: true, items: f.items };
+            save(); return s;
+          });
+        });
+      }
+      var idP = p.kind === 'id' ? Promise.resolve({ id: p.value }) : p.kind === 'name' ? findChannel(p.value) : channelIdFromPage(Feeds.pageUrl(p));
+      return idP.then(function (c) {
+        return youtubeFeed(c.id).then(function (f) {
+          var prior = state.sources[c.id];
+          var s = state.sources[c.id] = Object.assign(prior || {}, {
+            id: c.id, type: 'youtube', name: c.name || f.author || f.title || 'Channel', handle: c.handle || (prior && prior.handle) || '',
+            image: c.avatar || (prior && prior.image) || '', section: sec.id, added: (prior && prior.added) || now(),
+            seenUpTo: prior ? prior.seenUpTo : newest(f.items)
+          });
+          cache[c.id] = { fetched: now(), ok: true, items: f.items };
+          save(); return s;
+        });
+      });
+    }
+    function newest(items) { return items.reduce(function (m, x) { return Math.max(m, x.published || 0); }, 0); }
+
+    // ----- First run: Mo's channels -----
+    // Returns [{input, ok, error}] so the UI can show what didn't resolve.
+    function seed() {
+      if (state.seeded) return Promise.resolve([]);
+      var out = [];
+      return SEED_SOURCES.reduce(function (p, s) {
+        return p.then(function () {
+          return add(s.input, s.section, { audio: s.audio }).then(function () { out.push({ input: s.input, ok: true }); },
+            function (e) { out.push({ input: s.input, section: s.section, ok: false, error: e.message }); });
+        });
+      }, Promise.resolve()).then(function () {
+        state.seeded = true; state.seedMisses = out.filter(function (x) { return !x.ok; }); save(); return out;
+      });
+    }
+
+    // ----- Refresh -----
+    function refresh(id, force) {
+      var s = source(id); if (!s) return Promise.reject(new Error('gone'));
+      var c = cache[id];
+      if (!force && c && c.ok && now() - c.fetched < TTL) return Promise.resolve(c);
+      var p = s.type === 'podcast' ? io.fetchText(s.url).then(Feeds.parsePodcast) : youtubeFeed(s.id);
+      return p.then(function (f) {
+        cache[id] = { fetched: now(), ok: true, items: f.items };
+        return cache[id];
+      }, function (e) {
+        cache[id] = { fetched: now(), ok: false, error: e && e.message || 'failed', items: (c && c.items) || [] };
+        return cache[id];
+      });
+    }
+    // A few at a time so the phone stays responsive
+    function refreshAll(force, onEach) {
+      var ids = Object.keys(state.sources), i = 0;
+      function worker() {
+        if (i >= ids.length) return Promise.resolve();
+        var id = ids[i++];
+        return refresh(id, force).then(function (c) { if (onEach) onEach(id, c); }, function () {}).then(worker);
+      }
+      return Promise.all([worker(), worker(), worker()]);
+    }
+    function items(id) { return (cache[id] && cache[id].items) || []; }
+    function status(id) { var c = cache[id]; return c ? { ok: c.ok, error: c.error, fetched: c.fetched } : null; }
+    function newCount(id) {
+      var s = source(id); if (!s) return 0;
+      return items(id).filter(function (x) { return x.published > (s.seenUpTo || 0); }).length;
+    }
+    function sectionNewCount(sectionId) { return sources(sectionId).reduce(function (n, s) { return n + newCount(s.id); }, 0); }
+    function markSeen(id) {
+      var s = source(id); if (!s) return;
+      var n = newest(items(id)); if (n > (s.seenUpTo || 0)) { s.seenUpTo = n; save(); }
+    }
+    // Everything new across all channels, newest first (the "New" list)
+    function fresh() {
+      var out = [];
+      sources().forEach(function (s) {
+        items(s.id).forEach(function (x) { if (x.published > (s.seenUpTo || 0)) out.push(Object.assign({ source: s.id, sourceName: s.name }, x)); });
+      });
+      return out.sort(function (a, b) { return b.published - a.published; });
+    }
+
+    // Cache survives a relaunch so the shelf isn't empty while feeds load
+    function saveCache() {
+      var slim = {};
+      Object.keys(cache).forEach(function (k) { slim[k] = { fetched: cache[k].fetched, ok: cache[k].ok, items: cache[k].items.slice(0, 15) }; });
+      try { io.save(KEY + '.cache', JSON.stringify(slim)); } catch (e) {}
+    }
+    function loadCache() {
+      try { var c = JSON.parse(io.load(KEY + '.cache') || 'null'); if (c) Object.keys(c).forEach(function (k) { if (state.sources[k]) cache[k] = c[k]; }); } catch (e) {}
+    }
+    loadCache();
+
+    return {
+      sections: sections, section: section, addSection: addSection, renameSection: renameSection, removeSection: removeSection, moveSection: moveSection,
+      sources: sources, source: source, setSection: setSection, remove: remove, add: add, seed: seed,
+      refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
+      markSeen: markSeen, fresh: fresh, saveCache: saveCache, get seedMisses() { return state.seedMisses || []; }
+    };
+  }
+  return { create: create, KEY: KEY, SEED_SOURCES: SEED_SOURCES };
+})();
+if (typeof module !== 'undefined') module.exports = Library;
+</script>
+<script>// Sleep timer maths. Pure; the player code calls tick() once a second and acts on what it returns.
+var SleepTimer = (function () {
+  var PRESETS = [15, 30, 45, 60];
+  function start(minutes, now) {
+    now = now || Date.now();
+    if (minutes === 'end') return { mode: 'end', startedAt: now };
+    minutes = Number(minutes);
+    if (!(minutes > 0)) return null;
+    return { mode: 'min', minutes: minutes, startedAt: now, endsAt: now + minutes * 60000 };
+  }
+  // ms left, or null for "end of video" / no timer
+  function remaining(state, now) {
+    if (!state || state.mode !== 'min') return null;
+    return Math.max(0, state.endsAt - (now || Date.now()));
+  }
+  function countdown(ms) {
+    var s = Math.ceil(ms / 1000), m = Math.floor(s / 60), r = s % 60;
+    if (m >= 60) return Math.floor(m / 60) + ':' + pad(m % 60) + ':' + pad(r);
+    return m + ':' + pad(r);
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  // "about 10:31 pm"
+  function clock(ts) {
+    var d = new Date(ts), h = d.getHours(), m = d.getMinutes();
+    return 'about ' + ((h % 12) || 12) + ':' + pad(m) + ' ' + (h < 12 ? 'am' : 'pm');
+  }
+  // Volume for a gentle fade over the last minute (audio only); 1 before that
+  function volume(state, now, fadeMs) {
+    var left = remaining(state, now); fadeMs = fadeMs || 60000;
+    if (left == null) return 1;
+    return Math.max(0, Math.min(1, left / fadeMs));
+  }
+  // What should happen now: 'stop' when time is up, else null.
+  // For 'end' mode the player stops itself at the end of the video or episode (endOfMedia = true).
+  function tick(state, now, endOfMedia) {
+    if (!state) return null;
+    if (state.mode === 'end') return endOfMedia ? 'stop' : null;
+    return remaining(state, now) <= 0 ? 'stop' : null;
+  }
+  // Text for the button/readout
+  function label(state, now) {
+    if (!state) return 'Sleep timer off';
+    if (state.mode === 'end') return 'Stops at the end';
+    return countdown(remaining(state, now)) + ' left';
+  }
+  return { PRESETS: PRESETS, start: start, remaining: remaining, countdown: countdown, clock: clock, volume: volume, tick: tick, label: label };
+})();
+if (typeof module !== 'undefined') module.exports = SleepTimer;
+</script>
 <script>// App: storage, YouTube player, shelf, self-check, Send to iPhone.
 (function () {
   var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1';

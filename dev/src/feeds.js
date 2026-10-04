@@ -40,7 +40,7 @@ var Feeds = (function () {
   function parseYouTube(xml) {
     if (!/<feed[\s>]/i.test(xml)) throw new Error('not a YouTube feed');
     var head = xml.split(/<entry[\s>]/i)[0];
-    var out = { channelId: tag(head, 'yt:channelId'), title: tag(head, 'title'), items: [] };
+    var out = { channelId: tag(head, 'yt:channelId'), title: tag(head, 'title'), author: tag(tag(head, 'author'), 'name'), items: [] };
     if (out.channelId && !/^UC/.test(out.channelId)) out.channelId = 'UC' + out.channelId;
     blocks(xml, 'entry').forEach(function (e) {
       var id = tag(e, 'yt:videoId');
