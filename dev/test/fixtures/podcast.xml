@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+<channel>
+<title>Fin vs History</title>
+<itunes:author>Fin Taylor &amp; Horatio Gould</itunes:author>
+<itunes:image href="https://example.com/art.jpg"/>
+<image><url>https://example.com/art-small.jpg</url><title>Fin vs History</title></image>
+<item>
+ <title><![CDATA[Ep. 212: The Shortest War in History]]></title>
+ <description><![CDATA[<p>Fin and Horatio on the <b>Anglo-Zanzibar</b> war &amp; more.</p>]]></description>
+ <pubDate>Tue, 30 Sep 2026 04:00:00 -0000</pubDate>
+ <guid isPermaLink="false">abc-212</guid>
+ <itunes:duration>01:02:03</itunes:duration>
+ <itunes:episode>212</itunes:episode>
+ <enclosure url="https://traffic.megaphone.fm/FIN212.mp3?updated=1" length="0" type="audio/mpeg"/>
+</item>
+<item>
+ <title>Ep. 213: The Emu War</title>
+ <pubDate>Fri, 03 Oct 2026 04:00:00 -0000</pubDate>
+ <guid>abc-213</guid>
+ <itunes:duration>2950</itunes:duration>
+ <itunes:image href="https://example.com/ep213.jpg"/>
+ <enclosure url='https://traffic.megaphone.fm/FIN213.mp3' type='audio/mpeg' length='1'/>
+</item>
+<item><title>Trailer with no audio</title></item>
+</channel></rss>

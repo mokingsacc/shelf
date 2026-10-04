@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <link rel="self" href="http://www.youtube.com/feeds/videos.xml?channel_id=UCgF2C3zwV2-Ycq9fxXDZqmA"/>
+ <id>yt:channel:gF2C3zwV2-Ycq9fxXDZqmA</id>
+ <yt:channelId>gF2C3zwV2-Ycq9fxXDZqmA</yt:channelId>
+ <title>Dirty Medicine</title>
+ <author><name>Dirty Medicine</name><uri>https://www.youtube.com/channel/UCgF2C3zwV2-Ycq9fxXDZqmA</uri></author>
+ <published>2018-07-01T00:00:00+00:00</published>
+ <entry>
+  <id>yt:video:aaaaaaaaaa1</id>
+  <yt:videoId>aaaaaaaaaa1</yt:videoId>
+  <yt:channelId>UCgF2C3zwV2-Ycq9fxXDZqmA</yt:channelId>
+  <title>Hyperkalemia Mnemonics &amp; Treatment</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=aaaaaaaaaa1"/>
+  <author><name>Dirty Medicine</name></author>
+  <published>2026-09-30T15:00:10+00:00</published>
+  <updated>2026-10-01T02:00:00+00:00</updated>
+  <media:group>
+   <media:title>Hyperkalemia Mnemonics &amp; Treatment</media:title>
+   <media:content url="https://www.youtube.com/v/aaaaaaaaaa1?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i2.ytimg.com/vi/aaaaaaaaaa1/hqdefault.jpg" width="480" height="360"/>
+   <media:description>In this video we cover hyperkalemia &lt;3</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:aaaaaaaaaa2</id>
+  <yt:videoId>aaaaaaaaaa2</yt:videoId>
+  <title>Nephrotic vs Nephritic</title>
+  <published>2026-10-03T15:00:10+00:00</published>
+  <media:group><media:thumbnail url="https://i2.ytimg.com/vi/aaaaaaaaaa2/hqdefault.jpg" width="480" height="360"/><media:description></media:description></media:group>
+ </entry>
+</feed>
