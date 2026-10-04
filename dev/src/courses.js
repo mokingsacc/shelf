@@ -269,7 +269,7 @@ var Courses = (function () {
       var c = get(id), ch = cache[id];
       if (!c) return Promise.reject(new Error('gone'));
       if (busy[id]) return busy[id];
-      if (!force && ch && ch.ok !== false && ch.items && now() - ch.fetched < TTL) return Promise.resolve(c);
+      if (!force && ch && ch.ok !== false && ch.items && !ch.partial && now() - ch.fetched < TTL) return Promise.resolve(c); // a partial list is tried again on the next sync
       busy[id] = fetchList(id).then(function (r) {
         var seen = {}, its = [];
         r.items.forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; x.n = epNumber(x.title); its.push(x); } });

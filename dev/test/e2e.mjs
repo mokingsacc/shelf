@@ -181,7 +181,7 @@ let pos = await shelf(p, () => window.__fake.getCurrentTime());
 ok(pos > 90, 'a11y: Space on the position line doesn\'t jump to the start (' + Math.round(pos) + ')');
 await p.keyboard.press('ArrowRight'); await p.waitForTimeout(200);
 const pos2 = await shelf(p, () => window.__fake.getCurrentTime());
-ok(pos2 - pos > 25 && pos2 - pos < 35, 'a11y: arrow keys step through the video (+' + Math.round(pos2 - pos) + ' s)');
+ok(pos2 - pos > 12 && pos2 - pos < 18, 'a11y: arrow keys step through the video like its +15 button (+' + Math.round(pos2 - pos) + ' s)');
 ok(Number(await p.getAttribute('#vScrub', 'aria-valuenow')) > 90 && /of/.test(await p.getAttribute('#vScrub', 'aria-valuetext')), 'a11y: the position line reads as a slider with its time');
 const yt = await p.evaluate(() => { const a = document.querySelector('#ytLink'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
 const at = +(yt.match(/[?&]t=(\d+)s/) || [])[1];
@@ -266,6 +266,11 @@ await ctx.close();
 await settle(p);
 secs = await shelf(p, () => window.__shelf.lib.sections().map((x) => x.name));
 ok(secs.includes('Phone legacy') && !secs.includes('Web legacy'), 'store: legacy copies (no save count) prefer the phone');
+await ctx.close();
+// A null entry inside the phone's spots (seen in review) must not stop Home from drawing
+({ ctx, p } = await appPage({ prefs: { [VK]: '{"dQw4w9WgXcQ":null}' }, shell: { web: { [VK]: phoneSpot } } }));
+await settle(p);
+ok(await p.locator('.band').count() >= 3 && await shelf(p, () => !!window.__shelf.videos.dQw4w9WgXcQ), 'store: a null record on the phone is skipped and Home still draws');
 await ctx.close();
 // A damaged phone record is ignored, the rest still restores
 ({ ctx, p } = await appPage({ prefs: { [VK]: '{broken', [LIBK]: libWith('Phone ok', 3) } }));

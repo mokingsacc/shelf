@@ -594,7 +594,7 @@
     });
     if (prefs.arate) engine.setRate(prefs.arate);
     // A podcast starting ends the self-check's sound test (the engine then takes the lock-screen controls back)
-    $('#audio').addEventListener('play', function () { if (Native.tonePlaying) { Native.stopTone(); var tb = $('#toneBtn'); if (tb) tb.textContent = 'Test lock-screen sound'; } clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
+    $('#audio').addEventListener('play', function () { if (Native.tonePlaying) { Native.stopTone(); var tb = $('#toneBtn'); if (tb) tb.textContent = 'Test lock-screen sound'; if ($('#checkDlg').open) fillCheck(); } clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
     $('#audio').addEventListener('pause', function () { clearInterval(aTick); renderAudio(); });
   }
   function openAudio(e) {
@@ -1100,7 +1100,7 @@
       case 'send': copyShelf(b); break;
       case 'yt-sign': signInYT(b); break;
       case 'yt-settings': Native.openSettings().catch(function () { toast("Open the iPhone's Settings app, scroll down to Shelf, and turn on Allow Cross-Website Tracking.", 'warn'); }); break;
-      case 'phone-retry': b.textContent = 'Reopening…'; capture(true); if (engine) engine.capture(true); setTimeout(function () { location.reload(); }, 300); break; // a fresh start reads the phone's copy again and merges it
+      case 'phone-retry': if (navigator.onLine === false) { toast("You're offline. Reconnect, then tap Try again.", 'warn'); break; } b.textContent = 'Reopening…'; capture(true); if (engine) engine.capture(true); setTimeout(function () { location.reload(); }, 300); break; // a fresh start reads the phone's copy again and merges it
       case 'tone':
         if (Native.tonePlaying) { Native.stopTone(); if (engine) engine.session(); b.textContent = 'Test lock-screen sound'; fillCheck(); return; }
         if (engine.state().playing) engine.pause();
@@ -1114,17 +1114,17 @@
   // A tap seeks to that point. A keyboard "click" (Space/Enter, detail 0) has no position, so it doesn't jump to the
   // start; the arrow keys step back and forward instead (the line is a slider for VoiceOver and keyboards).
   function scrubAt(el, ev, dur, fn) { var r = el.getBoundingClientRect(); if (!dur || !r.width || ev.detail === 0) return; fn(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * dur); }
-  function scrubKeys(el, step) {
+  function scrubKeys(el, fwd, step) { // same steps as the player's own buttons: back 15 s, forward 15 s (video) or 30 s (podcast)
     el.addEventListener('keydown', function (ev) {
-      var d = { ArrowLeft: -15, ArrowDown: -15, ArrowRight: 30, ArrowUp: 30 }[ev.key];
+      var d = { ArrowLeft: -15, ArrowDown: -15, ArrowRight: fwd, ArrowUp: fwd }[ev.key];
       if (d != null) { ev.preventDefault(); step(d); }
     });
   }
   function scrubAria(el, t, d) { el.setAttribute('aria-valuemin', '0'); el.setAttribute('aria-valuemax', String(Math.round(d || 0))); el.setAttribute('aria-valuenow', String(Math.round(t || 0))); el.setAttribute('aria-valuetext', Core.fmt(t || 0) + (d ? ' of ' + Core.fmt(d) : '')); }
   // YouTube ↗ opens at the spot playing now, not where the video was when the player opened
   $('#ytLink').addEventListener('click', function () { capture(true); var v = current && videos[current]; if (v) this.href = ytLink(v); });
-  scrubKeys($('#vScrub'), function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
-  scrubKeys($('#nScrub'), function (s) { engine.seekBy(s); });
+  scrubKeys($('#vScrub'), 15, function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
+  scrubKeys($('#nScrub'), 30, function (s) { engine.seekBy(s); });
   $('#vScrub').addEventListener('click', function (ev) { try { var d = player.getDuration(); scrubAt(this, ev, d, function (t) { player.seekTo(t, true); videoTick(); }); } catch (e) {} });
   $('#nScrub').addEventListener('click', function (ev) { var st = engine.state(); scrubAt(this, ev, st.dur, function (t) { engine.seek(t); }); });
   $('#keyForm').addEventListener('submit', function (e) {
@@ -1294,19 +1294,24 @@
     var keys = PHONE_KEYS();
     wait = wait || 2000;
     return withTimeout(Promise.all(keys.map(Native.prefGet)), wait, 'slow').then(function (r) {
-      // Read and check everything first; a damaged phone record is ignored (the web copy then replaces it)
-      var BAD = {}, ph = r.map(function (x) { return x == null ? null : parseOr(x, BAD); });
-      ph = ph.map(function (x) { return x === BAD ? null : x; });
-      var writes = [];
-      if (ph[0]) { var m = Core.merge(load(KEY, {}), ph[0]); if (m.added || m.updated || !rawGet(KEY)) writes.push([KEY, JSON.stringify(m.videos)]); }
-      if (ph[1] && !rawGet(PREF)) writes.push([PREF, r[1]]);
-      if (ph[2]) { var la = load(AKEY, {}), pa = ph[2]; Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); writes.push([AKEY, JSON.stringify(la)]); }
-      if (ph[3] && pickLibrary(load(Library.KEY, null), ph[3])) writes.push([Library.KEY, r[3]]);
-      if (ph[4]) { var lc = load(Courses.KEY, null); if (!lc || (ph[4].saved || 0) > (lc.saved || 0)) writes.push([Courses.KEY, r[4]]); }
-      writes.forEach(function (w) { rawSet(w[0], w[1], false); });
-      restored = true; restoreFailed = false;
+      // Read and check everything first; a damaged phone record is ignored (the web copy then replaces it).
+      // Nothing in here may throw: an exception would stop boot() and leave Home blank with no way out.
+      try {
+        var BAD = {}, ph = r.map(function (x) { return x == null ? null : parseOr(x, BAD); });
+        ph = ph.map(function (x) { return x === BAD ? null : x; });
+        var writes = [];
+        if (ph[0]) { var m = Core.merge(load(KEY, {}), records(ph[0])); if (m.added || m.updated || !rawGet(KEY)) writes.push([KEY, JSON.stringify(m.videos)]); }
+        if (ph[1] && !rawGet(PREF)) writes.push([PREF, r[1]]);
+        if (ph[2]) { var la = load(AKEY, {}), pa = records(ph[2]); Object.keys(pa).forEach(function (g) { if (!la[g] || (pa[g].updated || 0) > (la[g].updated || 0)) la[g] = pa[g]; }); writes.push([AKEY, JSON.stringify(la)]); }
+        if (ph[3] && pickLibrary(load(Library.KEY, null), ph[3])) writes.push([Library.KEY, r[3]]);
+        if (ph[4]) { var lc = load(Courses.KEY, null); if (!lc || (ph[4].saved || 0) > (lc.saved || 0)) writes.push([Courses.KEY, r[4]]); }
+        writes.forEach(function (w) { rawSet(w[0], w[1], false); });
+        restored = true; restoreFailed = false;
+      } catch (e) { restoreFailed = true; }
     }, function () { if (wait < 6000) return restoreFromPhone(6000); restoreFailed = true; }); // slow phone: one longer try, then a Try again in the self-check
   }
+  // Only entries shaped like records (a null or stray value in a phone copy is dropped, not merged)
+  function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
     lib = Library.create({
@@ -1345,5 +1350,6 @@
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture,
       get current() { return current; }, get vTimer() { return vTimer; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
-  restoreFromPhone().then(boot);
+  // Home must draw whatever the phone's storage did
+  restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);
 })();
