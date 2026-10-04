@@ -140,7 +140,7 @@ function setup(store, opts = {}) {
     // Unticking takes it off the tally
     cc.tick(peds, a[91].id, false); assert.strictEqual(cc.today().n, 0);
     // Exam day and after: no divide by zero
-    r.tick(60 * 864e5); assert.strictEqual(cc.daysLeft(), 0); assert.ok(isFinite(cc.pace(peds).perDay));
+    r.tick(60 * 864e5); assert.strictEqual(cc.daysLeft(), 0); assert.strictEqual(cc.pace(peds).perDay, 0); assert.strictEqual(cc.today().perDay, 0); assert.ok(cc.examPast());
     assert.strictEqual(Courses.perDay(269 / 57), '4.8 a day'); assert.strictEqual(Courses.perDay(0.3), '1 every 3 days'); assert.strictEqual(Courses.perDay(0), '');
   }
 

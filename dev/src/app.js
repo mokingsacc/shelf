@@ -165,8 +165,9 @@
     if (!cs || !cs.list().length) return '';
     var c = upNextCourse(), pc = c && cs.pace(c.id), td = cs.today(), days = cs.daysLeft();
     if (isNight()) return '<b>Today</b> ' + td.n + (td.n === 1 ? ' episode' : ' episodes') + (td.secs ? ' · ' + Math.round(td.secs / 60) + ' min' : '') + (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' : '');
+    if (cs.examPast()) return pc ? esc(c.name) + ' ' + pc.left + ' left' : '';
     return (days ? '<b>' + days + (days === 1 ? ' day' : ' days') + '</b> to Step 2 CK' : '<b>Step 2 CK</b> today') +
-      (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' + (pc.perDay ? ' · ' + Courses.perDay(pc.perDay) : '') : td.left ? ' · ' + td.left + ' left · ' + Courses.perDay(td.perDay) : '');
+      (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' + (pc.perDay ? ' · ' + Courses.perDay(pc.perDay) : '') : td.left ? ' · ' + td.left + ' left' + (td.perDay ? ' · ' + Courses.perDay(td.perDay) : '') : '');
   }
   var refreshing = false;
   function renderHome() {
@@ -249,19 +250,29 @@
   var stack = [], skipPops = 0;
   function push(view) { stack.push(view); renderPage(); $('#page').scrollTop = 0; renderTabs(); try { history.pushState({ shelf: stack.length }, ''); } catch (e) {} }
   function pop() { stack.pop(); if (stack.length) renderPage(); else { $('#page').hidden = true; renderHome(); } renderTabs(); }
-  window.addEventListener('popstate', function () { if (skipPops) { skipPops--; return; } if (stack.length) pop(); });
+  window.addEventListener('popstate', function () { if (skipPops) { skipPops--; if (afterUnwind) afterUnwind(); return; } if (stack.length) pop(); });
+  // Close every open page and take their history entries with them, then run "then" (a new tab's first page)
+  var afterUnwind = null;
+  function unwind(then) {
+    var n = stack.length; stack = [];
+    if (!n) { if (then) then(); return; }
+    var fired = false, go = function () { if (fired) return; fired = true; if (afterUnwind === go) afterUnwind = null; if (then) then(); };
+    skipPops++; afterUnwind = go;
+    try { history.go(-n); } catch (e) { skipPops--; go(); return; }
+    // If the browser never answers, don't leave the next Back swallowed
+    setTimeout(function () { if (!fired) { skipPops = Math.max(0, skipPops - 1); go(); } }, 800);
+  }
   function back() { try { history.back(); } catch (e) { pop(); } }
   // Tabs: Today is Home; Courses and Search each start a fresh page stack
   function goHome() {
     var n = stack.length;
     if (!n) { try { window.scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {} return; }
-    stack = []; $('#page').hidden = true; renderHome(); renderTabs();
-    skipPops++; try { history.go(-n); } catch (e) { skipPops--; }
+    unwind(); $('#page').hidden = true; renderHome(); renderTabs();
   }
   function openTab(view) {
     var v = stack[stack.length - 1];
     if (v && stack.length === 1 && v.name === view.name && v.id === view.id) { $('#page').scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' }); return false; }
-    stack = []; push(view); return true;
+    unwind(function () { push(view); }); return true;
   }
   function renderTabs() {
     var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && v.name === 'search' ? 'searchBtn' : 'todayBtn';
@@ -390,13 +401,15 @@
     if (v.name === 'search') {
       var f = $('#sform');
       f.addEventListener('submit', function (ev) { ev.preventDefault(); var q = $('#sq').value.trim(); if (isLinkish(q)) { prefs.lastQ = ''; handleText(q); } else runSearch(q); });
-      if (!v.results && !v.msg) setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50);
+      if (!v.results && !v.msg && !v.focused) { v.focused = true; setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50); }
     }
   }
   // A pasted link in Search plays (or adds) instead of searching
   function isLinkish(q) {
     if (!q) return false;
-    if (/#shelf=/.test(q) || Core.findLinks(q).length || Courses.playlistId(q)) return true;
+    if (/#shelf=/.test(q) || Courses.playlistId(q)) return true;
+    // "hypokalemia" is 11 letters like a video id: only a real link counts
+    if (/youtu\.?be|youtube\.com|^https?:\/\//i.test(q) && Core.findLinks(q).length) return true;
     var c = Feeds.parseChannelInput(q);
     return !!c && (c.kind === 'id' || c.kind === 'handle' || c.kind === 'page' || (c.kind === 'feed' && /^https?:\/\//i.test(q)));
   }
@@ -440,7 +453,7 @@
 
   // ---------- Video player ----------
   var player = null, playerReady = false, ytLoaded = false, ytFailed = false, current = null, pending = null, tick = null, lastErr = '';
-  var wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null;
+  var wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null, startOnce = null, keepSpot = null;
   var armed = false, sawPlaying = false, loadStart = 0, startTimer = null, lastCaptureAt = 0, vTimer = null, vTimerMsg = '', wake = null, uiTick = null;
   window.onYouTubeIframeAPIReady = function () {
     ytLoaded = true; updateDot();
@@ -452,8 +465,11 @@
         onReady: function () { playerReady = true; if (pending) { var p = pending; pending = null; loadVideo(p); } },
         onStateChange: onState,
         onPlaybackRateChange: function (e) {
-          // A change made in YouTube's own menu sticks to the channel too; the reset YouTube does while loading doesn't
-          if (!current || !sawPlaying || Date.now() - loadAt < 2500 || e.data === wantRate) return;
+          // A change made in YouTube's own menu sticks to the channel too. Resets don't: YouTube's own while loading,
+          // an ad's (its length isn't the video's), and any drop back to 1× (pick 1× with Shelf's buttons instead)
+          if (!current || !sawPlaying || Date.now() - loadAt < 2500 || e.data === wantRate || !(e.data > 1)) return;
+          var vv = videos[current], pd = 0; try { pd = player.getDuration(); } catch (er) {}
+          if (vv && vv.dur && pd && Math.abs(pd - vv.dur) > 2) return;
           setRateFor(current, e.data);
         },
         onError: onError
@@ -521,13 +537,13 @@
       showError("Can't reach YouTube. Check your internet, or turn off any content blocker, then reopen Shelf.", v);
       return;
     }
-    current = v.id; armed = false; sawPlaying = false;
+    current = v.id; armed = false; sawPlaying = false; startOnce = o.start > 0 ? { id: v.id, t: o.start } : null; keepSpot = startOnce && v.t > o.start ? { id: v.id, t: v.t } : null;
     if (!playerReady) { pending = v.id; return; }
     loadVideo(v.id);
   }
   function loadVideo(id) {
     var v = videos[id]; if (!v) return;
-    var start = Core.resumeAt(v);
+    var start = startOnce && startOnce.id === id ? startOnce.t : Core.resumeAt(v); startOnce = null;
     if (v.done) { v.done = false; v.t = 0; saveVideos(); }
     loadStart = start;
     loadAt = Date.now();
@@ -553,6 +569,8 @@
     if (v.dur > 0 && d > 0 && d < v.dur * 0.9) return; // an ad or another video reporting
     if (d > 0) v.dur = d;
     if (t < 1 && v.t > 5) return; // the 0 reported while loading
+    // Playing from a Mark: the saved spot further on stays until you watch past it
+    if (keepSpot && keepSpot.id === current) { if (t < keepSpot.t && !v.done) return; keepSpot = null; }
     v.t = t; v.updated = Date.now(); lastCaptureAt = Date.now();
     saveVideos();
   }
@@ -705,7 +723,7 @@
     return s ? s.id : a || 'yt';
   }
   function chanName(v) { var s = v.channelId && lib.source(v.channelId); return (s && s.name) || v.author || 'This channel'; }
-  function rateFor(v) { var r = prefs.rates && prefs.rates['v:' + chanKey(v)]; return r > 0 ? r : 1; }
+  function rateFor(v) { var r = prefs.rates && prefs.rates['v:' + chanKey(v)]; return r > 0 ? r : prefs.rate > 0 ? prefs.rate : 1; }
   function setRateFor(id, r) {
     var v = videos[id]; if (!v) return;
     prefs.rates = prefs.rates || {}; prefs.rates['v:' + chanKey(v)] = r; savePrefs();
@@ -717,7 +735,7 @@
     $('#vRateLab').textContent = !v ? '' : wantRate === 1 ? chanName(v) + ' plays at 1×' : chanName(v) + ' remembers ' + wantRate + '×';
   }
   function podKey(guid) { var r = arec[guid] || {}, m = aMeta[guid] || {}; return 'a:' + (r.source || m.source || r.podcast || 'pod'); }
-  function podRate(guid) { var r = prefs.rates && prefs.rates[podKey(guid)]; return r > 0 ? r : 1; }
+  function podRate(guid) { var r = prefs.rates && prefs.rates[podKey(guid)]; return r > 0 ? r : prefs.arate > 0 ? prefs.arate : 1; }
 
   // ---------- Time lines (tap or drag to seek) ----------
   function paintScrub(w, t, d, rate) {
@@ -836,7 +854,7 @@
     else if (!st.playing) engine.toggle();
     engine.setRate(podRate(e.key));
     // At night a podcast starts with a 45-minute sleep timer, so it never has to be remembered half asleep
-    if (isNight() && !engine.state().timer) { engine.setTimer(45); setTimeout(function () { toast('45-minute sleep timer on. Tap a number to change it.'); }, 400); }
+    if (!same && isNight() && !engine.state().timer) { engine.setTimer(45); setTimeout(function () { toast('45-minute sleep timer on. Tap a number to change it.'); }, 400); }
     renderAudio();
   }
   function renderAudio() {
@@ -1080,10 +1098,10 @@
     }).join('') + '</div>';
   }
   function examHTML() {
-    var td = cs.today(), days = cs.daysLeft(), max = Math.max.apply(null, td.week.concat([1]));
-    return '<div class="exam"><div class="big mono"><small>Days to Step 2 CK</small>' + days + '</div><div class="nums mono">' +
+    var td = cs.today(), days = cs.daysLeft(), past = cs.examPast(), max = Math.max.apply(null, td.week.concat([1]));
+    return '<div class="exam"><div class="big mono"><small>' + (past ? 'Step 2 CK' : 'Days to Step 2 CK') + '</small>' + (past ? '✓' : days) + '</div><div class="nums mono">' +
       '<p><b>' + esc(DAYS[Courses.EXAM.getDay()].slice(0, 3) + ' ' + shortDay(Courses.EXAM.getTime())) + '</b> · ' + td.left + ' left</p>' +
-      '<p>' + (td.left ? '<b>' + esc(Courses.perDay(td.perDay)) + '</b> to finish in time' : '<b>Every course done.</b>') + '</p>' +
+      '<p>' + (past ? '<b>Exam done.</b>' : !td.left ? '<b>Every course done.</b>' : td.perDay ? '<b>' + esc(Courses.perDay(td.perDay)) + '</b> to finish in time' : '<b>Exam day. Good luck.</b>') + '</p>' +
       '<p>Today <b>' + td.n + (td.secs ? ' · ' + Math.round(td.secs / 60) + ' min' : '') + '</b> · this week <b>' + td.weekN + '</b></p>' +
       '<div class="week" role="img" aria-label="Episodes ticked each day, last 7 days: ' + td.week.join(', ') + '">' + td.week.map(function (n) { return '<i class="' + (n ? '' : 'z') + '" style="height:' + (n ? Math.max(15, Math.round(n / max * 100)) : 8) + '%"></i>'; }).join('') + '</div>' +
       '</div></div>';
@@ -1123,9 +1141,12 @@
   function openCourses(secId) { push({ name: 'courses', id: secId || 'med' }); }
   // Re-render without losing what's being typed in a Set place box
   function keepTyping(fn) {
-    var a = document.activeElement, id = a && a.id && /^pl-/.test(a.id) ? a.id : null, val = id ? a.value : '';
+    var a = document.activeElement, id = a && a.id && /^(pl-|sq$)/.test(a.id) ? a.id : null, val = id ? a.value : '', sel = id ? [a.selectionStart, a.selectionEnd] : null;
+    var sq = $('#sq'), sqVal = sq ? sq.value : null;
     fn();
-    if (id) { var n = document.getElementById(id); if (n) { n.value = val; try { n.focus({ preventScroll: true }); } catch (e) {} } }
+    // The Search box keeps what's typed even when it isn't focused
+    var sq2 = $('#sq'); if (sq2 && sqVal !== null && sq2.value !== sqVal) sq2.value = sqVal;
+    if (id) { var n = document.getElementById(id); if (n) { n.value = val; try { n.focus({ preventScroll: true }); if (sel && sel[0] != null) n.setSelectionRange(sel[0], sel[1]); } catch (e) {} } }
   }
   function syncCourses(force) {
     if (!cs || !(feedsOn || prefs.apiKey)) return Promise.resolve();
@@ -1285,7 +1306,8 @@
       var left = 5, vid = current;
       var step = function () {
         var cdn = $('#vNext .cdn');
-        if (current !== vid || !cdn || box.hidden || document.visibilityState !== 'visible') return;
+        if (current !== vid || !cdn || box.hidden) return;
+        if (document.visibilityState !== 'visible') { nextTimer = setTimeout(step, 1000); return; }
         if (--left <= 0) { playEp(c.id, n.x.id); return; }
         cdn.textContent = 'Plays in ' + left + ' s'; nextTimer = setTimeout(step, 1000);
       };
@@ -1315,7 +1337,7 @@
       case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
       case 'sec-delete':
         if (!confirmDel) { confirmDel = true; var to = lib.sections().filter(function (s) { return s.id !== editing; })[0]; b.textContent = 'Tap again: channels move to ' + (to ? to.name : '?'); break; }
-        try { var toSec = lib.removeSection(editing); cs.list().forEach(function (c) { if (c.section === editing) cs.move(c.id, toSec); }); $('#secDlg').close(); if (stack.length) { stack = []; $('#page').hidden = true; } renderAll(); toast('Section deleted. Its channels moved.'); }
+        try { var toSec = lib.removeSection(editing); cs.list().forEach(function (c) { if (c.section === editing) cs.move(c.id, toSec); }); $('#secDlg').close(); if (stack.length) { unwind(); $('#page').hidden = true; } renderAll(); toast('Section deleted. Its channels moved.'); }
         catch (err) { $('#secMsg').textContent = err.message; $('#secMsg').className = 'msgline err'; }
         break;
       case 'seen-section': lib.sources(id).forEach(function (s) { lib.markSeen(s.id); }); renderAll(); break;
@@ -1334,7 +1356,7 @@
       case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
       case 'open-marks': push({ name: 'marks' }); break;
       case 'mark': doMark(); break;
-      case 'mark-play': var mk = marks.get(id); if (mk) openVideo({ id: mk.vid, t: Math.max(1, mk.t), title: mk.title }); break;
+      case 'mark-play': var mk = marks.get(id); if (mk) openVideo({ id: mk.vid, start: Math.max(1, mk.t), title: mk.title }); break;
       case 'mark-note': openNote(id); break;
       case 'mark-remove': var gm = marks.remove(id); renderPage(); if (gm) toast('Mark removed.', '', { label: 'Undo', fn: function () { marks.restore(gm); renderAll(); } }); break;
       case 'marks-copy': var n0 = marks.count; copyText(marks.anki(), function () { b.textContent = 'Copied ' + n0 + (n0 === 1 ? ' card' : ' cards'); setTimeout(function () { b.textContent = 'Copy for Anki'; }, 2500); toast('Copied. In Anki: File › Import, then paste or pick the text.'); }); break;

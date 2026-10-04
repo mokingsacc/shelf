@@ -408,6 +408,7 @@ var Courses = (function () {
     var DAY = 864e5;
     function dayStart(t) { var d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
     function daysLeft(t) { return Math.max(0, Math.round((dayStart(EXAM.getTime()) - dayStart(t == null ? now() : t)) / DAY)); }
+    function examPast(t) { return dayStart(t == null ? now() : t) > dayStart(EXAM.getTime()); }
     // Ticks done by hand (or by finishing a video) in [from, to)
     function ticksBetween(c, from, to) {
       var at = c.ticksAt || {}, n = 0, secs = 0, dur = {};
@@ -420,7 +421,7 @@ var Courses = (function () {
       t = t || now();
       var c = get(id), pr = progress(id); if (!c || !pr) return null;
       var left = pr.total - pr.done, days = daysLeft(t), rate7 = ticksBetween(c, dayStart(t) - 6 * DAY, dayStart(t) + DAY).n / 7;
-      return { left: left, days: days, perDay: left ? (days ? left / days : left) : 0, rate7: rate7,
+      return { left: left, days: days, perDay: left && days ? left / days : 0, rate7: rate7,
         finishBy: left && rate7 ? dayStart(t) + Math.ceil(left / rate7) * DAY : 0 };
     }
     // All courses together: today, the last seven days (oldest first, today last), and what's left
@@ -433,12 +434,12 @@ var Courses = (function () {
         var pr = progress(c.id); if (pr && pr.total) out.left += pr.total - pr.done;
       });
       out.weekN = out.week.reduce(function (a, b) { return a + b; }, 0);
-      out.perDay = out.left ? (out.days ? out.left / out.days : out.left) : 0;
+      out.perDay = out.left && out.days ? out.left / out.days : 0;
       return out;
     }
 
     return {
-      pace: pace, today: today, daysLeft: daysLeft,
+      pace: pace, today: today, daysLeft: daysLeft, examPast: examPast,
       list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
       tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, move: move, remove: remove,
       load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists,

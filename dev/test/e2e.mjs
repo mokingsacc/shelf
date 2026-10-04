@@ -415,6 +415,18 @@ await ctx.close();
 console.log('\n== Player: swipe, speed per channel, Mark');
 ({ ctx, p } = await appPage({ ctxOpts: { permissions: ['clipboard-read', 'clipboard-write'] } }));
 await settle(p);
+await p.locator('#searchBtn').click(); await p.fill('#sq', 'hypokalemia');
+await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p); await p.waitForTimeout(200);
+ok(await p.inputValue('#sq') === 'hypokalemia', 'search: what you typed survives a background refresh');
+await p.press('#sq', 'Enter'); await p.waitForTimeout(400);
+ok(await p.locator('#vsheet.open').count() === 0 && await shelf(p, () => !window.__shelf.videos.hypokalemia), 'search: an 11-letter word is searched, not played as a video id');
+// tabs take their pages' history with them: Medicine › channel › Courses leaves one page behind Home, not three
+await p.locator('#todayBtn').click(); await p.waitForTimeout(300);
+const h0 = await p.evaluate(() => history.length);
+await p.locator('.band.c1 .hd').click(); await p.locator('#page .chrow').first().click(); await p.locator('#coursesBtn').click(); await p.waitForTimeout(400);
+ok(await p.evaluate(() => history.length) <= h0 + 1 && await shelf(p, () => window.__shelf.stack.length) === 1, 'tabs: switching tabs doesn\'t pile up Back steps');
+await p.goBack(); await p.waitForTimeout(300);
+ok(await p.locator('#page').isHidden(), 'tabs: Back from a tab goes Home');
 const playFrom = async (sec, chan, title) => {
   await p.locator('#todayBtn').click(); await p.waitForTimeout(100);
   await p.locator('.band', { hasText: sec }).locator('.hd').first().click();
@@ -454,6 +466,15 @@ ok(await p.locator('#page .mrow').count() === 1 && /Renal/.test(await p.locator(
 await p.locator('[data-act="marks-copy"]').click(); await p.waitForTimeout(300);
 const anki = (await shelf(p, () => window.__clip)) || await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
 ok(/Renal.*@ 2:\d\d.*\t.*youtube.*t=\d+s/.test(anki), 'mark: Copy for Anki gives tab-separated cards: ' + JSON.stringify(anki).slice(0, 90));
+const rid = await shelf(p, () => window.__shelf.marks.list()[0].vid), mt = await shelf(p, () => window.__shelf.marks.list()[0].t);
+await shelf(p, () => { const v = Object.values(window.__shelf.videos).find((x) => /Renal/.test(x.title)); v.t = 400; });
+await p.locator('#page [data-act="mark-play"]').first().click(); await p.waitForTimeout(600);
+ok(Math.abs(await shelf(p, () => window.__lastStart) - mt) < 2 && await p.evaluate((id) => window.__shelf.videos[id].t, rid) >= 399, 'mark: playing a mark starts there without moving the saved spot (' + JSON.stringify([mt, await shelf(p, () => window.__lastStart), await p.evaluate((id) => window.__shelf.videos[id] && window.__shelf.videos[id].t, rid), rid]) + ')');
+await p.locator('[data-act="close-video"]').first().click();
+await shelf(p, () => { window.__shelf.prefs.rate = 1.25; });
+await playFrom('Entertainment', 'Breaking Points', 'Shutdown'); await p.waitForTimeout(2600);
+ok(await shelf(p, () => window.__fake.getPlaybackRate()) === 1.25, 'speed: a speed saved by the old version still applies');
+await p.locator('[data-act="close-video"]').first().click();
 await ctx.close();
 
 console.log('\n== Night (23:12)');
@@ -464,6 +485,9 @@ await p.locator('.band.c3 .hd').click();
 await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTimeout(1200);
 const tmr = await p.evaluate(() => { const t = window.__shelf.engine.state().timer; return t && Math.round((t.endsAt - Date.now()) / 60000); });
 ok(tmr === 45 && /45-minute sleep timer on/.test(await p.locator('#toast').textContent()), 'night: a 45-minute sleep timer starts by itself (' + tmr + ' min)');
+await p.locator('#nSeg [data-m="45"]').click(); await p.locator('[data-act="close-night"]').click(); await p.waitForTimeout(200);
+await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTimeout(600);
+ok(await p.evaluate(() => !window.__shelf.engine.state().timer), 'night: a timer you turned off stays off when you reopen the episode');
 await p.evaluate(() => { document.querySelector('#audio').currentTime = 60; }); await p.waitForTimeout(600);
 await p.evaluate(() => { document.querySelector('#audio').pause(); window.__shelf.engine.capture(true); }); await p.waitForTimeout(200);
 await p.locator('[data-act="close-night"]').click(); await p.locator('#todayBtn').click(); await p.waitForTimeout(300);
