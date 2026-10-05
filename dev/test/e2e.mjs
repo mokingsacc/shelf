@@ -101,6 +101,7 @@ const b15 = p.locator('#vSeg [data-m="15"]').first(); const bb = await b15.bound
 await p.mouse.move(bb.x + 10, bb.y + 10); await p.mouse.down(); await p.waitForTimeout(800); await p.mouse.up(); await p.waitForTimeout(100);
 ok(await shelf(p, () => window.__shelf.vTimer && window.__shelf.vTimer.minutes) === 1 && /[01]:\d\d/.test(await p.locator('#vStops').textContent()), '5 press and hold sets a 1-minute test timer');
 await p.locator('#vSeg [data-m="30"]').click(); await p.locator('#vSeg [data-m="30"]').click();
+ok(await p.locator('#vSeg').isVisible(), '5 the numbers stay open after turning the timer off');
 ok((await p.locator('#vStops').textContent()).startsWith('Off'), '5 tapping the chosen number again turns the timer off');
 // guards from v1: video swap and pre-roll ads must not overwrite a spot
 await p.evaluate(() => { window.__lag = true; });
@@ -389,7 +390,7 @@ const ex = await p.locator('#paceBody').textContent();
 ok(ex.includes(String(days)) && /Today 2/.test(ex) && /PAEDS|Paeds/.test(ex) && /26 left/.test(ex), 'C Pace sheet: ' + days + ' days, today 2, Paeds 26 left (' + ex.replace(/\s+/g, ' ').slice(0, 90) + ')');
 await p.locator('#paceCopy').click(); await p.waitForTimeout(300);
 const plan = (await shelf(p, () => window.__clip)) || await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
-ok(/Exam: 30 November 2026, \d+ days/.test(plan) && /Paeds: 104 of 130 watched, 26 left/.test(plan) && /how many videos a day/.test(plan), 'C Copy for Claude gives a plan question: ' + JSON.stringify(plan.split('\n').slice(1, 4)));
+ok(/Exam: 30 November 2026, \d+ days/.test(plan) && /Paeds( \([^)]*\))?: 104 of 130 watched, 26 left/.test(plan) && /how many videos a day/.test(plan), 'C Copy for Claude gives a plan question: ' + JSON.stringify(plan.split('\n').slice(1, 4)));
 await p.keyboard.press('Escape');
 await p.locator('#page .top [data-act="add-course"]').click(); await p.waitForTimeout(500);
 await p.fill('#courseInput', 'surg'); await p.waitForTimeout(150);

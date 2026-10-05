@@ -132,6 +132,8 @@ svg{display:block;flex:none}
 @media (min-width:700px){
   :root{--g:max(28px,calc((100vw - 720px) / 2))}
   dialog{--g:24px}
+  .chrow{padding-right:calc(var(--g) - 16px)}
+  .mini{padding:0 calc(var(--g) - 16px)}
   #vsheet .vid{width:min(100%,calc((100vh - 330px) * 16 / 9));margin:0 auto}
 }
 
@@ -255,7 +257,7 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .course .cn{font:600 12px var(--mono)}
 .course .cx{grid-column:1/-1;font:400 12px var(--mono);color:var(--grey);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .course .cx b{color:var(--ink);font-weight:600}
-.course .cx .late{color:var(--bad)}
+.course .cx .late,.plist .late{color:var(--bad)}
 .course.open{background:var(--soft)}
 .cgo{width:var(--tap);height:var(--tap);background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;font:600 16px var(--mono)}
 .cgo svg{width:18px;height:18px}
@@ -2373,6 +2375,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
     if (bed) top = bed;
     // The podcast bar at the bottom already is "continue" for the episode it holds
     var held = engine && engine.state().episode;
+    if (held && arec[held.guid] && arec[held.guid].done) held = null;
     if (held) { top = all.filter(function (e) { return !(e.type === 'audio' && e.key === held.guid); })[0]; bed = null; }
     if (held && top && top.type === 'audio') top = null;
     $('#cont').hidden = !top;
@@ -2457,7 +2460,9 @@ if (typeof module !== 'undefined') module.exports = Marks;
   function foldKey(label) { var v = stack[stack.length - 1]; return (v ? v.name + ':' + (v.id || '') : 'home') + ':' + label; }
   function fold(label, html, n, open) {
     if (!n && !open) return '';
-    var k = foldKey(label), on = k in foldOpen ? foldOpen[k] : !!open;
+    var k = foldKey(label);
+    if (!(k in foldOpen)) foldOpen[k] = !!open;
+    var on = foldOpen[k];
     return '<details class="fold" data-k="' + esc(k) + '"' + (on ? ' open' : '') + '><summary><span>' + esc(label) + ' · ' + n + '</span>' + I.down + '</summary>' + html + '</details>';
   }
   document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.classList && d.classList.contains('fold') && d.getAttribute('data-k')) foldOpen[d.getAttribute('data-k')] = d.open; }, true);
@@ -2861,7 +2866,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
   function setTimer(which, m) {
     var cur = timerFor(which), same = cur && (cur.mode === 'end' ? m === 'end' : cur.minutes === +m);
     var val = same ? null : m === 'end' ? 'end' : +m;
-    if (which === 'v') { vTimer = val == null ? null : SleepTimer.start(val); vTimerMsg = ''; }
+    if (which === 'v') { vTimer = val == null ? null : SleepTimer.start(val); vTimerMsg = ''; vTmOpen = true; }
     else engine.setTimer(val);
     renderTimerUI(which);
     if (which === 'a') renderAudio();
@@ -3291,7 +3296,9 @@ if (typeof module !== 'undefined') module.exports = Marks;
     var h = examHTML(), open = cs.list().filter(function (c) { var pr = cs.progress(c.id); return pr.total && pr.state !== 'done'; }), tot = 0, tsec = 0;
     h += '<ul class="plist">' + open.map(function (c) {
       var pr = cs.progress(c.id), pc = cs.pace(c.id), left = pr.total - pr.done, sec = leftSecs(c); tot += left; tsec += sec;
-      return '<li><b>' + esc(c.name) + '</b><span class="mono">' + left + ' left' + (sec ? ' · ' + hrs(sec) : '') + (pc && pc.perDay ? ' · ' + esc(Courses.perDay(pc.perDay)) : '') + '</span></li>';
+      var late = pc && pc.finishBy && pc.finishBy > Courses.EXAM.getTime();
+      return '<li><b>' + esc(c.name) + '</b><span class="mono">' + left + ' left' + (sec ? ' · ' + hrs(sec) : '') + (pc && pc.perDay ? ' · ' + esc(Courses.perDay(pc.perDay)) : '') +
+        (pc && pc.finishBy ? '<br><span' + (late ? ' class="late"' : '') + '>done ' + esc(shortDay(pc.finishBy)) + ' at this week\'s pace</span>' : '') + '</span></li>';
     }).join('');
     var td = cs.today();
     if (open.length > 1) h += '<li class="tot"><b>All</b><span class="mono">' + tot + ' left' + (tsec ? ' · ' + hrs(tsec) : '') + (td.perDay ? ' · ' + esc(Courses.perDay(td.perDay)) : '') + '</span></li>';
@@ -3301,11 +3308,11 @@ if (typeof module !== 'undefined') module.exports = Marks;
     var d = new Date(), days = cs.daysLeft(), td = cs.today(), lines = [];
     lines.push('My USMLE Step 2 CK study plan, from my Shelf app (' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() + ').');
     lines.push(cs.examPast() ? 'My exam was on 30 November 2026.' : 'Exam: 30 November 2026, ' + days + (days === 1 ? ' day' : ' days') + ' from today.');
-    lines.push('Mehlman Medical video courses (YouTube playlists):');
+    lines.push('Video courses (YouTube playlists):');
     cs.list().forEach(function (c) {
       var pr = cs.progress(c.id); if (!pr.total) return;
       var sec = leftSecs(c);
-      lines.push('- ' + c.name + ': ' + pr.done + ' of ' + pr.total + ' watched' + (pr.state === 'done' ? ' (done)' : ', ' + (pr.total - pr.done) + ' left' + (sec ? ', about ' + hrs(sec) + ' of video' : '')));
+      lines.push('- ' + c.name + (c.channel ? ' (' + c.channel + ')' : '') + ': ' + pr.done + ' of ' + pr.total + ' watched' + (pr.state === 'done' ? ' (done)' : ', ' + (pr.total - pr.done) + ' left' + (sec ? ', about ' + hrs(sec) + ' of video' : '')));
     });
     lines.push('Watched today: ' + td.n + '. Last 7 days: ' + td.weekN + '.');
     lines.push('Work out how many videos a day I need to finish before the exam, which order to do the courses in, and a simple week-by-week schedule that leaves the last week for review. Keep it short.');

@@ -132,6 +132,8 @@ svg{display:block;flex:none}
 @media (min-width:700px){
   :root{--g:max(28px,calc((100vw - 720px) / 2))}
   dialog{--g:24px}
+  .chrow{padding-right:calc(var(--g) - 16px)}
+  .mini{padding:0 calc(var(--g) - 16px)}
   #vsheet .vid{width:min(100%,calc((100vh - 330px) * 16 / 9));margin:0 auto}
 }
 
@@ -255,7 +257,7 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .course .cn{font:600 12px var(--mono)}
 .course .cx{grid-column:1/-1;font:400 12px var(--mono);color:var(--grey);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .course .cx b{color:var(--ink);font-weight:600}
-.course .cx .late{color:var(--bad)}
+.course .cx .late,.plist .late{color:var(--bad)}
 .course.open{background:var(--soft)}
 .cgo{width:var(--tap);height:var(--tap);background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;font:600 16px var(--mono)}
 .cgo svg{width:18px;height:18px}
