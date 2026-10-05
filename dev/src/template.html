@@ -386,6 +386,27 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .ctl button.on{background:var(--pl-fg);color:var(--pl-bg)}
 .ctl svg{width:26px;height:26px}
 .spacer{height:18px;flex:none}
+/* Gemini: one folded row under the title, notes in a sheet */
+.lab.tgl.ai .mono{max-width:62%}
+.aibox{margin:8px var(--g) 0;flex:none;font-size:15px;line-height:1.4}
+.aibox .gist{margin:0 0 6px;font-weight:700}
+.aibox .msg{margin:0;color:var(--pl-mute)}
+.aibox .msg.err{color:var(--pl-fg)}
+.aibox .cbtn{margin-top:8px;color:var(--pl-fg)}
+.pts{list-style:none;margin:0;padding:0}
+.pts li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;border-top:2px solid var(--pl-dim);padding:2px 0}
+.pts .tt{min-height:var(--tap);min-width:58px;padding:0 6px;border:2px solid var(--pl-dim);color:var(--pl-hi);font-weight:600;font-size:14px}
+.pts li>span{padding:10px 0;overflow-wrap:anywhere}
+.twin.ai #vNextBtn{grid-column:1/-1}
+.nts h3{margin:6px 0 0;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.nts ul{margin:0;padding:0 0 0 18px;font-size:15px;line-height:1.4}
+.nts li{margin:4px 0;overflow-wrap:anywhere}
+.nts .mono{color:var(--grey);font-size:13px}
+.nts .topic{font-size:17px;font-weight:800}
+.mcard{grid-column:1/-1;margin:0 0 6px;font-size:14px;line-height:1.4}
+.mcard summary{min-height:var(--tap);display:flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);cursor:pointer}
+.mcard p{margin:4px 0;overflow-wrap:anywhere}
+.mcard .cbtn{margin-top:4px}
 
 /* ---------- Night player (podcasts): lights down, no yellow ---------- */
 .night{background:var(--n-bg);color:var(--n-fg)}
@@ -448,7 +469,7 @@ dialog .grab{background:var(--hair);margin:8px auto 0}
 .prob{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;padding:10px 0;border-top:2px solid var(--hair);font-size:14px;line-height:1.35}
 .prob .ic{font:900 16px var(--mono);color:var(--bad)}
 .prob.wait .ic{color:var(--wait)}
-.prob .fix{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 12px;border:2px solid var(--rule);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:8px 8px 0 0}
+.prob .fix,.checks .fix{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 12px;border:2px solid var(--rule);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:8px 8px 0 0}
 details.all>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:var(--tap);font:600 12px var(--mono);color:var(--grey);border-top:2px solid var(--hair);cursor:pointer}
 details.all>summary::-webkit-details-marker{display:none}
 details.all>summary svg{width:18px;height:18px;transition:transform .15s}
@@ -509,6 +530,8 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="sh-top"><button type="button" class="x" data-act="close-video" aria-label="Close player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><a class="lnk" id="ytLink" href="#" target="_blank" rel="noopener">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></div>
   <div class="vid"><div id="player"></div><div class="perr" id="perr" hidden></div></div>
   <div class="info"><div class="ch" id="vCh"></div><h2 id="vTitle"></h2></div>
+  <button type="button" class="lab tgl ai" id="vAiBtn" data-act="ai-sum" aria-expanded="false" aria-controls="vAi" hidden><span>Summary</span><span class="mono" id="vAiSt"></span></button>
+  <div class="aibox" id="vAi" hidden></div>
   <button type="button" class="scrub" id="vScrub" role="slider" aria-label="Position in the video" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span class="line"><i id="vLine"></i><u id="vKnob"></u></span><span class="nums mono"><b id="vT">0:00</b><span id="vLeft"></span></span></button>
   <div class="vcourse" id="vCourse" hidden></div>
   <div class="nextup" id="vNext" hidden></div>
@@ -516,7 +539,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="chips" id="vRate" role="group" aria-label="Speed"></div>
   <button type="button" class="lab tgl" id="vTmBtn" data-act="v-timer-toggle" aria-expanded="false" aria-controls="vSeg"><span>Sleep timer</span><span class="mono" id="vStops"></span></button>
   <div class="chips tm" id="vSeg" role="group" aria-label="Sleep timer" hidden></div>
-  <div class="twin" id="vTwin"><button type="button" class="act" id="vMark" data-act="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Mark</span></button><button type="button" class="act solid" id="vNextBtn" data-act="ep-play" hidden></button></div>
+  <div class="twin" id="vTwin"><button type="button" class="act" id="vMark" data-act="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Mark</span></button><button type="button" class="act" id="vNotes" data-act="ai-notes" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4"/></svg><span>Notes</span></button><button type="button" class="act solid" id="vNextBtn" data-act="ep-play" hidden></button></div>
   <div class="spacer"></div>
   <div class="ctl"><button type="button" data-act="v-back" aria-label="Back 15 seconds">−15</button><button type="button" id="vPlay" data-act="v-toggle" aria-label="Pause" class="on"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button type="button" data-act="v-fwd" aria-label="Forward 15 seconds">+15</button></div>
 </section>
@@ -615,7 +638,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <details class="all" id="checkAll"><summary><span id="checkAllSum">Show all checks</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><ul class="checks" id="checkList"></ul></details>
     <details class="all" id="checkMore"><summary><span>More</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
       <div class="grid2" id="checkActs"></div>
-      <div class="lastline"><button type="button" data-act="settings">Search key</button><button type="button" id="trackBtn" data-act="yt-settings" hidden>iPhone Settings for Shelf</button></div>
+      <div class="lastline"><button type="button" data-act="settings">Search key</button><button type="button" id="aiKeyBtn" data-act="ai-key" hidden>Gemini key</button><button type="button" id="trackBtn" data-act="yt-settings" hidden>iPhone Settings for Shelf</button></div>
       <p class="small" id="sendNote">The shelf link carries your spots to Safari on another device. Your private feeds never go in it.</p>
     </details>
   </div>
@@ -670,6 +693,25 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   </form>
 </dialog>
 
+<dialog id="notesDlg" aria-labelledby="notesH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="notesH">Notes</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db" id="notesBody"></div>
+</dialog>
+
+<dialog id="aiKeyDlg" aria-labelledby="aiKeyH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="aiKeyH">Gemini key</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <form class="db" id="aiKeyForm" novalidate>
+    <p>Free. It lets Gemini watch videos for summaries, notes and Anki cards. Make one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (Create API key, then Copy) and paste it here.</p>
+    <input class="field mono" id="aiKeyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…" aria-label="Gemini key">
+    <div class="msgline" id="aiKeyMsg" role="status"></div>
+    <div class="grid2"><button type="button" class="ghost" data-act="ai-key-paste">Paste</button><button type="submit" class="primary">Save</button></div>
+    <button type="button" class="ghost" data-act="ai-key-remove">Remove the key</button>
+    <p class="small">The key stays on this phone. Shelf only sends Google the video's link, its own instructions and your short mark note. Google may use free-tier requests to improve its models.</p>
+  </form>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>/*@CORE@*/</script>
@@ -681,6 +723,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <script>/*@SEARCH@*/</script>
 <script>/*@COURSES@*/</script>
 <script>/*@MARKS@*/</script>
+<script>/*@AI@*/</script>
 <script>/*@APP@*/</script>
 </body>
 </html>

@@ -165,6 +165,11 @@ export async function installFakes(ctx, opts = {}) {
       if (!PLAYLISTS[pid]) return r.fulfill({ status: 400, headers: cors, body: '{}' });
       return r.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify({ onResponseReceivedActions: [{ appendContinuationItemsAction: { continuationItems: plPage(pid, +k) } }] }) });
     }
+    if (u.pathname === '/watch') {
+      const v = u.searchParams.get('v') || '';
+      const status = /priv/.test(v) ? 'LOGIN_REQUIRED' : 'OK', len = /long/.test(v) ? 3 * 3600 : 600;
+      return r.fulfill({ contentType: 'text/html', headers: cors, body: `<html><script>var ytInitialPlayerResponse = {"playabilityStatus":{"status":"${status}"},"videoDetails":{"videoId":"${v}","lengthSeconds":"${len}"}};</script></html>` });
+    }
     const handle = decodeURIComponent(u.pathname.slice(1));
     if (CHANNELS[handle]) {
       const ch = CHANNELS[handle];
@@ -200,6 +205,28 @@ export async function installFakes(ctx, opts = {}) {
   await ctx.route(/https:\/\/(i\.ytimg\.com|img\.example\.com|yt3\.example\.com)\/.*/, (r) => {
     const u = r.request().url(); let n = 0; for (const c of u) n = (n * 31 + c.charCodeAt(0)) % 997;
     r.fulfill({ contentType: 'image/svg+xml', body: svg('', n) });
+  });
+  // A pretend Gemini. opts.gemini = { mode: ok|slow|badkey|busy|daily, calls: [] } (shared with the test, so it can switch)
+  const G = opts.gemini || { mode: 'ok', calls: [] };
+  await ctx.route('https://generativelanguage.googleapis.com/**', async (r) => {
+    const req = r.request(), body = JSON.parse(req.postData() || '{}'), parts = (body.contents && body.contents[0].parts) || [];
+    const video = parts.find((p) => p.fileData), text = (parts.find((p) => p.text) || {}).text || '';
+    G.calls.push({ url: req.url(), key: req.headers()['x-goog-api-key'], video: video && video.fileData.fileUri, clip: video && video.videoMetadata, processing: video && video.mediaProcessing, text });
+    const err = (code, message, extra) => r.fulfill({ status: code, contentType: 'application/json', headers: cors, body: JSON.stringify({ error: Object.assign({ code, message }, extra || {}) }) });
+    if (G.mode === 'badkey') return err(400, 'API key not valid. Please pass a valid API key.', { status: 'INVALID_ARGUMENT' });
+    if (G.mode === 'busy') { G.mode = 'ok'; return err(429, 'Resource has been exhausted (e.g. check quota).', { status: 'RESOURCE_EXHAUSTED' }); }
+    if (G.mode === 'daily') return err(429, 'Quota exceeded', { details: [{ violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }] });
+    if (video && /priv/.test(video.fileData.fileUri)) return err(400, 'Cannot fetch content from the provided URL. The YouTube video may be private.');
+    if (G.mode === 'slow') await new Promise((res) => setTimeout(res, 1500));
+    let out;
+    if (/Reply OK/.test(text)) out = 'OK';
+    else if (/"points"/.test(text)) out = JSON.stringify({ gist: 'Fake gist for ' + (video ? video.fileData.fileUri.slice(-11) : ''), points: [{ t: '0:30', text: 'First point' }, { t: '2:05', text: 'Second point' }, { t: '4:40', text: 'Third point' }] });
+    else if (/"bullets"/.test(text) && !/"cards"/.test(text)) out = JSON.stringify({ topic: 'Plain topic', bullets: [{ t: '1:00', text: 'A plain bullet' }, { t: '3:00', text: 'Another bullet' }] });
+    else if (/"cards"/.test(text)) out = '```json\n' + JSON.stringify({ topic: 'Renal physiology', facts: [{ t: '1:10', text: 'Loop diuretics act on the thick ascending limb' }], tested: [{ clue: 'Hypokalaemia after furosemide', dx: 'Loop diuretic effect', next: 'Replace potassium' }], versus: [{ name: 'Thiazides', feature: 'cause hypercalcaemia' }], questions: [],
+      cards: [{ stem: 'A man on furosemide has cramps and a low potassium.', questions: ['What is the cause?', 'What do you do next?'], answer: 'This is **loop diuretic hypokalaemia**.', management: 'Replace **potassium**.', vs: 'Versus thiazides: high calcium, so check calcium.', why: 'Loops waste potassium.' }] }) + '\n```';
+    else if (/ONE card/.test(text)) out = JSON.stringify({ stem: 'A child has 5 days of fever and a strawberry tongue.', questions: ['What is the diagnosis?'], answer: 'This is **Kawasaki disease**.', management: '', vs: 'Versus scarlet fever: a sandpaper rash, so give penicillin.', why: 'Coronary aneurysms are the risk.' });
+    else out = '{}';
+    r.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: out }] }, finishReason: 'STOP' }] }) });
   });
   await ctx.route('https://www.googleapis.com/**', (r) => r.fulfill({ status: 403, headers: cors, contentType: 'application/json', body: JSON.stringify({ error: { errors: [{ reason: 'quotaExceeded' }] } }) }));
   // opts.fontsDir: a folder with fonts.css + map.txt (downloaded once) so screenshots use the real faces

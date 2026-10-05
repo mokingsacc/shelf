@@ -27,7 +27,7 @@ for (const [w, h] of [[390, 844], [375, 667], [820, 1180], [1180, 820]]) for (co
   const ctx = await b.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await installFakes(ctx, { fresh: true, fontsDir: FONTS });
   await ctx.addInitScript('window.__hour = 14.13;');
-  await ctx.addInitScript(CAP({}, ''));
+  await ctx.addInitScript(CAP({ 'gemini.key': 'AIzaPREVIEWKEY000000000000000000' }, ''));
   const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
   await p.goto('http://localhost:8767/'); await p.waitForTimeout(2500);
   await p.evaluate(() => window.__shelf.refreshAll(true)); await p.waitForTimeout(800);
@@ -37,6 +37,9 @@ for (const [w, h] of [[390, 844], [375, 667], [820, 1180], [1180, 820]]) for (co
   await p.evaluate(() => window.__fake.advance(140)); await p.waitForTimeout(5400);
   await p.locator('#vRate [data-r="1.5"]').click(); await shot('player-folded'); await p.locator('#vTmBtn').click(); await p.locator('#vSeg [data-m="30"]').click(); await p.waitForTimeout(1100);
   await shot('player');
+  await p.evaluate(() => { window.__shelf.videos.dQw4w9WgXcQ.section = 'med'; });
+  await p.locator('#vAiBtn').click(); await p.waitForSelector('#vAi .pts', { timeout: 5000 }).catch(() => {}); await shot('player-summary');
+  await p.locator('#vNotes').click(); await p.waitForSelector('#notesBody .nts', { timeout: 5000 }).catch(() => {}); await shot('notes'); await p.keyboard.press('Escape');
   await p.locator('[data-act="close-video"]').click(); await p.waitForTimeout(400);
   await shot('home');
   await p.screenshot({ path: `${OUT}/v3-homefull-${tag}.png`, fullPage: true });

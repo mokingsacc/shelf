@@ -386,6 +386,27 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .ctl button.on{background:var(--pl-fg);color:var(--pl-bg)}
 .ctl svg{width:26px;height:26px}
 .spacer{height:18px;flex:none}
+/* Gemini: one folded row under the title, notes in a sheet */
+.lab.tgl.ai .mono{max-width:62%}
+.aibox{margin:8px var(--g) 0;flex:none;font-size:15px;line-height:1.4}
+.aibox .gist{margin:0 0 6px;font-weight:700}
+.aibox .msg{margin:0;color:var(--pl-mute)}
+.aibox .msg.err{color:var(--pl-fg)}
+.aibox .cbtn{margin-top:8px;color:var(--pl-fg)}
+.pts{list-style:none;margin:0;padding:0}
+.pts li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;border-top:2px solid var(--pl-dim);padding:2px 0}
+.pts .tt{min-height:var(--tap);min-width:58px;padding:0 6px;border:2px solid var(--pl-dim);color:var(--pl-hi);font-weight:600;font-size:14px}
+.pts li>span{padding:10px 0;overflow-wrap:anywhere}
+.twin.ai #vNextBtn{grid-column:1/-1}
+.nts h3{margin:6px 0 0;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.nts ul{margin:0;padding:0 0 0 18px;font-size:15px;line-height:1.4}
+.nts li{margin:4px 0;overflow-wrap:anywhere}
+.nts .mono{color:var(--grey);font-size:13px}
+.nts .topic{font-size:17px;font-weight:800}
+.mcard{grid-column:1/-1;margin:0 0 6px;font-size:14px;line-height:1.4}
+.mcard summary{min-height:var(--tap);display:flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);cursor:pointer}
+.mcard p{margin:4px 0;overflow-wrap:anywhere}
+.mcard .cbtn{margin-top:4px}
 
 /* ---------- Night player (podcasts): lights down, no yellow ---------- */
 .night{background:var(--n-bg);color:var(--n-fg)}
@@ -448,7 +469,7 @@ dialog .grab{background:var(--hair);margin:8px auto 0}
 .prob{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;padding:10px 0;border-top:2px solid var(--hair);font-size:14px;line-height:1.35}
 .prob .ic{font:900 16px var(--mono);color:var(--bad)}
 .prob.wait .ic{color:var(--wait)}
-.prob .fix{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 12px;border:2px solid var(--rule);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:8px 8px 0 0}
+.prob .fix,.checks .fix{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 12px;border:2px solid var(--rule);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:8px 8px 0 0}
 details.all>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:var(--tap);font:600 12px var(--mono);color:var(--grey);border-top:2px solid var(--hair);cursor:pointer}
 details.all>summary::-webkit-details-marker{display:none}
 details.all>summary svg{width:18px;height:18px;transition:transform .15s}
@@ -509,6 +530,8 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="sh-top"><button type="button" class="x" data-act="close-video" aria-label="Close player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><a class="lnk" id="ytLink" href="#" target="_blank" rel="noopener">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></div>
   <div class="vid"><div id="player"></div><div class="perr" id="perr" hidden></div></div>
   <div class="info"><div class="ch" id="vCh"></div><h2 id="vTitle"></h2></div>
+  <button type="button" class="lab tgl ai" id="vAiBtn" data-act="ai-sum" aria-expanded="false" aria-controls="vAi" hidden><span>Summary</span><span class="mono" id="vAiSt"></span></button>
+  <div class="aibox" id="vAi" hidden></div>
   <button type="button" class="scrub" id="vScrub" role="slider" aria-label="Position in the video" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span class="line"><i id="vLine"></i><u id="vKnob"></u></span><span class="nums mono"><b id="vT">0:00</b><span id="vLeft"></span></span></button>
   <div class="vcourse" id="vCourse" hidden></div>
   <div class="nextup" id="vNext" hidden></div>
@@ -516,7 +539,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="chips" id="vRate" role="group" aria-label="Speed"></div>
   <button type="button" class="lab tgl" id="vTmBtn" data-act="v-timer-toggle" aria-expanded="false" aria-controls="vSeg"><span>Sleep timer</span><span class="mono" id="vStops"></span></button>
   <div class="chips tm" id="vSeg" role="group" aria-label="Sleep timer" hidden></div>
-  <div class="twin" id="vTwin"><button type="button" class="act" id="vMark" data-act="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Mark</span></button><button type="button" class="act solid" id="vNextBtn" data-act="ep-play" hidden></button></div>
+  <div class="twin" id="vTwin"><button type="button" class="act" id="vMark" data-act="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Mark</span></button><button type="button" class="act" id="vNotes" data-act="ai-notes" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4"/></svg><span>Notes</span></button><button type="button" class="act solid" id="vNextBtn" data-act="ep-play" hidden></button></div>
   <div class="spacer"></div>
   <div class="ctl"><button type="button" data-act="v-back" aria-label="Back 15 seconds">−15</button><button type="button" id="vPlay" data-act="v-toggle" aria-label="Pause" class="on"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button type="button" data-act="v-fwd" aria-label="Forward 15 seconds">+15</button></div>
 </section>
@@ -615,7 +638,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <details class="all" id="checkAll"><summary><span id="checkAllSum">Show all checks</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><ul class="checks" id="checkList"></ul></details>
     <details class="all" id="checkMore"><summary><span>More</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
       <div class="grid2" id="checkActs"></div>
-      <div class="lastline"><button type="button" data-act="settings">Search key</button><button type="button" id="trackBtn" data-act="yt-settings" hidden>iPhone Settings for Shelf</button></div>
+      <div class="lastline"><button type="button" data-act="settings">Search key</button><button type="button" id="aiKeyBtn" data-act="ai-key" hidden>Gemini key</button><button type="button" id="trackBtn" data-act="yt-settings" hidden>iPhone Settings for Shelf</button></div>
       <p class="small" id="sendNote">The shelf link carries your spots to Safari on another device. Your private feeds never go in it.</p>
     </details>
   </div>
@@ -667,6 +690,25 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <div class="msgline" id="keyMsg" role="status"></div>
     <button type="submit" class="primary">Save</button>
     <button type="button" class="ghost" data-act="key-remove">Remove the key</button>
+  </form>
+</dialog>
+
+<dialog id="notesDlg" aria-labelledby="notesH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="notesH">Notes</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db" id="notesBody"></div>
+</dialog>
+
+<dialog id="aiKeyDlg" aria-labelledby="aiKeyH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="aiKeyH">Gemini key</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <form class="db" id="aiKeyForm" novalidate>
+    <p>Free. It lets Gemini watch videos for summaries, notes and Anki cards. Make one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (Create API key, then Copy) and paste it here.</p>
+    <input class="field mono" id="aiKeyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…" aria-label="Gemini key">
+    <div class="msgline" id="aiKeyMsg" role="status"></div>
+    <div class="grid2"><button type="button" class="ghost" data-act="ai-key-paste">Paste</button><button type="submit" class="primary">Save</button></div>
+    <button type="button" class="ghost" data-act="ai-key-remove">Remove the key</button>
+    <p class="small">The key stays on this phone. Shelf only sends Google the video's link, its own instructions and your short mark note. Google may use free-tier requests to improve its models.</p>
   </form>
 </dialog>
 
@@ -2154,10 +2196,20 @@ var Marks = (function () {
   // One line of text: tabs and line breaks would split an Anki row
   function flat(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
   function link(m) { return 'https://www.youtube.com/watch?v=' + m.vid + (m.t >= 1 ? '&t=' + Math.floor(m.t) + 's' : ''); }
-  // Anki's text import: front<TAB>back, one card a line
+  // A drafted card (Mo's style: a short case and one or two questions; one sentence each, then Versus and Why)
+  // as one Anki line. Line breaks become <br> (Anki's import reads HTML), **bold** becomes <b>.
+  function html(s) { return flat(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>'); }
+  function cardLine(c) {
+    if (!c || !c.answer) return '';
+    var qs = (Array.isArray(c.questions) ? c.questions : [c.questions]).map(html).filter(Boolean);
+    var front = (flat(c.stem) ? html(c.stem) + '<br><br>' : '') + qs.join('<br>');
+    var back = html(c.answer) + (flat(c.management) ? '<br>' + html(c.management) : '') + (flat(c.vs) ? '<br><br>' + html(c.vs) : '') + (flat(c.why) ? '<br><br><i>Why: ' + html(c.why).replace(/^Why:\s*/i, '') + '</i>' : '');
+    return front ? front + '\t' + back : '';
+  }
+  // Anki's text import: front<TAB>back, one card a line. A mark with a drafted card exports the card.
   function anki(list) {
     return list.map(function (m) {
-      return flat(m.title || 'YouTube video') + ' @ ' + fmt(m.t) + (flat(m.note) ? ': ' + flat(m.note) : '') + '\t' + link(m);
+      return cardLine(m.card) || flat(m.title || 'YouTube video') + ' @ ' + fmt(m.t) + (flat(m.note) ? ': ' + flat(m.note) : '') + '\t' + link(m);
     }).join('\n');
   }
 
@@ -2180,13 +2232,384 @@ var Marks = (function () {
       return m;
     }
     function setNote(id, note) { var m = get(id); if (!m) return null; m.note = flat(note); save(); return m; }
+    function setCard(id, card) { var m = get(id); if (!m) return null; if (card) m.card = card; else delete m.card; save(); return m; }
     function remove(id) { var m = get(id); if (!m) return null; state.items = state.items.filter(function (x) { return x !== m; }); save(); return m; }
     function restore(m) { if (m && !get(m.id)) { state.items.push(m); save(); } }
-    return { list: list, get: get, add: add, setNote: setNote, remove: remove, restore: restore, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
+    return { list: list, get: get, add: add, setNote: setNote, setCard: setCard, remove: remove, restore: restore, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
   }
-  return { create: create, KEY: KEY, anki: anki, fmt: fmt, link: link };
+  return { create: create, KEY: KEY, anki: anki, cardLine: cardLine, fmt: fmt, link: link };
 })();
 if (typeof module !== 'undefined') module.exports = Marks;
+</script>
+<script>// Gemini: summaries, Step 2 notes and drafted Anki cards from a YouTube link. The key stays on the phone and only
+// the link, the prompt and Mo's short mark note are sent. Pure helpers are exported for the Node tests.
+var AI = (function () {
+  var KEY = 'shelf.v3.ai', KEY_PREF = 'gemini.key', PROMPT_VERSION = 1;
+  // Free models, best first. The second name in each list is Google's moving alias, used if the first is retired.
+  var MODELS = ['gemini-3.8-flash', 'gemini-flash-latest'], LITE = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+  var API = 'https://generativelanguage.googleapis.com/v1beta/models/';
+  var DAY_SECS = 8 * 3600, AUTO_STOP = 6 * 3600, AUTO_MAX = 10, AUTO_MAX_LEN = 3600, AGENTIC_OVER = 1200, CACHE_MAX = 300;
+  var CLIP_BEFORE = 90, CLIP_AFTER = 30, CACHE_BYTES = 400000;
+
+  var MSG = {
+    key: 'Google says the key is wrong. Paste it again.',
+    nokey: 'No Gemini key yet. Tap to add one.',
+    busy: 'Gemini is busy. Trying again in a minute.',
+    busyGave: 'Gemini is still busy. Try again in a few minutes.',
+    daily: 'Free video limit used for today. It resets at 8am.',
+    private: "Gemini can't watch this video (it isn't public).",
+    offline: "No internet. Will try when you're back online.",
+    garbled: "Gemini's answer came back garbled. Try again.",
+    slow: 'Gemini took too long on this one. Try again later.',
+    blocked: "Gemini wouldn't answer for this video.",
+    model: "Google renamed its Gemini models, so Shelf can't reach one. Tell Claude.",
+    web: 'AI works in the iPhone app'
+  };
+
+  // ----- time and dates -----
+  function fmt(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  // "3:12", "03:12", "1:02:03", 192 or "192" -> seconds (null when it isn't a time)
+  function parseT(t) {
+    if (typeof t === 'number') return isFinite(t) && t >= 0 ? Math.floor(t) : null;
+    var m = String(t || '').trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
+    if (m) return (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]);
+    return /^\d+$/.test(String(t || '').trim()) ? +String(t).trim() : null;
+  }
+  // Google's free day runs on Pacific time (midnight there is 8am in the UK, 7am for the week the clocks differ)
+  var pacFmt = null;
+  function pacificDay(t) {
+    try {
+      pacFmt = pacFmt || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' });
+      return pacFmt.format(new Date(t));
+    } catch (e) { var d = new Date(t - 8 * 3600e3); return d.toISOString().slice(0, 10); }
+  }
+  function nextReset(t) {
+    var day = pacificDay(t), h = Math.ceil(t / 3600e3) * 3600e3;
+    for (var i = 0; i < 27; i++, h += 3600e3) if (pacificDay(h) !== day) return h;
+    return t + 24 * 3600e3;
+  }
+  function resetText(t) {
+    var d = new Date(nextReset(t)), h = d.getHours(), m = d.getMinutes();
+    return (h % 12 || 12) + (m ? ':' + (m < 10 ? '0' : '') + m : '') + (h < 12 ? 'am' : 'pm');
+  }
+  function hours(secs) { var h = secs / 3600; return h > 0 && h < 0.1 ? '0.1' : String(Math.round(h * 10) / 10); }
+
+  // ----- prompts -----
+  var CARD_SHAPE = '{"stem":"a short case with only the findings that matter, under 30 words, in full sentences",' +
+    '"questions":["What is the diagnosis?","What is the next step?"],' +
+    '"answer":"one full spoken sentence answering the first question, key words in **bold**",' +
+    '"management":"one full spoken sentence answering the second question (empty string if there is only one question)",' +
+    '"vs":"Versus <one look-alike>: <the finding you would see>, so <what changes>.",' +
+    '"why":"one easy-to-remember sentence giving the reason"}';
+  var JSON_ONLY = ' Reply with JSON only, no other text.';
+  function isQuestionVideo(title) { return /\bHY\b|\bQ\s*#|#\s*\d|question|\bQs?\b/i.test(title || ''); }
+  function summaryPrompt(o) {
+    return 'Watch this YouTube video' + (o.title ? ' ("' + o.title + '")' : '') + ' and summarise it' +
+      (o.med ? ' for a medical student preparing for USMLE Step 2 CK. Keep what is high-yield for the exam' : '') + '.' +
+      ' Give a one-line gist (under 20 words) and 3 to 5 key points in the order they come, each with the time (m:ss or h:mm:ss) where that point starts in the video.' +
+      ' Keep drug and disease names exactly as said.' + JSON_ONLY +
+      ' Shape: {"gist":"…","points":[{"t":"3:12","text":"one short sentence"}]}';
+  }
+  function notesPrompt(o) {
+    if (!o.med) {
+      return 'Watch this YouTube video' + (o.title ? ' ("' + o.title + '")' : '') + ' and make short notes: the topic in a few words and 5 to 10 plain bullets in order, each with the time (m:ss) it comes up.' +
+        JSON_ONLY + ' Shape: {"topic":"…","bullets":[{"t":"3:12","text":"…"}]}';
+    }
+    return 'Watch this medical YouTube video' + (o.title ? ' ("' + o.title + '")' : '') + ' and make USMLE Step 2 CK study notes.' +
+      ' topic: the topic in a few words. facts: 5 to 12 high-yield facts as short lines, each with the time (m:ss) it is said.' +
+      ' tested: 1 to 4 ways it is tested, each as the classic vignette clue, the diagnosis, and the next best step.' +
+      ' versus: 1 to 3 look-alikes, each with the one feature that separates them.' +
+      (isQuestionVideo(o.title) ? ' questions: this video works through exam questions, so give every question with its time, the stem\'s key clue, the answer, and why in one line.'
+        : ' questions: if the video works through exam questions, give each with its time, the key clue, the answer and why; otherwise an empty list.') +
+      ' cards: 1 to 5 Anki cards for the most testable points, each a short case with one or two questions (what is it, then what do you do).' +
+      JSON_ONLY + ' Shape: {"topic":"…","facts":[{"t":"3:12","text":"…"}],"tested":[{"clue":"…","dx":"…","next":"…"}],"versus":[{"name":"…","feature":"…"}],' +
+      '"questions":[{"t":"3:12","clue":"…","answer":"…","why":"…"}],"cards":[' + CARD_SHAPE + ']}';
+  }
+  function cardPrompt(o) {
+    return 'This is a clip of a medical YouTube video' + (o.title ? ' ("' + o.title + '")' : '') + '. The student marked the moment ' + CLIP_AFTER + ' seconds before the clip ends because it should become an Anki card for USMLE Step 2 CK.' +
+      (o.note ? ' Their note on the moment, which is what the card must be about: "' + String(o.note).slice(0, 200) + '".' : ' Make the card about the main testable point at that moment.') +
+      ' Draft ONE card: a short case, then one or two questions (what is it, then what do you do). Never a mechanism question unless the mechanism is the tested fact.' +
+      JSON_ONLY + ' Shape: ' + CARD_SHAPE;
+  }
+
+  // ----- the request (one place, so a change in Google's API is one edit) -----
+  function videoUrl(vid) { return 'https://www.youtube.com/watch?v=' + vid; }
+  function clip(t, dur) {
+    t = Math.max(0, Math.floor(t || 0));
+    var s = Math.max(0, t - CLIP_BEFORE), e = t + CLIP_AFTER;
+    if (dur > 0) { e = Math.min(e, Math.floor(dur)); if (e - s < 30) s = Math.max(0, e - 30); }
+    if (e <= s) e = s + 30;
+    return { start: s, end: e };
+  }
+  // processing: 'AGENTIC', 'STATIC' or '' (leave it to Gemini)
+  function requestBody(o) {
+    var video = { fileData: { fileUri: videoUrl(o.vid) } };
+    if (o.clip) video.videoMetadata = { startOffset: o.clip.start + 's', endOffset: o.clip.end + 's' };
+    if (o.processing) video.mediaProcessing = o.processing;
+    return { contents: [{ role: 'user', parts: [video, { text: o.prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.3 } };
+  }
+  function endpoint(model) { return API + model + ':generateContent'; }
+  function testBody() { return { contents: [{ role: 'user', parts: [{ text: 'Reply OK' }] }], generationConfig: { maxOutputTokens: 20 } }; }
+
+  // ----- replies -----
+  function parseJSON(text) {
+    if (text && typeof text === 'object') return text;
+    var s = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+    try { return JSON.parse(s); } catch (e) {}
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {} }
+    return null;
+  }
+  // The model's text out of a generateContent reply; { blocked } when Gemini refused
+  function replyText(raw) {
+    var r = parseJSON(raw); if (!r) return { text: null };
+    var c = r.candidates && r.candidates[0];
+    if (!c) return { text: null, blocked: !!(r.promptFeedback && r.promptFeedback.blockReason) };
+    var parts = (c.content && c.content.parts) || [];
+    var t = parts.filter(function (p) { return p && p.text && !p.thought; }).map(function (p) { return p.text; }).join('');
+    return { text: t || null, blocked: !t && /SAFETY|BLOCK|PROHIBITED|RECITATION/.test(c.finishReason || '') };
+  }
+  function str(x, n) { return String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, n || 600); }
+  function arr(x) { return Array.isArray(x) ? x : []; }
+  function timed(list) { return arr(list).map(function (p) { return p && { t: parseT(p.t), text: str(p.text) }; }).filter(function (p) { return p && p.text; }); }
+  function normCard(c) {
+    if (!c || typeof c !== 'object') return null;
+    var qs = (Array.isArray(c.questions) ? c.questions : [c.questions]).map(function (q) { return str(q, 200); }).filter(Boolean).slice(0, 2);
+    var card = { stem: str(c.stem, 400), questions: qs, answer: str(c.answer), management: qs.length > 1 ? str(c.management) : '', vs: str(c.vs, 400), why: str(c.why, 400) };
+    return card.answer && qs.length ? card : null;
+  }
+  // Checked, trimmed results (null = not usable, ask again)
+  function clean(kind, v) {
+    if (!v || typeof v !== 'object') return null;
+    if (kind === 'summary') {
+      var pts = timed(v.points).slice(0, 6);
+      return pts.length ? { gist: str(v.gist, 200), points: pts } : null;
+    }
+    if (kind === 'card') return normCard(v.card || v);
+    if (kind === 'notes') {
+      var n = { topic: str(v.topic, 120), facts: timed(v.facts).slice(0, 15), bullets: timed(v.bullets).slice(0, 12),
+        tested: arr(v.tested).map(function (x) { return x && { clue: str(x.clue), dx: str(x.dx, 200), next: str(x.next) }; }).filter(function (x) { return x && (x.clue || x.dx); }).slice(0, 6),
+        versus: arr(v.versus).map(function (x) { return x && { name: str(x.name, 120), feature: str(x.feature) }; }).filter(function (x) { return x && x.name; }).slice(0, 4),
+        questions: arr(v.questions).map(function (x) { return x && { t: parseT(x.t), clue: str(x.clue), answer: str(x.answer, 300), why: str(x.why) }; }).filter(function (x) { return x && x.answer; }).slice(0, 40),
+        cards: arr(v.cards).map(normCard).filter(Boolean).slice(0, 8) };
+      return n.facts.length || n.bullets.length || n.cards.length ? n : null;
+    }
+    return null;
+  }
+  // Errors in plain words. kind: key, busy, daily, private, offline, model, other
+  function classify(status, text) {
+    var t = String(text || ''), err = parseJSON(t), m = (err && err.error && (err.error.message + ' ' + (err.error.status || '') + ' ' + JSON.stringify(err.error.details || ''))) || t;
+    if (!status) return { kind: 'offline', msg: MSG.offline };
+    if (status === 504 && t === 'slow') return { kind: 'slow', msg: MSG.slow };
+    if (/API.?key|API_KEY|unregistered callers|credential/i.test(m) && status !== 429) return { kind: 'key', msg: MSG.key };
+    if (status === 404 || /models\/[^ ]* is not found|not supported for generateContent|model.*not found/i.test(m)) return { kind: 'model', msg: MSG.model };
+    if (status === 429) return /per.?day|PerDay|daily/i.test(m) ? { kind: 'daily', msg: MSG.daily } : { kind: 'busy', msg: MSG.busy };
+    if (status >= 500) return { kind: 'busy', msg: MSG.busy };
+    if (/media.?processing|AGENTIC|STATIC/i.test(m) && status === 400) return { kind: 'processing', msg: MSG.garbled };
+    if (/youtube|video|file.?uri|file.?data|url|private|unavailable|not accessible|cannot (be )?(fetch|access)/i.test(m)) return { kind: 'private', msg: MSG.private };
+    if (status === 401 || status === 403) return { kind: 'key', msg: MSG.key };
+    return { kind: 'other', msg: "Gemini couldn't do this one (error " + status + '). Try again later.' };
+  }
+  // The watch page tells a video's length and whether anyone can watch it
+  function parseWatch(html) {
+    var s = String(html || ''), len = s.match(/"lengthSeconds":"(\d+)"/), ps = s.match(/"playabilityStatus":\{"status":"([A-Z_]+)"/);
+    return { secs: len ? +len[1] : 0, open: !ps || ps[1] === 'OK' };
+  }
+
+  // ----- turning results into text -----
+  function notesText(n, title, vid) {
+    var L = ['# ' + (title || 'Video notes'), ''];
+    if (n.topic) L.push(n.topic, '');
+    var at = function (t) { return t != null ? '[' + fmt(t) + '] ' : ''; };
+    if (n.facts.length) { L.push('## High-yield'); n.facts.forEach(function (f) { L.push('- ' + at(f.t) + f.text); }); L.push(''); }
+    if (n.bullets.length) { n.bullets.forEach(function (f) { L.push('- ' + at(f.t) + f.text); }); L.push(''); }
+    if (n.tested.length) { L.push("## How it's tested"); n.tested.forEach(function (x) { L.push('- ' + [x.clue, x.dx, x.next].filter(Boolean).join(' → ')); }); L.push(''); }
+    if (n.versus.length) { L.push('## Versus'); n.versus.forEach(function (x) { L.push('- ' + x.name + (x.feature ? ': ' + x.feature : '')); }); L.push(''); }
+    if (n.questions.length) { L.push('## Questions'); n.questions.forEach(function (x) { L.push('- ' + at(x.t) + (x.clue ? x.clue + ' → ' : '') + x.answer + (x.why ? ' (' + x.why + ')' : '')); }); L.push(''); }
+    if (vid) L.push(videoUrl(vid));
+    return L.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function cardLine(c) { var M = typeof Marks !== 'undefined' ? Marks : require('./marks.js'); return M.cardLine(c); }
+  function notesAnki(n) { return n.cards.map(cardLine).filter(Boolean).join('\n'); }
+
+  function cacheKey(vid, kind) { return vid + '|' + kind + '|v' + PROMPT_VERSION; }
+
+  // io: { load(k), save(k, s), now(), post(url, body, headers) -> Promise<{status, text}>, key() -> string,
+  //       wait(ms) -> Promise, onChange() }
+  function create(io) {
+    var now = io.now || Date.now, wait = io.wait || function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var state = read(), jobs = {}, queue = [], running = false, waiting = false, held = [];
+    function read() {
+      var s = null;
+      try { s = JSON.parse(io.load(KEY) || 'null'); } catch (e) { s = null; }
+      if (!s || typeof s !== 'object') s = {};
+      if (!s.cache || typeof s.cache !== 'object') s.cache = {};
+      if (!s.used || typeof s.used !== 'object') s.used = {};
+      if (!s.auto || typeof s.auto !== 'object') s.auto = {};
+      if (!s.lens || typeof s.lens !== 'object') s.lens = {};
+      s.mi = s.mi | 0; s.li = s.li | 0;
+      return s;
+    }
+    function save() {
+      var keep = Object.keys(state.used).concat(Object.keys(state.auto)).sort().slice(-14)[0] || '', u = {}, a = {};
+      Object.keys(state.used).forEach(function (d) { if (d >= keep) u[d] = state.used[d]; });
+      Object.keys(state.auto).forEach(function (d) { if (d >= keep) a[d] = state.auto[d]; });
+      state.used = u; state.auto = a;
+      var ks = Object.keys(state.cache).sort(function (x, y) { return state.cache[x].at - state.cache[y].at; });
+      if (ks.length > CACHE_MAX) ks.splice(0, ks.length - CACHE_MAX).forEach(function (k) { delete state.cache[k]; });
+      var lk = Object.keys(state.lens); if (lk.length > 500) lk.slice(0, lk.length - 500).forEach(function (k) { delete state.lens[k]; });
+      state.saved = now();
+      // Kept small: it's mirrored to the phone and shares the web view's storage with your spots
+      var out = JSON.stringify(state);
+      while (out.length > CACHE_BYTES && ks.length) { delete state.cache[ks.shift()]; out = JSON.stringify(state); }
+      io.save(KEY, out);
+    }
+    function changed() { if (io.onChange) try { io.onChange(); } catch (e) {} }
+    function today() { return pacificDay(now()); }
+    function usedToday() { return state.used[today()] || 0; }
+    function autoToday() { return state.auto[today()] || 0; }
+    function get(vid, kind) { var c = state.cache[cacheKey(vid, kind)]; return c ? c.v : null; }
+    function put(vid, kind, v) { state.cache[cacheKey(vid, kind)] = { at: now(), v: v }; }
+    function status(vid, kind) {
+      var j = jobs[cacheKey(vid, kind)];
+      if (get(vid, kind) && (!j || j.state === 'done')) return { state: 'ready' };
+      return j ? { state: j.state, msg: j.msg || '' } : { state: 'none' };
+    }
+    // Why an automatic summary would not run now ('' = it can)
+    function autoBlock(secs) {
+      if (!io.key()) return 'nokey';
+      if (!(secs > 0)) return 'length';
+      if (secs > AUTO_MAX_LEN) return 'long';
+      if (autoToday() >= AUTO_MAX) return 'count';
+      if (usedToday() + secs > AUTO_STOP) return 'budget';
+      return '';
+    }
+    function dailyMsg() { return MSG.daily.replace('8am', resetText(now())); }
+
+    // o: { vid, kind: summary|notes|card, title, med, secs (video length), t (card), note, auto, force }
+    function request(o) {
+      var kind = o.kind, ck = cacheKey(o.vid, kind === 'card' ? 'card@' + Math.floor(o.t || 0) : kind);
+      if (!o.force && kind !== 'card' && get(o.vid, kind)) return Promise.resolve(get(o.vid, kind));
+      if (jobs[ck] && jobs[ck].promise && /queued|working|busy/.test(jobs[ck].state)) {
+        if (!o.auto && jobs[ck].auto) { jobs[ck].auto = false; queue.sort(order); }
+        return jobs[ck].promise;
+      }
+      if (!io.key()) return Promise.reject({ kind: 'nokey', msg: MSG.nokey });
+      var c = kind === 'card' ? clip(o.t, o.secs) : null, secs = c ? c.end - c.start : (o.secs || 0);
+      if (secs > DAY_SECS) return Promise.reject({ kind: 'daily', msg: 'This video is longer than the 8 free video hours a day.' });
+      if (usedToday() + secs > DAY_SECS) return Promise.reject({ kind: 'daily', msg: dailyMsg() });
+      var job = { key: ck, o: o, kind: kind, clip: c, secs: secs, auto: !!o.auto, tries: 0, state: 'queued', msg: '', at: now(), notBefore: 0 };
+      job.promise = new Promise(function (res, rej) { job.res = res; job.rej = rej; });
+      job.promise.catch(function () {});
+      jobs[ck] = job; queue.push(job); queue.sort(order);
+      changed(); pump();
+      return job.promise;
+    }
+    // Taps first, then automatic ones newest first
+    function order(a, b) { return (a.auto - b.auto) || (a.auto ? b.at - a.at : a.at - b.at); }
+    function pump() {
+      if (running) return;
+      var t = now(), i = 0;
+      while (i < queue.length && queue[i].notBefore > t) i++;
+      if (i >= queue.length) {
+        // Only jobs waiting out a busy spell: look again then (a new tap meanwhile still goes straight away)
+        if (queue.length && !waiting) { var soon = Math.min.apply(null, queue.map(function (j) { return j.notBefore; })); waiting = true; wait(Math.max(50, soon - t)).then(function () { waiting = false; pump(); }); }
+        return;
+      }
+      var job = queue.splice(i, 1)[0];
+      if (job.auto && autoBlock(job.secs)) { finish(job, null, { kind: 'skipped', msg: '' }); return pump(); }
+      running = true; job.state = 'working'; job.msg = ''; changed();
+      if (job.auto && !job.counted) { job.counted = true; state.auto[today()] = autoToday() + 1; save(); }
+      var done = function () { running = false; pump(); };
+      run(job).then(function (v) { finish(job, v); }, function (e) { failed(job, e); }).then(done, done);
+    }
+    function finish(job, v, err) {
+      if (err) { job.state = err.kind === 'skipped' ? 'none' : 'error'; job.msg = err.msg; job.rej(err); }
+      else { job.state = 'done'; job.msg = ''; job.res(v); }
+      if (job.state === 'none') delete jobs[job.key];
+      changed();
+    }
+    function failed(job, e) {
+      e = e && e.kind ? e : { kind: 'other', msg: "Gemini couldn't do this one. Try again later." };
+      if (e.kind === 'busy' && job.tries < 3) {
+        job.tries++; job.lite = true; job.notBefore = now() + 60e3; job.state = 'busy'; job.msg = MSG.busy; queue.push(job); queue.sort(order); changed(); return;
+      }
+      if (e.kind === 'busy') e = { kind: 'busy', msg: MSG.busyGave };
+      // No internet: summaries and notes wait for it; a card says so (its mark offers Draft again)
+      if (e.kind === 'offline' && job.kind !== 'card') { job.state = 'offline'; job.msg = MSG.offline; held.push(job); changed(); return; }
+      if (e.kind === 'daily') e = { kind: 'daily', msg: dailyMsg() };
+      state.last = { kind: e.kind, msg: e.msg, at: now() }; save();
+      finish(job, null, e);
+    }
+    // Back online: the ones that failed for want of internet go again
+    function retryHeld() { var h = held; held = []; h.forEach(function (j) { j.state = 'queued'; j.msg = ''; queue.push(j); }); queue.sort(order); if (h.length) { changed(); pump(); } }
+
+    function post(body, lite) {
+      var list = lite ? LITE : MODELS, idx = lite ? 'li' : 'mi';
+      var model = list[Math.min(state[idx], list.length - 1)];
+      return Promise.resolve().then(function () { return io.post(endpoint(model), body, { 'x-goog-api-key': io.key() }); })
+        .then(function (r) { return r || { status: 0, text: '' }; }, function () { return { status: 0, text: '' }; })
+        .then(function (r) {
+          if (r.status >= 200 && r.status < 300) return r;
+          var c = classify(r.status, r.text);
+          if (c.kind === 'model' && state[idx] < list.length - 1) { state[idx]++; save(); return post(body, lite); }
+          throw c;
+        });
+    }
+    function run(job) {
+      var o = job.o, prompt = job.kind === 'summary' ? summaryPrompt(o) : job.kind === 'notes' ? notesPrompt(o) : cardPrompt(o);
+      var processing = job.clip ? 'STATIC' : (!state.noAgentic && job.secs > AGENTIC_OVER ? 'AGENTIC' : '');
+      // Every answer that came back means Gemini watched the video: each one counts against the free hours
+      var spend = function () { state.used[today()] = usedToday() + job.secs; save(); };
+      var attempt = function (proc, again) {
+        return post(requestBody({ vid: o.vid, prompt: prompt, clip: job.clip, processing: proc }), job.lite).then(function (r) {
+          spend();
+          var rt = replyText(r.text);
+          if (rt.blocked) throw { kind: 'blocked', msg: MSG.blocked };
+          var v = clean(job.kind, parseJSON(rt.text));
+          if (!v) { if (!again) return attempt(proc, true); throw { kind: 'garbled', msg: MSG.garbled }; }
+          return v;
+        }, function (e) {
+          if (e.kind === 'slow') spend();
+          // Refused with a processing setting (whatever the wording): once without it
+          if (proc && /processing|private|other/.test(e.kind)) { if (proc === 'AGENTIC') { state.noAgentic = true; save(); } return attempt('', again); }
+          throw e;
+        });
+      };
+      return attempt(processing, false).then(function (v) {
+        if (job.kind !== 'card') put(o.vid, job.kind, v);
+        state.last = { kind: 'ok', msg: '', at: now() };
+        save();
+        return v;
+      });
+    }
+    // The self-check's tiny text-only call
+    function test() {
+      if (!io.key()) return Promise.resolve({ ok: false, kind: 'nokey', msg: MSG.nokey });
+      return post(testBody(), false).then(function () { state.last = { kind: 'ok', msg: '', at: now() }; save(); return { ok: true }; },
+        function (e) { var r = { ok: false, kind: e.kind, msg: e.kind === 'daily' ? dailyMsg() : e.msg }; if (e.kind !== 'offline') { state.last = { kind: e.kind, msg: r.msg, at: now() }; save(); } return r; });
+    }
+    // Video lengths read from YouTube, kept so a refresh doesn't fetch the same pages again
+    function len(vid) { return state.lens[vid] || null; }
+    function setLen(vid, r) { state.lens[vid] = { secs: r.secs | 0, open: !!r.open }; save(); }
+    function forget(vid, kind) { delete state.cache[cacheKey(vid, kind)]; delete jobs[cacheKey(vid, kind)]; save(); }
+    function clearErrors() { Object.keys(jobs).forEach(function (k) { if (jobs[k].state === 'error') delete jobs[k]; }); state.last = null; save(); changed(); }
+    return { request: request, get: get, status: status, autoBlock: autoBlock, test: test, retryHeld: retryHeld, forget: forget, clearErrors: clearErrors, len: len, setLen: setLen,
+      usedToday: usedToday, autoToday: autoToday, dailyMsg: dailyMsg, get last() { return state.last || null; }, get busy() { return running || queue.length > 0; },
+      get size() { return Object.keys(state.cache).length; } };
+  }
+
+  return { create: create, KEY: KEY, KEY_PREF: KEY_PREF, PROMPT_VERSION: PROMPT_VERSION, MODELS: MODELS, LITE: LITE, MSG: MSG, DAY_SECS: DAY_SECS,
+    fmt: fmt, parseT: parseT, pacificDay: pacificDay, nextReset: nextReset, resetText: resetText, hours: hours,
+    summaryPrompt: summaryPrompt, notesPrompt: notesPrompt, cardPrompt: cardPrompt, isQuestionVideo: isQuestionVideo,
+    clip: clip, requestBody: requestBody, endpoint: endpoint, parseJSON: parseJSON, replyText: replyText, clean: clean, classify: classify,
+    parseWatch: parseWatch, notesText: notesText, notesAnki: notesAnki, cacheKey: cacheKey };
+})();
+if (typeof module !== 'undefined') module.exports = AI;
 </script>
 <script>// Shelf v3 (Day Sheet): Home bands, section/channel/courses/search/marks pages, YouTube player, night player, self-check.
 (function () {
@@ -2208,7 +2631,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
   // Nothing is written to the phone until the phone's own copy was read and merged, so a slow or failed
   // start can't replace good spots, ticks or channels with the web view's (possibly stale) copy
   var guarded = function (k) { return Native.inApp && !restored && PHONE_KEYS().indexOf(k) >= 0; };
-  var PHONE_KEYS = function () { return [KEY, PREF, AKEY, Library.KEY, Courses.KEY, Marks.KEY]; };
+  var PHONE_KEYS = function () { return [KEY, PREF, AKEY, Library.KEY, Courses.KEY, Marks.KEY, AI.KEY]; };
   function rawSet(k, s, mirror) {
     if (mirror !== false && !guarded(k)) Native.prefSet(k, s);
     if (!canSave) { mem[k] = s; return Native.inApp; }
@@ -2660,7 +3083,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
     refreshing = true; renderSoon();
     var first = lib.seed();
     return first.then(function () { return Promise.all([lib.refreshAll(force, function () { renderSoon(); }), syncCourses(force)]); })
-      .then(function () { refreshing = false; lib.saveCache(); lastRefresh = Date.now(); renderAll(); updateDot(); }, function () { refreshing = false; renderAll(); });
+      .then(function () { refreshing = false; lib.saveCache(); lastRefresh = Date.now(); renderAll(); updateDot(); autoSummaries(); }, function () { refreshing = false; renderAll(); });
   }
   var lastRefresh = 0;
 
@@ -2745,6 +3168,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
     vTmOpen = false; renderTimerUI('v');
+    aiSumOpen = false; current = v.id; renderAiUI();
     if (ytFailed && !playerReady) {
       current = null;
       showError("Can't reach YouTube. Check your internet, or turn off any content blocker, then reopen Shelf.", v);
@@ -3015,7 +3439,9 @@ if (typeof module !== 'undefined') module.exports = Marks;
     try { t = player.getCurrentTime() || 0; } catch (e) {}
     var m = marks.add({ vid: current, title: v.title || 'YouTube video', t: t, course: w ? w.course.name : '' });
     try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
-    toast('Marked ' + Core.fmt(m.t) + '.', '', { label: 'Add note', fn: function () { openNote(m.id); } });
+    var card = aiOn() && aiKey && isMed(current);
+    toast('Marked ' + Core.fmt(m.t) + (card ? ' · drafting a card' : '.'), '', { label: 'Add note', fn: function () { openNote(m.id); } });
+    if (card) queueCard(m.id);
     if (stack.length && stack[stack.length - 1].name === 'marks') renderPage();
   }
   function openNote(id) {
@@ -3023,28 +3449,207 @@ if (typeof module !== 'undefined') module.exports = Marks;
     noteFor = id; $('#noteWhat').textContent = Core.fmt(m.t) + ' · ' + m.title; $('#noteInput').value = m.note || '';
     openDlg($('#noteDlg')); setTimeout(function () { $('#noteInput').focus(); }, 60);
   }
+  // Closed without saving: the waiting card is drafted anyway
+  $('#noteDlg').addEventListener('close', function () { var nf = noteFor; if (nf && cardTimers[nf] !== undefined) queueCard(nf, true); });
   $('#noteForm').addEventListener('submit', function (e) {
     e.preventDefault();
     if (noteFor) marks.setNote(noteFor, $('#noteInput').value);
-    $('#noteDlg').close(); toast('Note saved.');
+    var nf = noteFor; $('#noteDlg').close();
+    if (nf && cardTimers[nf] !== undefined) { queueCard(nf, true); toast('Note saved · drafting the card with it'); } else toast('Note saved.');
     if (stack.length && stack[stack.length - 1].name === 'marks') renderPage();
   });
   function marksPage() {
     var list = marks.list(), h = topHTML('c1', 'Marks', list.length ? list.length + (list.length === 1 ? ' moment' : ' moments') + ' saved from the player' : 'Moments saved from the player');
     if (!list.length) return h + '<p class="pnote">Nothing marked yet. While a video plays, tap Mark when something should become a card.</p>';
-    h += '<div class="pad"><button type="button" class="primary" data-act="marks-copy">Copy for Anki</button><span class="small">Copies one card a line: the moment on the front, its YouTube link on the back. In Anki on the Mac, File › Import, fields separated by Tab.</span></div>';
+    h += '<div class="pad"><button type="button" class="primary" data-act="marks-copy">Copy for Anki</button><span class="small">Copies one card a line: a drafted card as it is, otherwise the moment on the front and its YouTube link on the back. In Anki on the Mac, File › Import, fields separated by Tab, allow HTML.</span></div>';
     h += '<h2 class="subh"><span>Newest first</span><span class="mono">' + list.length + '</span></h2>';
     list.forEach(function (m) {
       h += '<div class="mrow"><button type="button" data-act="mark-play" data-id="' + esc(m.id) + '"><b><span class="mono">' + Core.fmt(m.t) + '</span> · ' + esc(m.title) + '</b>' +
         '<small>' + (m.note ? esc(m.note) : (m.course ? esc(m.course) + ' · ' : '') + 'no note yet') + '</small></button>' +
-        '<span class="iconrow">' + ib('mark-note', m.id, I.dots, 'Note for ' + Core.fmt(m.t)) + ib('mark-remove', m.id, I.x, 'Remove the mark at ' + Core.fmt(m.t)) + '</span></div>';
+        '<span class="iconrow">' + ib('mark-note', m.id, I.dots, 'Note for ' + Core.fmt(m.t)) + ib('mark-remove', m.id, I.x, 'Remove the mark at ' + Core.fmt(m.t)) + '</span>' + markCardHTML(m) + '</div>';
     });
     return h;
+  }
+  // A drafted card under its mark, folded
+  function markCardHTML(m) {
+    if (drafting[m.id]) return '<p class="mcard small" role="status">Drafting a card…</p>';
+    if (m.card) {
+      var c = m.card;
+      return '<details class="mcard"><summary>Card drafted</summary>' + (c.stem ? '<p>' + esc(c.stem) + '</p>' : '') + '<p><b>' + esc([].concat(c.questions || []).join(' ')) + '</b></p>' +
+        '<p>' + esc(String(c.answer || '').replace(/\*\*/g, '')) + (c.management ? ' ' + esc(String(c.management).replace(/\*\*/g, '')) : '') + '</p>' + (c.vs ? '<p>' + esc(c.vs) + '</p>' : '') + (c.why ? '<p class="small">Why: ' + esc(c.why) + '</p>' : '') +
+        (aiOn() && aiKey ? '<button type="button" class="cbtn" data-act="mark-draft" data-id="' + esc(m.id) + '">Draft again</button>' : '') + '</details>';
+    }
+    if (aiOn() && aiKey && isMed(m.vid)) return '<div class="mcard"><button type="button" class="cbtn" data-act="mark-draft" data-id="' + esc(m.id) + '">Draft a card</button></div>';
+    return '';
   }
   function copyText(text, done) {
     var fail = function () { toast("Couldn't copy. Try again.", 'warn'); };
     try { navigator.clipboard.writeText(text).then(done, function () { Native.call('Clipboard', 'write', { string: text }).then(done, fail); }); }
     catch (e) { fail(); }
+  }
+
+  // ---------- Gemini (summaries, notes, drafted cards) ----------
+  // Works in the app only: the key stays in the phone's storage and the requests go through iOS networking
+  var ai = null, aiKey = '', aiHealth = { state: 'none', msg: '' }, aiSumOpen = false, aiAsk = {}, aiRenderT = null, cardTimers = {}, drafting = {};
+  function aiOn() { return Native.inApp && !!ai; }
+  function isMed(vid) {
+    if (courseOf(vid)) return true;
+    var v = videos[vid], sec = v && videoSection(v), s = sec && lib.section(sec);
+    return sec === 'med' || !!(s && /medic/i.test(s.name || ''));
+  }
+  // A video's length (seconds) and whether anyone can watch it: the player or the course knows, else its YouTube page
+  function videoSecs(vid) {
+    var v = videos[vid], w = courseOf(vid), it = w && cs.items(w.course.id)[w.i];
+    if (v && v.dur > 0) return Promise.resolve({ secs: v.dur, open: true });
+    if (it && it.dur > 0) return Promise.resolve({ secs: it.dur, open: true });
+    if (ai.len(vid)) return Promise.resolve(ai.len(vid));
+    return fetchText('https://www.youtube.com/watch?v=' + vid).then(function (h) { var r = AI.parseWatch(h); if (r.secs || !r.open) ai.setLen(vid, r); return r; }, function () { return { secs: 0, open: true }; });
+  }
+  function aiPost(url, body, headers) {
+    // A long video can take Gemini a couple of minutes; no answer after 4 is treated as busy
+    return withTimeout(Native.httpPost(url, body, headers), 240000, 'slow').then(function (r) { return { status: r.status, text: r.text }; },
+      function (e) { if (e && e.message === 'slow') return { status: 504, text: 'slow' }; throw e; });
+  }
+  var marksDirty = false;
+  function renderAiSoon() { clearTimeout(aiRenderT); aiRenderT = setTimeout(function () { renderAiUI(); if ($('#notesDlg').open) fillNotes(); if (marksDirty && stack.length && stack[stack.length - 1].name === 'marks') renderPage(); marksDirty = false; }, 60); }
+  function setHTML(el, h) { if (el.__h !== h) { el.__h = h; el.innerHTML = h; } }
+  function testAi() {
+    if (!aiOn() || !aiKey) { aiHealth = { state: 'none', msg: '' }; return Promise.resolve(); }
+    aiHealth = { state: 'wait', msg: '' };
+    return ai.test().then(function (r) { aiHealth = r.ok ? { state: 'ok', msg: '' } : { state: r.kind === 'offline' ? 'offline' : 'bad', msg: r.msg }; updateDot(); renderAiSoon(); });
+  }
+  function setAiKey(k) { aiKey = k; Native.prefSet(AI.KEY_PREF, k); if (ai) ai.clearErrors(); }
+  function aiCheck() {
+    if (!Native.inApp) return { ok: 1, text: AI.MSG.web };
+    if (!aiKey) return { ok: 1, text: AI.MSG.nokey, fix: 'ai-key' };
+    var used = AI.hours(ai.usedToday()) + ' of 8 video hours used today';
+    if (aiHealth.state === 'wait') return { ok: 2, text: 'Checking your Gemini key…' };
+    if (aiHealth.state === 'offline') return { ok: 1, text: 'Gemini: will check the key when you\'re online · ' + used, fix: 'ai-key' };
+    if (aiHealth.state === 'bad' && aiHealth.msg === AI.MSG.key) return { ok: 0, text: 'Gemini: ' + AI.MSG.key, fix: 'ai-key' };
+    var last = ai.last;
+    if (last && last.kind === 'key') return { ok: 0, text: 'Gemini: ' + AI.MSG.key, fix: 'ai-key' };
+    if (aiHealth.state === 'bad') return { ok: 1, text: 'Gemini: ' + aiHealth.msg + ' · ' + used, fix: 'ai-key' };
+    if (last && /daily|busy/.test(last.kind) && Date.now() - last.at < 3600e3) return { ok: 1, text: 'Gemini: ' + last.msg + ' · ' + used, fix: 'ai-key' };
+    return { ok: 1, text: 'Gemini: working · ' + used, fix: 'ai-key' };
+  }
+  // What the folded Summary row says on the right
+  function aiShort(st, kind) {
+    if (!aiKey) return 'add a key';
+    if (st.state === 'ready') return kind === 'summary' ? 'ready' : '';
+    if (st.state === 'queued' || st.state === 'working') return 'watching…';
+    if (st.state === 'busy') return 'busy, retrying';
+    if (st.state === 'offline') return 'offline';
+    if (st.state === 'error') return "didn't work";
+    return 'tap to make';
+  }
+  function renderAiUI() {
+    var on = aiOn() && !!current;
+    $('#vAiBtn').hidden = !on; $('#vNotes').hidden = !on; $('#vTwin').classList.toggle('ai', on);
+    if (!on) { $('#vAi').hidden = true; return; }
+    var st = ai.status(current, 'summary');
+    $('#vAiSt').textContent = aiShort(st, 'summary');
+    $('#vAiBtn').setAttribute('aria-expanded', String(aiSumOpen));
+    $('#vAi').hidden = !aiSumOpen;
+    if (aiSumOpen) setHTML($('#vAi'), aiBodyHTML('summary', st));
+  }
+  // Shared states for Summary (in the player) and Notes (in its sheet)
+  function aiBodyHTML(kind, st) {
+    var vid = kind === 'notes' ? notesFor : current;
+    if (!aiKey) return '<p class="msg">' + esc(AI.MSG.nokey) + '</p><button type="button" class="cbtn" data-act="ai-key">Add Gemini key</button>';
+    if (st.state === 'ready') return kind === 'summary' ? summaryHTML(ai.get(vid, 'summary')) : notesHTML(ai.get(vid, 'notes'), vid);
+    if (st.state === 'queued' || st.state === 'working') return '<p class="msg" role="status">Gemini is watching the video. A long one can take a minute or two.</p>';
+    if (st.state === 'busy' || st.state === 'offline') return '<p class="msg" role="status">' + esc(st.msg) + '</p>';
+    if (st.state === 'error') return '<p class="msg err" role="alert">' + esc(st.msg) + '</p>' + (st.msg === AI.MSG.key ? '<button type="button" class="cbtn" data-act="ai-key">Paste the key again</button>' : /it isn't public|resets at|longer than/.test(st.msg) ? '' : '<button type="button" class="cbtn" data-act="ai-go" data-id="' + kind + '">Try again</button>');
+    var ask = aiAsk[vid + kind];
+    if (ask && ask.err) return '<p class="msg err" role="alert">' + esc(ask.msg) + '</p>';
+    if (ask) return '<p class="msg">' + esc(ask.msg) + '</p><button type="button" class="cbtn" data-act="ai-go" data-id="' + kind + '" data-force="1">Make it anyway</button>';
+    return '<button type="button" class="cbtn" data-act="ai-go" data-id="' + kind + '">Make ' + (kind === 'summary' ? 'a summary' : 'notes') + '</button>';
+  }
+  function tt(t) { return t == null ? '' : '<button type="button" class="tt mono" data-act="ai-seek" data-t="' + t + '" aria-label="Play from ' + AI.fmt(t) + '">' + AI.fmt(t) + '</button>'; }
+  function summaryHTML(s) {
+    return (s.gist ? '<p class="gist">' + esc(s.gist) + '</p>' : '') + '<ol class="pts">' + s.points.map(function (p) { return '<li>' + (p.t == null ? '<span></span>' : tt(p.t)) + '<span>' + esc(p.text) + '</span></li>'; }).join('') + '</ol>';
+  }
+  function lines(list, f) { return list.length ? '<ul>' + list.map(f).join('') + '</ul>' : ''; }
+  function at(t) { return t == null ? '' : '<span class="mono">' + AI.fmt(t) + '</span> '; }
+  function notesHTML(n, vid) {
+    var h = '<div class="nts">' + (n.topic ? '<p class="topic">' + esc(n.topic) + '</p>' : '');
+    if (n.facts.length) h += '<h3>High-yield</h3>' + lines(n.facts, function (f) { return '<li>' + at(f.t) + esc(f.text) + '</li>'; });
+    if (n.bullets.length) h += lines(n.bullets, function (f) { return '<li>' + at(f.t) + esc(f.text) + '</li>'; });
+    if (n.tested.length) h += '<h3>How it\'s tested</h3>' + lines(n.tested, function (x) { return '<li>' + esc([x.clue, x.dx, x.next].filter(Boolean).join(' → ')) + '</li>'; });
+    if (n.versus.length) h += '<h3>Versus</h3>' + lines(n.versus, function (x) { return '<li><b>' + esc(x.name) + '</b>' + (x.feature ? ': ' + esc(x.feature) : '') + '</li>'; });
+    if (n.questions.length) h += '<h3>Questions</h3>' + lines(n.questions, function (x) { return '<li>' + at(x.t) + esc((x.clue ? x.clue + ' → ' : '') + x.answer) + (x.why ? ' <span class="small">' + esc(x.why) + '</span>' : '') + '</li>'; });
+    h += '</div>';
+    if (n.cards.length) h += '<button type="button" class="primary" data-act="notes-anki">Copy ' + n.cards.length + (n.cards.length === 1 ? ' card' : ' cards') + ' for Anki</button>';
+    h += '<button type="button" class="ghost" data-act="notes-text">Copy as text</button>';
+    if (n.cards.length) h += '<p class="small">Anki on the Mac: File › Import, fields separated by Tab, allow HTML. Text is for OneNote or Claude.</p>';
+    return h;
+  }
+  var notesFor = null;
+  function fillNotes() {
+    var vid = notesFor; if (!vid) return;
+    var v = videos[vid] || {};
+    $('#notesH').textContent = 'Notes';
+    setHTML($('#notesBody'), '<p class="small">' + esc(v.title || 'YouTube video') + '</p>' + aiBodyHTML('notes', ai.status(vid, 'notes')));
+  }
+  // Start a summary or notes for the open video. A long one asks first: it uses up the free hours
+  function aiStart(kind, force) {
+    var vid = kind === 'notes' ? notesFor : current; if (!vid || !aiKey) return;
+    var v = videos[vid] || {};
+    videoSecs(vid).then(function (r) {
+      if (!r.open) { aiAsk[vid + kind] = { err: true, msg: AI.MSG.private }; renderAiSoon(); return; }
+      var secs = r.secs || (player && current === vid ? safeDur() : 0);
+      if (!force && secs > 5400) {
+        aiAsk[vid + kind] = { msg: 'This video is ' + AI.hours(secs) + ' h long, so it uses ' + AI.hours(secs) + ' of today\'s 8 free video hours (' + AI.hours(ai.usedToday()) + ' used so far).' };
+        renderAiSoon(); return;
+      }
+      delete aiAsk[vid + kind];
+      // Refused before it started (today's free hours, or too long): say so where the button was
+      ai.request({ vid: vid, kind: kind, title: v.title || '', med: isMed(vid), secs: secs || 600 }).catch(function (e) {
+        if (e && e.msg && ai.status(vid, kind).state === 'none') aiAsk[vid + kind] = { err: true, msg: e.msg };
+      }).then(renderAiSoon);
+      renderAiSoon();
+    });
+  }
+  function safeDur() { try { return player.getDuration() || 0; } catch (e) { return 0; } }
+  // Automatic summaries after a refresh: new Medicine uploads and the course's next episode, one at a time
+  var autoRunning = false;
+  function autoSummaries() {
+    if (!aiOn() || !aiKey || autoRunning) return;
+    var list = feedEntries('med').filter(function (e) { return e.type === 'video' && isNew(e); }).slice(0, 10).map(function (e) { return { vid: e.key, title: e.title }; });
+    var c = upNextCourse(), pr = c && cs.progress(c.id);
+    if (pr && pr.next) list.unshift({ vid: pr.next.id, title: pr.next.title, secs: pr.next.dur });
+    list = list.filter(function (x) { return ai.status(x.vid, 'summary').state === 'none'; });
+    if (!list.length) return;
+    autoRunning = true;
+    (function next() {
+      var x = list.shift();
+      if (!x || ai.autoBlock(60) === 'count' || ai.autoBlock(60) === 'budget' || !aiKey) { autoRunning = false; return; }
+      (x.secs ? Promise.resolve({ secs: x.secs, open: true }) : videoSecs(x.vid)).then(function (r) {
+        if (!r.open || ai.autoBlock(r.secs)) return;
+        return ai.request({ vid: x.vid, kind: 'summary', title: x.title, med: true, secs: r.secs, auto: true }).catch(function () {});
+      }).then(next, next);
+    })();
+  }
+  // Mark in a Medicine video: draft one card from the two minutes around it (after a moment, so a note can join it)
+  function queueCard(mid, now) {
+    clearTimeout(cardTimers[mid]);
+    if (now) return draftCard(mid);
+    cardTimers[mid] = setTimeout(function () { if (noteFor !== mid || !$('#noteDlg').open) draftCard(mid); }, 6000);
+  }
+  function draftCard(mid) {
+    var m = marks.get(mid); if (!m || !aiOn() || !aiKey) return;
+    clearTimeout(cardTimers[mid]); delete cardTimers[mid];
+    drafting[mid] = true; marksDirty = true; renderAiSoon();
+    videoSecs(m.vid).then(function (r) {
+      return ai.request({ vid: m.vid, kind: 'card', t: m.t, secs: r.secs || 0, note: m.note, title: m.title, med: true, force: true });
+    }).then(function (card) {
+      delete drafting[mid]; marks.setCard(mid, card); marksDirty = true;
+      toast('Marked ' + Core.fmt(m.t) + ' · card drafted');
+      renderAiSoon();
+    }, function (e) {
+      delete drafting[mid]; marksDirty = true; renderAiSoon();
+      if (e && e.kind !== 'nokey') toast("Couldn't draft the card for " + Core.fmt(m.t) + ': ' + ((e && e.msg) || 'try again later.'), 'warn');
+    });
   }
 
   // ---------- Night player (podcasts) ----------
@@ -3667,6 +4272,26 @@ if (typeof module !== 'undefined') module.exports = Marks;
       case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
       case 'open-marks': push({ name: 'marks' }); break;
       case 'mark': doMark(); break;
+      case 'ai-sum':
+        aiSumOpen = !aiSumOpen; renderAiUI();
+        if (aiSumOpen && aiKey && current && ai.status(current, 'summary').state === 'none' && !aiAsk[current + 'summary']) aiStart('summary');
+        break;
+      case 'ai-go': if (b.getAttribute('data-force')) delete aiAsk[(id === 'notes' ? notesFor : current) + id]; aiStart(id, !!b.getAttribute('data-force')); break;
+      case 'ai-seek': try { player.seekTo(+b.getAttribute('data-t'), true); player.playVideo(); videoTick(); } catch (er) {} break;
+      case 'ai-notes':
+        if (!current) break;
+        notesFor = current; fillNotes(); openDlg($('#notesDlg'));
+        if (aiKey && ai.status(current, 'notes').state === 'none' && !aiAsk[current + 'notes']) aiStart('notes');
+        break;
+      case 'notes-anki': var na = ai.get(notesFor, 'notes'); if (na) copyText(AI.notesAnki(na), function () { toast('Copied ' + na.cards.length + (na.cards.length === 1 ? ' card' : ' cards') + '. In Anki: File › Import.'); }); break;
+      case 'notes-text': var nt = ai.get(notesFor, 'notes'), nv = videos[notesFor] || {}; if (nt) copyText(AI.notesText(nt, nv.title, notesFor), function () { toast('Copied the notes as text.'); }); break;
+      case 'ai-key':
+        if ($('#checkDlg').open) $('#checkDlg').close(); if ($('#notesDlg').open) $('#notesDlg').close();
+        $('#aiKeyInput').value = aiKey; $('#aiKeyMsg').textContent = ''; $('#aiKeyMsg').className = 'msgline'; openDlg($('#aiKeyDlg'));
+        break;
+      case 'ai-key-paste': Native.readClipboard().then(function (t) { $('#aiKeyInput').value = String(t || '').trim(); }, function () { $('#aiKeyMsg').textContent = 'Couldn\'t read the clipboard. Press and hold in the box, then Paste.'; $('#aiKeyMsg').className = 'msgline err'; }); break;
+      case 'ai-key-remove': setAiKey(''); aiHealth = { state: 'none', msg: '' }; $('#aiKeyInput').value = ''; $('#aiKeyMsg').textContent = 'Removed. Summaries and notes are off until you add a key.'; $('#aiKeyMsg').className = 'msgline ok'; updateDot(); renderAiSoon(); break;
+      case 'mark-draft': queueCard(id, true); break;
       case 'mark-play': var mk = marks.get(id); if (mk) openVideo({ id: mk.vid, start: Math.max(1, mk.t), title: mk.title }); break;
       case 'mark-note': openNote(id); break;
       case 'mark-remove': var gm = marks.remove(id); renderPage(); if (gm) toast('Mark removed.', '', { label: 'Undo', fn: function () { marks.restore(gm); renderAll(); } }); break;
@@ -3744,6 +4369,18 @@ if (typeof module !== 'undefined') module.exports = Marks;
   sheetSwipe($('#vsheet'), '.grab,.sh-top', function () { closeVideo(); });
   sheetSwipe($('#nsheet'), '.grab,.sh-top', function () { closeNight(); });
   Array.prototype.forEach.call(document.querySelectorAll('dialog'), function (d) { sheetSwipe(d, '.grab,.dh', function () { d.close(); }); });
+  $('#aiKeyForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var k = $('#aiKeyInput').value.trim(), msg = $('#aiKeyMsg');
+    if (!k) { msg.textContent = 'Paste the key first.'; msg.className = 'msgline err'; return; }
+    if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) { msg.textContent = 'That doesn\'t look like a Gemini key. They start with "AIza".'; msg.className = 'msgline err'; return; }
+    setAiKey(k); msg.textContent = 'Checking it with Google…'; msg.className = 'msgline';
+    testAi().then(function () {
+      if (aiHealth.state === 'ok') { $('#aiKeyDlg').close(); toast('Gemini key works. Summaries are on.'); autoSummaries(); }
+      else if (aiHealth.state === 'offline') { msg.textContent = 'Saved. No internet to check it right now.'; msg.className = 'msgline'; }
+      else { msg.textContent = aiHealth.msg; msg.className = 'msgline err'; }
+    });
+  });
   $('#keyForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var k = $('#keyInput').value.trim();
@@ -3811,6 +4448,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
       else out.push({ ok: 1, text: 'Tracking ' + cs.list().length + (cs.list().length === 1 ? ' course' : ' courses') + ' episode by episode' });
     }
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
+    out.push(aiCheck());
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       var ya = Native.ytAccount.state;
@@ -3852,6 +4490,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
   function fixBtn(kind) {
     var ya = Native.ytAccount.state;
     if (kind === 'yt') return '<button type="button" class="fix" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : ya === 'in' ? 'Sign out of YouTube' : 'Sign in to YouTube') + '</button>';
+    if (kind === 'ai-key') return '<button type="button" class="fix" data-act="ai-key">' + (aiKey ? 'Gemini key' : 'Add Gemini key') + '</button>';
     if (kind === 'retry') return '<button type="button" class="fix" id="retryBtn" data-act="phone-retry">Try again</button>';
     return '';
   }
@@ -3869,10 +4508,10 @@ if (typeof module !== 'undefined') module.exports = Marks;
     acts += '<button type="button" class="ghost" id="sendBtn" data-act="send">Copy shelf link</button>';
     if (signIn && ya === 'in') acts += '<button type="button" class="ghost" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : 'Sign out of YouTube') + '</button>';
     $('#checkActs').innerHTML = acts;
-    $('#trackBtn').hidden = !signIn;
+    $('#trackBtn').hidden = !signIn; $('#aiKeyBtn').hidden = !Native.inApp;
     $('#checkAllSum').textContent = 'Show all ' + c.length + ' checks';
     $('#checkList').innerHTML = c.map(function (x) {
-      return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + '</span></li>';
+      return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + (x.fix === 'ai-key' && x.ok === 1 && !aiKey ? '<br>' + fixBtn(x.fix) : '') + '</span></li>';
     }).join('');
   }
   var signingIn = false;
@@ -3936,6 +4575,7 @@ if (typeof module !== 'undefined') module.exports = Marks;
         if (ph[3] && pickLibrary(load(Library.KEY, null), ph[3])) writes.push([Library.KEY, r[3]]);
         if (ph[4]) { var lc = load(Courses.KEY, null); if (!lc || (ph[4].saved || 0) > (lc.saved || 0)) writes.push([Courses.KEY, r[4]]); }
         if (ph[5]) { var lm = load(Marks.KEY, null); if (!lm || (ph[5].saved || 0) > (lm.saved || 0)) writes.push([Marks.KEY, r[5]]); }
+        if (ph[6]) { var lg = load(AI.KEY, null); if (!lg || (ph[6].saved || 0) > (lg.saved || 0)) writes.push([AI.KEY, r[6]]); }
         writes.forEach(function (w) { rawSet(w[0], w[1], false); });
         restored = true; restoreFailed = false;
       } catch (e) { restoreFailed = true; }
@@ -3961,6 +4601,8 @@ if (typeof module !== 'undefined') module.exports = Marks;
     // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
     if (Native.inApp && restored) PHONE_KEYS().forEach(function (k) { var v = rawGet(k); if (v) Native.prefSet(k, v); });
     marks = Marks.create({ load: rawGet, save: function (k, v) { rawSet(k, v); } });
+    ai = AI.create({ load: rawGet, save: function (k, v) { rawSet(k, v); }, now: function () { return Date.now(); }, key: function () { return aiKey; }, post: aiPost, onChange: renderAiSoon });
+    if (Native.inApp) Native.prefGet(AI.KEY_PREF).then(function (k) { aiKey = k || ''; testAi(); updateDot(); if (lastRefresh) autoSummaries(); }, function () {});
     if (restoreFailed) setTimeout(function () { toast("The phone's storage didn't answer, so changes aren't backed up to it yet. Tap the self-check to try again.", 'warn'); }, 800);
     buildSeg('#vSeg', 'v'); buildSeg('#nSeg', 'a'); buildRates();
     initAudio();
@@ -3972,12 +4614,12 @@ if (typeof module !== 'undefined') module.exports = Marks;
     if (Native.inApp) Native.checkYT().then(updateDot); // the corner turns green as soon as the sign-in is known
     setInterval(updateDot, 5000);
     setInterval(function () { if (!stack.length && document.visibilityState === 'visible') keepTyping(renderHome); }, 60000);
-    window.addEventListener('online', updateDot); window.addEventListener('offline', updateDot);
+    window.addEventListener('online', function () { updateDot(); if (ai) ai.retryHeld(); }); window.addEventListener('offline', updateDot);
     if (!canSave && !Native.inApp) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Tap the self-check for how to fix it.', 'warn'); }, 600);
     refreshAll(false);
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture,
-      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);
