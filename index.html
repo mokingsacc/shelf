@@ -686,7 +686,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="dh"><h2 id="keyH">Search key</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
   <form class="db" id="keyForm">
     <p>Optional. Without a key, Shelf reads YouTube's own results page. With a free Google key ("YouTube Data API v3"), search is steadier and allows about 100 searches a day.</p>
-    <input class="field mono" id="keyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…" aria-label="Google key">
+    <input class="field mono" id="keyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your key" aria-label="Google key">
     <div class="msgline" id="keyMsg" role="status"></div>
     <button type="submit" class="primary">Save</button>
     <button type="button" class="ghost" data-act="key-remove">Remove the key</button>
@@ -704,7 +704,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="dh"><h2 id="aiKeyH">Gemini key</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
   <form class="db" id="aiKeyForm" novalidate>
     <p>Free. It lets Gemini watch videos for summaries, notes and Anki cards. Make one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (Create API key, then Copy) and paste it here.</p>
-    <input class="field mono" id="aiKeyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…" aria-label="Gemini key">
+    <input class="field mono" id="aiKeyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your key" aria-label="Gemini key">
     <div class="msgline" id="aiKeyMsg" role="status"></div>
     <div class="grid2"><button type="button" class="ghost" data-act="ai-key-paste">Paste</button><button type="submit" class="primary">Save</button></div>
     <button type="button" class="ghost" data-act="ai-key-remove">Remove the key</button>
@@ -4373,7 +4373,9 @@ if (typeof module !== 'undefined') module.exports = AI;
     e.preventDefault();
     var k = $('#aiKeyInput').value.trim(), msg = $('#aiKeyMsg');
     if (!k) { msg.textContent = 'Paste the key first.'; msg.className = 'msgline err'; return; }
-    if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) { msg.textContent = 'That doesn\'t look like a Gemini key. They start with "AIza".'; msg.className = 'msgline err'; return; }
+    // Any shape Google uses: the test call with Google decides whether it works
+    k = k.replace(/\s+/g, '').replace(/^["']|["']$/g, ''); $('#aiKeyInput').value = k;
+    if (k.length < 20) { msg.textContent = 'That\'s too short to be a key. Copy the whole key and paste it again.'; msg.className = 'msgline err'; return; }
     setAiKey(k); msg.textContent = 'Checking it with Google…'; msg.className = 'msgline';
     testAi().then(function () {
       if (aiHealth.state === 'ok') { $('#aiKeyDlg').close(); toast('Gemini key works. Summaries are on.'); autoSummaries(); }
@@ -4384,7 +4386,8 @@ if (typeof module !== 'undefined') module.exports = AI;
   $('#keyForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var k = $('#keyInput').value.trim();
-    if (k && !/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) { $('#keyMsg').textContent = 'That doesn\'t look like a Google key. They start with "AIza".'; $('#keyMsg').className = 'msgline err'; return; }
+    k = k.replace(/\s+/g, '').replace(/^["']|["']$/g, '');
+    if (k && k.length < 20) { $('#keyMsg').textContent = 'That\'s too short to be a key. Copy the whole key and paste it again.'; $('#keyMsg').className = 'msgline err'; return; }
     if (k) prefs.apiKey = k; else delete prefs.apiKey;
     savePrefs(); $('#keyDlg').close(); toast(k ? 'Saved. Search now uses your Google key.' : 'No key. Search reads YouTube\'s results page.');
   });

@@ -658,13 +658,16 @@ await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 await p.locator('#checkAll summary').click();
 await p.locator('#checkList [data-act="ai-key"]').click(); await p.waitForTimeout(150);
 await p.fill('#aiKeyInput', 'hello'); await p.locator('#aiKeyForm button[type="submit"]').click(); await p.waitForTimeout(100);
-ok(/start with "AIza"/.test(await p.locator('#aiKeyMsg').textContent()), 'G a wrong-looking key is refused');
+ok(/too short to be a key/.test(await p.locator('#aiKeyMsg').textContent()), 'G a scrap of text is refused');
+await p.fill('#aiKeyInput', ' AQ.Ab8RN6NEWSTYLEKEY_0000000000-x '); await p.locator('#aiKeyForm button[type="submit"]').click(); await p.waitForTimeout(600);
+ok(await p.locator('#aiKeyDlg[open]').count() === 0 && (await shelf(p, () => window.__prefs))['gemini.key'] === 'AQ.Ab8RN6NEWSTYLEKEY_0000000000-x', 'G a key in any format (not just AIza…) is accepted and trimmed');
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150); await p.locator('#checkMore summary').click(); await p.locator('#checkMore [data-act="ai-key"]').click(); await p.waitForTimeout(150);
 await p.fill('#aiKeyInput', GKEY); await p.locator('#aiKeyForm button[type="submit"]').click(); await p.waitForTimeout(600);
 ok(await p.locator('#aiKeyDlg[open]').count() === 0 && /Gemini key works/.test(await p.locator('#toast').textContent()), 'G saving a key checks it with Google');
 // The key lives only in the phone's storage: not in the web view's storage, the shelf link or the site
 const lsAll = await p.evaluate(() => Object.keys(localStorage).map((k) => localStorage.getItem(k)).join(' '));
 ok(!lsAll.includes(GKEY) && (await shelf(p, () => window.__prefs))['gemini.key'] === GKEY, 'G the key is kept on the phone only');
-await p.locator('#statusBtn').click(); await p.locator('#checkMore summary').click(); await p.locator('#sendBtn').click(); await p.waitForTimeout(300);
+await p.locator('#statusBtn').click(); if (!(await p.locator('#checkMore[open]').count())) await p.locator('#checkMore summary').click(); await p.locator('#sendBtn').click(); await p.waitForTimeout(300);
 const slink = await clipNow();
 ok(!slink.includes(GKEY) && /#shelf=/.test(slink), 'G the shelf link never carries the key');
 await p.keyboard.press('Escape');

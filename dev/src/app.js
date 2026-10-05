@@ -1760,7 +1760,9 @@
     e.preventDefault();
     var k = $('#aiKeyInput').value.trim(), msg = $('#aiKeyMsg');
     if (!k) { msg.textContent = 'Paste the key first.'; msg.className = 'msgline err'; return; }
-    if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) { msg.textContent = 'That doesn\'t look like a Gemini key. They start with "AIza".'; msg.className = 'msgline err'; return; }
+    // Any shape Google uses: the test call with Google decides whether it works
+    k = k.replace(/\s+/g, '').replace(/^["']|["']$/g, ''); $('#aiKeyInput').value = k;
+    if (k.length < 20) { msg.textContent = 'That\'s too short to be a key. Copy the whole key and paste it again.'; msg.className = 'msgline err'; return; }
     setAiKey(k); msg.textContent = 'Checking it with Google…'; msg.className = 'msgline';
     testAi().then(function () {
       if (aiHealth.state === 'ok') { $('#aiKeyDlg').close(); toast('Gemini key works. Summaries are on.'); autoSummaries(); }
@@ -1771,7 +1773,8 @@
   $('#keyForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var k = $('#keyInput').value.trim();
-    if (k && !/^AIza[0-9A-Za-z_-]{20,}$/.test(k)) { $('#keyMsg').textContent = 'That doesn\'t look like a Google key. They start with "AIza".'; $('#keyMsg').className = 'msgline err'; return; }
+    k = k.replace(/\s+/g, '').replace(/^["']|["']$/g, '');
+    if (k && k.length < 20) { $('#keyMsg').textContent = 'That\'s too short to be a key. Copy the whole key and paste it again.'; $('#keyMsg').className = 'msgline err'; return; }
     if (k) prefs.apiKey = k; else delete prefs.apiKey;
     savePrefs(); $('#keyDlg').close(); toast(k ? 'Saved. Search now uses your Google key.' : 'No key. Search reads YouTube\'s results page.');
   });

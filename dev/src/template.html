@@ -686,7 +686,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="dh"><h2 id="keyH">Search key</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
   <form class="db" id="keyForm">
     <p>Optional. Without a key, Shelf reads YouTube's own results page. With a free Google key ("YouTube Data API v3"), search is steadier and allows about 100 searches a day.</p>
-    <input class="field mono" id="keyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…" aria-label="Google key">
+    <input class="field mono" id="keyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your key" aria-label="Google key">
     <div class="msgline" id="keyMsg" role="status"></div>
     <button type="submit" class="primary">Save</button>
     <button type="button" class="ghost" data-act="key-remove">Remove the key</button>
@@ -704,7 +704,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="dh"><h2 id="aiKeyH">Gemini key</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
   <form class="db" id="aiKeyForm" novalidate>
     <p>Free. It lets Gemini watch videos for summaries, notes and Anki cards. Make one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (Create API key, then Copy) and paste it here.</p>
-    <input class="field mono" id="aiKeyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…" aria-label="Gemini key">
+    <input class="field mono" id="aiKeyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your key" aria-label="Gemini key">
     <div class="msgline" id="aiKeyMsg" role="status"></div>
     <div class="grid2"><button type="button" class="ghost" data-act="ai-key-paste">Paste</button><button type="submit" class="primary">Save</button></div>
     <button type="button" class="ghost" data-act="ai-key-remove">Remove the key</button>
