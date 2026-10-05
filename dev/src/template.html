@@ -97,6 +97,7 @@ svg{display:block;flex:none}
 
 /* Bands */
 .bands{display:flex;flex-direction:column}
+.addcat{display:flex;justify-content:space-between;align-items:center;min-height:56px;margin:0;padding:0 var(--g);border-top:2px solid var(--hair);border-bottom:2px solid var(--hair);font:700 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);background:var(--paper);width:100%}
 .band{padding:12px var(--g) 14px;background:var(--bg);color:var(--fg)}
 .band.c1{--bg:var(--b1-bg);--fg:var(--b1-fg);--tb:var(--b1-tag-bg);--tf:var(--b1-tag-fg)}
 .band.c2{--pin:#ffc2b8;--bg:var(--b2-bg);--fg:var(--b2-fg);--tb:var(--b2-tag-bg);--tf:var(--b2-tag-fg)}
@@ -125,6 +126,12 @@ svg{display:block;flex:none}
 .row .n{font-size:12px;font-weight:600;white-space:nowrap}
 .row .pr{max-width:220px}
 .band .more{display:flex;justify-content:space-between;align-items:center;min-height:var(--tap);border-top:2px solid currentColor;font:600 12px var(--mono);width:100%}
+.band .chl{margin:0}
+.band .chl button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;min-height:52px;border-top:2px solid currentColor;padding:6px 0;text-align:left}
+.band .chl.first button:first-child{margin-top:6px;border-top-width:3px}
+.band .chl b{display:block;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.band .chl small{display:block;font:400 12px var(--mono);opacity:.85;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.band .chl button>span:last-child{font:600 16px var(--mono);width:24px;text-align:right}
 .band .empty{margin:6px 0 0;font-size:14px;border-top:2px solid currentColor;padding:12px 0 2px;opacity:.88}
 .band .empty button{text-decoration:underline;text-underline-offset:3px;font-weight:700;min-height:var(--tap)}
 .nw{display:inline-block;background:var(--tb,var(--ink));color:var(--tf,var(--paper));padding:1px 5px;font:800 10px/1.4 var(--font);letter-spacing:.1em;margin-right:6px;vertical-align:2px}
@@ -603,7 +610,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <div class="picks" id="secKind" role="group" aria-label="Kind"><button type="button" data-kind="video" aria-pressed="true">YouTube channels</button><button type="button" data-kind="audio" aria-pressed="false">Podcasts</button></div>
     <div class="msgline" id="secMsg" role="status"></div>
     <button type="submit" class="primary">Save</button>
-    <button type="button" class="ghost" data-act="add-section" id="secNew">+ New section</button>
+    <button type="button" class="ghost" data-act="add-section" id="secNew">+ New category</button>
     <div class="grid3" id="secMore"><button type="button" class="ghost" data-act="sec-up">Move up</button><button type="button" class="ghost" data-act="sec-down">Move down</button><button type="button" class="ghost danger" data-act="sec-delete" id="secDel">Delete</button></div>
   </form>
 </dialog>

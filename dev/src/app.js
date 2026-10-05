@@ -115,10 +115,11 @@
   function hourNow() { if (typeof window.__hour === 'number') return window.__hour; var d = new Date(); return d.getHours() + d.getMinutes() / 60; }
   function dayPart() { var h = hourNow(); return h >= 21.5 || h < 5 ? 'night' : h >= 18 ? 'evening' : 'day'; }
   function isNight() { return dayPart() === 'night'; }
+  // Home's order (Mo's): Entertainment, Medicine, Sleep, then any new categories; Pasted always last
+  var ORDER = { ent: 0, med: 1, sleep: 2 };
   function daySections() {
     var secs = lib.sections();
-    if (!isNight()) return secs;
-    return secs.filter(function (x) { return x.kind === 'audio'; }).concat(secs.filter(function (x) { return x.kind !== 'audio'; }));
+    return secs.map(function (x, i) { return { s: x, r: x.id in ORDER ? ORDER[x.id] : 3 + i }; }).sort(function (a, b) { return a.r - b.r; }).map(function (x) { return x.s; });
   }
   function shortDay(t) { var d = new Date(t); return d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3); }
 
@@ -176,6 +177,11 @@
       '<button type="button" class="tg" data-act="toggle-band" data-id="' + esc(id) + '" aria-expanded="' + open + '"><h2>' + esc(name) + '</h2><span class="car" aria-hidden="true">' + I.down + '</span></button>' + (extra || '') +
       '<button type="button" class="tm mono" data-act="' + act + '" data-id="' + esc(id) + '" aria-label="Open ' + esc(name) + ': ' + esc(count) + '">' + esc(count) + ' ›</button></div>';
   }
+  function bandChannel(s) {
+    var its = itemsOf(s), last = its.reduce(function (a, x) { return x.published > (a ? a.published : 0) ? x : a; }, null), n = srcNewCount(s.id), st = lib.status(s.id);
+    var sub = st && !st.ok ? "Couldn't update" : last ? (n ? n + ' new · ' : '') + 'latest ' + Core.ago(last.published) + ' · ' + last.title : refreshing || !st ? 'Checking…' : 'No videos yet';
+    return '<button type="button" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="tx"><b>' + esc(s.name) + '</b><small>' + esc(sub) + '</small></span><span aria-hidden="true">›</span></button>';
+  }
   var refreshing = false;
   function renderHome() {
     reg.h = [];
@@ -198,8 +204,9 @@
       if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
       else if (!srcs && !feedsOn) html += '<p class="empty">Your channels show here in the Shelf app on your iPhone.</p>';
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
-      else html += '<p class="empty">' + (refreshing && !lib.sources(sec.id).some(function (s) { return lib.items(s.id).length; }) ? 'Checking for new uploads…' : 'Nothing new. All caught up.') + '</p>';
       if (rest > 0) html += '<button type="button" class="more" data-act="open-section" data-id="' + esc(sec.id) + '"><span>+' + rest + ' more in ' + esc(sec.name) + '</span><span aria-hidden="true">›</span></button>';
+      // Its channels, one line each: tap one for its videos, newest first
+      if (srcs) html += '<div class="chl' + (list.length ? '' : ' first') + '">' + lib.sources(sec.id).map(bandChannel).join('') + '</div>';
       html += '</section>';
     });
     // Pasted videos that belong to no section
@@ -214,6 +221,8 @@
         '<ul>' + loose.slice(0, 3).map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>' +
         (loose.length > 3 ? '<button type="button" class="more" data-act="open-pasted"><span>+' + (loose.length - 3) + ' more pasted</span><span aria-hidden="true">›</span></button>' : '') + '</section>';
     }
+    // Make a new category (it lands after Sleep, above Pasted)
+    html += '<button type="button" class="addcat" data-act="add-section"><span>+ Add category</span><span aria-hidden="true">›</span></button>';
     $('#bands').innerHTML = html;
     fitAll($('#bands'));
     // Continue: the most recent unfinished thing anywhere. At night, the last podcast you fell asleep to (Bedtime).
@@ -387,7 +396,7 @@
     } else if (v.name === 'channel') {
       var s = lib.source(v.id);
       if (!s) { stack.pop(); return renderPage(); }
-      var st2 = lib.status(s.id), list = itemsOf(s).map(function (it) { return entryFromItem(s, it); });
+      var st2 = lib.status(s.id), list = itemsOf(s).map(function (it) { return entryFromItem(s, it); }).sort(function (a, b) { return (b.published || 0) - (a.published || 0); }); // newest first
       var kind = s.type === 'podcast' ? (s.private ? 'Private podcast' : 'Podcast') : 'YouTube';
       html += topHTML(bandClass(s.section), s.name, st2 && !st2.ok ? '<span class="err">Couldn\'t update: ' + esc(st2.error) + '</span>' : '<b>' + kind + '</b> · latest ' + list.length + (st2 ? ' · updated ' + esc(Core.ago(st2.fetched)) : ''),
         ib('refresh-channel', s.id, I.refresh, 'Check for new uploads') + ib('channel-menu', s.id, I.dots, 'Section, Shorts or remove'));
@@ -1182,11 +1191,11 @@
   function openSec(id) {
     editing = id || null; confirmDel = false;
     var s = id && lib.section(id);
-    $('#secH').textContent = s ? 'Edit section' : 'New section';
+    $('#secH').textContent = s ? 'Edit category' : 'New category';
     $('#secName').value = s ? s.name : '';
     secKind = s ? s.kind : 'video'; paintKind();
     $('#secMore').hidden = !s; $('#secNew').hidden = !s;
-    $('#secDel').textContent = 'Delete section';
+    $('#secDel').textContent = 'Delete category';
     $('#secMsg').textContent = ''; $('#secMsg').className = 'msgline';
     openDlg($('#secDlg'));
     if (!s && !isPhone) setTimeout(function () { $('#secName').focus(); }, 50);
@@ -1640,7 +1649,7 @@
       case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
       case 'sec-delete':
         if (!confirmDel) { confirmDel = true; var to = lib.sections().filter(function (s) { return s.id !== editing; })[0]; b.textContent = 'Tap again: channels move to ' + (to ? to.name : '?'); break; }
-        try { var toSec = lib.removeSection(editing); cs.list().forEach(function (c) { if (c.section === editing) cs.move(c.id, toSec); }); $('#secDlg').close(); if (stack.length) { unwind(); $('#page').hidden = true; } renderAll(); toast('Section deleted. Its channels moved.'); }
+        try { var toSec = lib.removeSection(editing); cs.list().forEach(function (c) { if (c.section === editing) cs.move(c.id, toSec); }); $('#secDlg').close(); if (stack.length) { unwind(); $('#page').hidden = true; } renderAll(); toast('Category deleted. Its channels moved.'); }
         catch (err) { $('#secMsg').textContent = err.message; $('#secMsg').className = 'msgline err'; }
         break;
       case 'seen-section': lib.sources(id).forEach(function (s) { lib.markSeen(s.id); }); renderAll(); break;
