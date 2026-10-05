@@ -166,14 +166,14 @@
     var c = upNextCourse(), pc = c && cs.pace(c.id), td = cs.today(), days = cs.daysLeft();
     if (isNight()) return '<b>Today</b> ' + td.n + (td.n === 1 ? ' episode' : ' episodes') + (td.secs ? ' · ' + Math.round(td.secs / 60) + ' min' : '') + (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' : '');
     if (cs.examPast()) return pc ? esc(c.name) + ' ' + pc.left + ' left' : '';
-    return (days ? '<b>' + days + (days === 1 ? ' day' : ' days') + '</b> to Step 2 CK' : '<b>Step 2 CK</b> today') +
+    return (days ? '<b>' + days + (days === 1 ? ' day' : ' days') + '</b> to ' + esc(goalName()) : '<b>' + esc(goalName()) + '</b> today') +
       (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' + (pc.perDay ? ' · ' + Courses.perDay(pc.perDay) : '') : td.left ? ' · ' + td.left + ' left' + (td.perDay ? ' · ' + Courses.perDay(td.perDay) : '') : '');
   }
   // Home's sections start folded: the name opens and closes one (remembered), the count on the right opens its page
   function isOpenBand(id) { return !!(prefs.open && prefs.open[id]); }
-  function bandHead(id, cls, name, count, act, open) {
-    return '<section class="band ' + cls + (open ? ' open' : '') + '" aria-label="' + esc(name) + '"><div class="hd">' +
-      '<button type="button" class="tg" data-act="toggle-band" data-id="' + esc(id) + '" aria-expanded="' + open + '"><h2>' + esc(name) + '</h2><span class="car" aria-hidden="true">' + I.down + '</span></button>' +
+  function bandHead(id, cls, name, count, act, open, extra) {
+    return '<section class="band ' + cls + (open ? ' open' : '') + '" aria-label="' + esc(name) + '"><div class="hd' + (extra ? ' x3' : '') + '">' +
+      '<button type="button" class="tg" data-act="toggle-band" data-id="' + esc(id) + '" aria-expanded="' + open + '"><h2>' + esc(name) + '</h2><span class="car" aria-hidden="true">' + I.down + '</span></button>' + (extra || '') +
       '<button type="button" class="tm mono" data-act="' + act + '" data-id="' + esc(id) + '" aria-label="Open ' + esc(name) + ': ' + esc(count) + '">' + esc(count) + ' ›</button></div>';
   }
   var refreshing = false;
@@ -205,9 +205,12 @@
     // Pasted videos that belong to no section
     var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
-    if (loose.length && !isOpenBand('_pasted')) html += bandHead('_pasted', 'c0', 'Pasted', String(loose.length), 'open-pasted', false) + '</section>';
-    else if (loose.length) {
-      html += bandHead('_pasted', 'c0', 'Pasted', String(loose.length), 'open-pasted', true) +
+    // Pasted always shows, with a URL button to play any YouTube link
+    var urlBtn = '<button type="button" class="urlb" data-act="paste-url" aria-label="Play a YouTube link">+ URL</button>';
+    if (!loose.length) html += '<section class="band c0" aria-label="Pasted"><div class="hd x3"><button type="button" class="tg" data-act="paste-url" aria-label="Pasted: nothing yet. Play a YouTube link"><h2>Pasted</h2></button>' + urlBtn + '<button type="button" class="tm mono" data-act="open-pasted" aria-label="Open Pasted: 0">0 ›</button></div></section>';
+    else if (!isOpenBand('_pasted')) html += bandHead('_pasted', 'c0', 'Pasted', String(loose.length), 'open-pasted', false, urlBtn) + '</section>';
+    else {
+      html += bandHead('_pasted', 'c0', 'Pasted', String(loose.length), 'open-pasted', true, urlBtn) +
         '<ul>' + loose.slice(0, 3).map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>' +
         (loose.length > 3 ? '<button type="button" class="more" data-act="open-pasted"><span>+' + (loose.length - 3) + ' more pasted</span><span aria-hidden="true">›</span></button>' : '') + '</section>';
     }
@@ -394,8 +397,8 @@
     } else if (v.name === 'pasted') {
       var vids = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section; })
         .sort(function (a, b) { return (isDoneE(a) - isDoneE(b)) || (b.updated || 0) - (a.updated || 0); });
-      html += topHTML('c0', 'Pasted', vids.length + (vids.length === 1 ? ' video' : ' videos') + ' from channels you don\'t follow');
-      if (!vids.length) html += '<p class="pnote">Nothing pasted yet.</p>';
+      html += topHTML('c0', 'Pasted', vids.length + (vids.length === 1 ? ' video' : ' videos') + ' from channels you don\'t follow', ib('paste-url', null, I.plus, 'Play a YouTube link'));
+      if (!vids.length) html += '<p class="pnote">Nothing pasted yet. Tap + to play a YouTube link.</p>';
       vids.forEach(function (e) { html += '<div class="irow">' + itemHTML(e, 'p') + ib('remove-video', e.key, I.x, 'Remove ' + e.title) + '</div>'; });
     } else if (v.name === 'courses') {
       html += coursesPage(v);
@@ -1065,8 +1068,8 @@
   function courseSub(c, pr, arr) {
     if (!arr.length || pr.state === 'done') return courseShort(c, pr, arr);
     var pc = cs.pace(c.id), per = pc && pc.perDay ? Courses.perDay(pc.perDay) : '';
-    if (pr.state === 'new') return pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '') + (per ? ' · <b>' + per + '</b> by the exam' : '');
-    var late = pc.finishBy && pc.finishBy > Courses.EXAM.getTime();
+    if (pr.state === 'new') return pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '') + (per ? ' · <b>' + per + '</b> by ' + esc(goalName()) : '');
+    var late = pc.finishBy && pc.finishBy > Courses.exam().getTime();
     return '<b>' + pc.left + ' left</b>' + (per ? ' · ' + per : '') + (pc.finishBy ? ' · <span' + (late ? ' class="late"' : '') + '>done ' + shortDay(pc.finishBy) + ' at this week\'s pace</span>' : '');
   }
   function courseRow(c) {
@@ -1089,9 +1092,9 @@
     if (st.partial) h += '<p class="cnote">YouTube sent only the first ' + arr.length + (st.partial > 0 ? ' of ' + st.partial : '') + ' videos' + (c.seed ? ', so your place from the note waits for the rest' : '') + '. <button type="button" data-act="course-retry" data-id="' + esc(c.id) + '">Load the rest</button></p>';
     if (c.note) h += '<p class="cnote">' + esc(c.note) + '</p>';
     if (arr.length) {
-      if (cplace[c.id]) h += '<form class="cplace" data-id="' + esc(c.id) + '"><label for="pl-' + esc(c.id) + '">Where are you? Episode № from the title</label>' +
+      if (cplace[c.id]) h += '<form class="cplace" data-id="' + esc(c.id) + '"><label for="pl-' + esc(c.id) + '">Watched up to? The episode № from the title, or how many videos in</label>' +
         '<input id="pl-' + esc(c.id) + '" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="e.g. ' + esc(epLabel(arr[Math.max(0, pr.notch)] || arr[0], 0)) + '">' +
-        '<span class="row"><button type="submit" class="cbtn solid">Tick up to here</button><button type="button" class="cbtn" data-act="course-pin-no" data-id="' + esc(c.id) + '">Pin ‼</button></span></form>';
+        '<span class="row"><button type="submit" class="cbtn solid">Tick up to here</button>' + (pr.done ? '' : '<button type="button" class="cbtn" data-act="course-place" data-id="' + esc(c.id) + '">Not started</button>') + '<button type="button" class="cbtn" data-act="course-pin-no" data-id="' + esc(c.id) + '">Pin ‼</button>' + '</span></form>';
       else if (pr.state === 'new') h += '<p class="cnote">Not started. Tap ▶ to start at the top, or Set place if you\'ve watched some on YouTube.</p>';
       h += cgrid[c.id] ? gridHTML(c, pr, arr) : windowHTML(c, pr, arr);
     }
@@ -1127,21 +1130,28 @@
   }
   function examHTML() {
     var td = cs.today(), days = cs.daysLeft(), past = cs.examPast(), max = Math.max.apply(null, td.week.concat([1]));
-    return '<div class="exam"><div class="big mono"><small>' + (past ? 'Step 2 CK' : 'Days to Step 2 CK') + '</small>' + (past ? '✓' : days) + '</div><div class="nums mono">' +
-      '<p><b>' + esc(DAYS[Courses.EXAM.getDay()].slice(0, 3) + ' ' + shortDay(Courses.EXAM.getTime())) + '</b> · ' + td.left + ' left</p>' +
-      '<p>' + (past ? '<b>Exam done.</b>' : !td.left ? '<b>Every course done.</b>' : td.perDay ? '<b>' + esc(Courses.perDay(td.perDay)) + '</b> to finish in time' : '<b>Exam day. Good luck.</b>') + '</p>' +
+    return '<div class="exam"><div class="big mono"><small>' + esc(past ? goalName() : 'Days to ' + goalName()) + '</small>' + (past ? '✓' : days) + '</div><div class="nums mono">' +
+      '<p><b>' + esc(DAYS[Courses.exam().getDay()].slice(0, 3) + ' ' + shortDay(Courses.exam().getTime())) + '</b> · ' + td.left + ' left</p>' +
+      '<p>' + (past ? '<b>Date passed. Tap Goal to set a new one.</b>' : !td.left ? '<b>Every course done.</b>' : td.perDay ? '<b>' + esc(Courses.perDay(td.perDay)) + '</b> to finish in time' : '<b>It\'s today. Good luck.</b>') + '</p>' +
       '<p>Today <b>' + td.n + (td.secs ? ' · ' + Math.round(td.secs / 60) + ' min' : '') + '</b> · this week <b>' + td.weekN + '</b></p>' +
       '<div class="week" role="img" aria-label="Episodes ticked each day, last 7 days: ' + td.week.join(', ') + '">' + td.week.map(function (n) { return '<i class="' + (n ? '' : 'z') + '" style="height:' + (n ? Math.max(15, Math.round(n / max * 100)) : 8) + '%"></i>'; }).join('') + '</div>' +
       '</div></div>';
   }
+  // The goal the pace counts down to: Step 2 CK on 30 Nov unless Mo changes it (prefs.goal)
+  function goalName() { return (prefs.goal && prefs.goal.name) || 'Step 2 CK'; }
+  function applyGoal() { var g = prefs.goal, d = g && g.date && /^\d{4}-\d\d-\d\d$/.test(g.date) ? new Date(+g.date.slice(0, 4), +g.date.slice(5, 7) - 1, +g.date.slice(8, 10)) : null; Courses.setExam(d); }
+  function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function goalISO() { return isoOf(Courses.exam()); }
+  function todayISO() { return isoOf(new Date()); }
+  function longDay(d) { return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear(); }
   // Pace: everything with numbers lives here, one tap away from Courses
   function leftSecs(c) { return cs.items(c.id).reduce(function (a, x) { return a + (cs.isDone(c.id, x.id) ? 0 : x.dur || 0); }, 0); }
   function hrs(sec) { var h = sec / 3600; return h >= 10 ? Math.round(h) + ' h' : h >= 1 ? (Math.round(h * 10) / 10) + ' h' : Math.max(1, Math.round(sec / 60)) + ' min'; }
   function paceHTML() {
-    var h = examHTML(), open = cs.list().filter(function (c) { var pr = cs.progress(c.id); return pr.total && pr.state !== 'done'; }), tot = 0, tsec = 0;
+    var h = '<button type="button" class="goal" data-act="edit-goal"><span><small>Goal</small><b>' + esc(goalName()) + '</b> · ' + esc(shortDay(Courses.exam().getTime())) + '</span><span class="mono">Edit</span></button>' + examHTML(), open = cs.list().filter(function (c) { var pr = cs.progress(c.id); return pr.total && pr.state !== 'done'; }), tot = 0, tsec = 0;
     h += '<ul class="plist">' + open.map(function (c) {
       var pr = cs.progress(c.id), pc = cs.pace(c.id), left = pr.total - pr.done, sec = leftSecs(c); tot += left; tsec += sec;
-      var late = pc && pc.finishBy && pc.finishBy > Courses.EXAM.getTime();
+      var late = pc && pc.finishBy && pc.finishBy > Courses.exam().getTime();
       return '<li><b>' + esc(c.name) + '</b><span class="mono">' + left + ' left' + (sec ? ' · ' + hrs(sec) : '') + (pc && pc.perDay ? ' · ' + esc(Courses.perDay(pc.perDay)) : '') +
         (pc && pc.finishBy ? '<br><span' + (late ? ' class="late"' : '') + '>done ' + esc(shortDay(pc.finishBy)) + ' at this week\'s pace</span>' : '') + '</span></li>';
     }).join('');
@@ -1151,8 +1161,8 @@
   }
   function paceText() {
     var d = new Date(), days = cs.daysLeft(), td = cs.today(), lines = [];
-    lines.push('My USMLE Step 2 CK study plan, from my Shelf app (' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() + ').');
-    lines.push(cs.examPast() ? 'My exam was on 30 November 2026.' : 'Exam: 30 November 2026, ' + days + (days === 1 ? ' day' : ' days') + ' from today.');
+    lines.push('My study plan, from my Shelf app (' + longDay(d) + ').');
+    lines.push(cs.examPast() ? 'My goal, ' + goalName() + ', was on ' + longDay(Courses.exam()) + '.' : 'Goal: ' + goalName() + ' on ' + longDay(Courses.exam()) + ', ' + days + (days === 1 ? ' day' : ' days') + ' from today.');
     lines.push('Video courses (YouTube playlists):');
     cs.list().forEach(function (c) {
       var pr = cs.progress(c.id); if (!pr.total) return;
@@ -1160,7 +1170,7 @@
       lines.push('- ' + c.name + (c.channel ? ' (' + c.channel + ')' : '') + ': ' + pr.done + ' of ' + pr.total + ' watched' + (pr.state === 'done' ? ' (done)' : ', ' + (pr.total - pr.done) + ' left' + (sec ? ', about ' + hrs(sec) + ' of video' : '')));
     });
     lines.push('Watched today: ' + td.n + '. Last 7 days: ' + td.weekN + '.');
-    lines.push('Work out how many videos a day I need to finish before the exam, which order to do the courses in, and a simple week-by-week schedule that leaves the last week for review. Keep it short.');
+    lines.push('Work out how many videos a day I need to finish before ' + goalName() + ', which order to do the courses in, and a simple week-by-week schedule that leaves the last week for review. Keep it short.');
     return lines.join('\n');
   }
   function courseGroups(list) {
@@ -1178,7 +1188,7 @@
     var who = Object.keys(chans).length === 1 ? Object.keys(chans)[0] : sec.name;
     h += topHTML(bandClass(sec.id), 'Courses', esc(who) + ' · ' + all.length + (all.length === 1 ? ' course' : ' courses'),
       ib('open-marks', null, I.mark, 'Marks') + ib('add-course', sec.id, I.plus, 'Add a playlist'));
-    if (cs.list().length) h += '<button type="button" class="more" data-act="open-pace"><span>Pace</span><span class="mono">' + (cs.examPast() ? 'what\'s left' : cs.daysLeft() + ' days to Step 2 CK') + ' ›</span></button>';
+    if (cs.list().length) h += '<button type="button" class="more" data-act="open-pace"><span>Pace</span><span class="mono">' + (cs.examPast() ? 'what\'s left' : cs.daysLeft() + ' days to ' + esc(goalName())) + ' ›</span></button>';
     if (!feedsOn && !prefs.apiKey) h += '<p class="pnote">Episodes load in the Shelf app on your iPhone.</p>';
     h += courseGroups(all);
     if (!all.length) h += '<p class="pnote">No courses yet. Add a playlist and Shelf ticks it episode by episode.</p>';
@@ -1255,13 +1265,41 @@
     var f = e.target.closest && e.target.closest('.cplace'); if (!f) return;
     e.preventDefault();
     var cid = f.getAttribute('data-id'), c = cs.get(cid), n = parseInt(f.querySelector('input').value, 10);
-    if (!c || !n) { toast('Type the episode number from the video title, like 1107.', 'warn'); return; }
-    var hits = cs.findNumber(cid, n), arr = cs.items(cid);
-    if (!hits.length) { toast('No episode ' + n + ' in ' + c.name + '. Check the number in the video title.', 'warn'); return; }
-    var before = cs.tickUpTo(cid, hits[0]);
-    cplace[cid] = false; cwin[cid] = null;
-    renderAll();
-    toast(n + ' is ' + (hits[0] + 1) + ' of ' + arr.length + '. Ticked everything up to it' + (hits.length > 1 ? ' (first of ' + hits.length + ')' : '') + '.', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+    if (!c || !n) { toast('Type a number: the episode № from the title, or how many videos in you are.', 'warn'); return; }
+    var hits = cs.findNumber(cid, n), arr = cs.items(cid), numbered = arr.some(function (x) { return x.n != null; });
+    function tickTo(i, said) {
+      var before = cs.tickUpTo(cid, i);
+      cplace[cid] = false; cwin[cid] = null;
+      renderAll();
+      toast(said + ' Ticked everything up to it.', '', { label: 'Undo', fn: function () { cs.restore(cid, before); renderAll(); } });
+    }
+    if (hits.length) return tickTo(hits[0], n + ' is ' + (hits[0] + 1) + ' of ' + arr.length + (hits.length > 1 ? ' (first of ' + hits.length + ')' : '') + '.');
+    if (n > arr.length) { toast('No episode ' + n + ' in ' + c.name + ', and it has only ' + arr.length + ' videos.', 'warn'); return; }
+    // Titles without numbers: the number is how many videos in
+    if (!numbered) return tickTo(n - 1, 'Video ' + n + ' of ' + arr.length + '.');
+    // Numbered titles but no match: could be a typo, so ask before ticking by count
+    toast('No episode ' + n + ' in ' + c.name + '. Meant the first ' + n + ' videos?', 'warn', { label: 'Tick ' + n, fn: function () { tickTo(n - 1, 'Video ' + n + ' of ' + arr.length + '.'); } });
+  });
+
+  // URL: play (or add) whatever YouTube link goes in the box
+  $('#urlForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var t = $('#urlInput').value.trim();
+    if (!t) { $('#urlMsg').textContent = 'Paste a YouTube link first.'; $('#urlMsg').className = 'msgline err'; return; }
+    if (!isLinkish(t)) { $('#urlMsg').textContent = "That isn't a YouTube link. It should start with youtube.com or youtu.be."; $('#urlMsg').className = 'msgline err'; return; }
+    $('#urlDlg').close(); handleText(t);
+  });
+  // Edit the goal: a name and a date
+  $('#goalForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = $('#goalName').value.trim().slice(0, 40), date = $('#goalDate').value;
+    if (!name) { $('#goalMsg').textContent = 'Give it a name, like Step 2 CK or Paeds rotation.'; $('#goalMsg').className = 'msgline err'; return; }
+    if (!/^\d{4}-\d\d-\d\d$/.test(date)) { $('#goalMsg').textContent = 'Pick a date.'; $('#goalMsg').className = 'msgline err'; return; }
+    if (date < todayISO()) { $('#goalMsg').textContent = 'That date has passed. Pick today or later.'; $('#goalMsg').className = 'msgline err'; return; }
+    prefs.goal = { name: name, date: date }; savePrefs(); applyGoal();
+    $('#goalDlg').close(); renderAll();
+    $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg'));
+    toast(cs.examPast() ? 'Goal saved.' : 'Goal saved: ' + cs.daysLeft() + ' days to ' + name + '.');
   });
 
   // Add a course
@@ -1310,8 +1348,19 @@
       if (cFix) cs.fixMiss(cFix, c);
       var pr = cs.progress(c.id);
       msg.textContent = 'Added ' + c.name + ' · ' + pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '') + '.'; msg.className = 'msgline ok';
-      openC = c.id; renderAll(); updateDot();
-      setTimeout(function () { if ($('#courseDlg').open) $('#courseDlg').close(); }, 900);
+      openC = c.id; cplace[c.id] = pr.total > 0; renderAll(); updateDot();
+      setTimeout(function () {
+        if ($('#courseDlg').open) $('#courseDlg').close();
+        // Straight to the new course, asking how far in you already are
+        var v = stack[stack.length - 1], sid = c.section || cAddSec || 'med';
+        if (!v || v.name !== 'courses' || (v.id && v.id !== sid)) openTab({ name: 'courses', id: sid });
+        var tries = 0;
+        (function focusRow() {
+          var row = document.getElementById('pl-' + c.id);
+          if (row && row.offsetParent) { row.scrollIntoView({ block: 'center' }); row.focus({ preventScroll: true }); }
+          else if (++tries < 20) setTimeout(focusRow, 100);
+        })();
+      }, 900);
     }, function (err) {
       cAdding = false; $('#courseGo').disabled = false;
       msg.textContent = (err && err.message) || "Couldn't add that."; msg.className = 'msgline err';
@@ -1392,7 +1441,17 @@
       case 'add-pick': addSec = id; Array.prototype.forEach.call(document.querySelectorAll('#addPicks button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); $('#addGo').textContent = 'Add to ' + lib.section(id).name; break;
       case 'add-section': openSec(null); break;
       case 'v-timer-toggle': vTmOpen = !vTmOpen; renderTimerUI('v'); break;
+      case 'paste-url': $('#urlInput').value = ''; $('#urlMsg').textContent = ''; openDlg($('#urlDlg')); setTimeout(function () { $('#urlInput').focus(); }, 60); break;
+      case 'url-paste':
+        Native.readClipboard().then(function (t) {
+          t = (t || '').trim();
+          if (!t) { $('#urlMsg').textContent = 'Nothing copied yet. Copy a YouTube link first, or type it in.'; $('#urlMsg').className = 'msgline err'; return; }
+          $('#urlInput').value = t; $('#urlForm').requestSubmit ? $('#urlForm').requestSubmit() : $('#urlForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        }, function () { $('#urlMsg').textContent = "Couldn't read what you copied. Long-press the box and tap Paste."; $('#urlMsg').className = 'msgline err'; });
+        break;
       case 'open-pace': $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); break;
+      case 'edit-goal': $('#goalName').value = goalName(); $('#goalDate').min = todayISO(); $('#goalDate').value = goalISO(); $('#goalMsg').textContent = ''; if ($('#paceDlg').open) $('#paceDlg').close(); openDlg($('#goalDlg')); break;
+      case 'goal-reset': delete prefs.goal; savePrefs(); applyGoal(); $('#goalDlg').close(); renderAll(); $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); toast('Goal back to Step 2 CK on 30 November.'); break;
       case 'pace-copy': copyText(paceText(), function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy for Claude'; }, 2500); toast('Copied. Paste it into Claude.'); }); break;
       case 'toggle-band': prefs.open = prefs.open || {}; if (prefs.open[id]) delete prefs.open[id]; else prefs.open[id] = 1; savePrefs(); renderHome(); var tg = document.querySelector('.band [data-act="toggle-band"][data-id="' + id + '"]'); if (tg) tg.focus({ preventScroll: true }); break;
       case 'edit-section': openSec(id); break;
@@ -1695,7 +1754,7 @@
   // Only entries shaped like records (a null or stray value in a phone copy is dropped, not merged)
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
-    videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {}); applyGoal();
     lib = Library.create({
       load: rawGet,
       save: function (k, v) { rawSet(k, v, k === Library.KEY); }, // the feed cache stays in the web view; the library itself is mirrored to the phone

@@ -108,6 +108,8 @@ svg{display:block;flex:none}
 .band .hd .car{flex:none;width:22px;height:22px;opacity:.8;transition:transform .15s}
 .band .hd .car svg{width:22px;height:22px;display:block;transform:rotate(-90deg)}
 .band.open .hd .car svg{transform:none}
+.band .hd.x3{grid-template-columns:minmax(0,1fr) auto auto}
+.band .hd .urlb{min-height:var(--tap);padding:0 12px;border:2px solid currentColor;font:700 12px var(--mono);letter-spacing:.04em;white-space:nowrap}
 .band .hd .tm{min-height:var(--tap);min-width:var(--tap);display:flex;align-items:center;justify-content:flex-end}
 .band:not(.open){padding-bottom:12px}
 .band .hd h2{margin:0;font-size:30px;line-height:.9;font-weight:900;font-stretch:125%;letter-spacing:-.035em;text-transform:uppercase;white-space:nowrap;overflow:hidden;min-width:0;padding:2px 0}
@@ -246,6 +248,10 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .cgroup{color:var(--ink)}
 .cgroup+.cgroup{border-top:3px solid var(--rule)}
 .cnote.pace{font-size:12px}
+.goal{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:52px;margin-bottom:6px;border-bottom:3px solid var(--rule);text-align:left}
+.goal small{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.goal b{font-weight:800}
+.goal .mono{font-size:12px;text-decoration:underline;text-underline-offset:3px}
 .plist{list-style:none;margin:14px 0 4px;padding:0;border-top:3px solid var(--rule)}
 .plist li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 0;border-bottom:2px solid var(--hair)}
 .plist li b{font-weight:800;text-transform:uppercase;letter-spacing:.04em;font-size:13px}
@@ -623,6 +629,33 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <button type="button" class="primary" id="paceCopy" data-act="pace-copy">Copy for Claude</button>
     <p class="small">Copies your numbers with a question. Paste it into Claude to get a day-by-day plan.</p>
   </div>
+</dialog>
+
+<dialog id="urlDlg" aria-labelledby="urlH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="urlH">Play a link</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <form class="db" id="urlForm" novalidate>
+    <label for="urlInput">YouTube link</label>
+    <input class="field mono" id="urlInput" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtu.be/…">
+    <div class="msgline" id="urlMsg" role="status"></div>
+    <div class="grid2"><button type="button" class="ghost" data-act="url-paste">Paste</button><button type="submit" class="primary">Play</button></div>
+    <p class="small">It plays straight away and saves your spot under Pasted. A playlist link adds it to Courses.</p>
+  </form>
+</dialog>
+
+<dialog id="goalDlg" aria-labelledby="goalH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="goalH">Goal</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <form class="db" id="goalForm" novalidate>
+    <p>What you're working towards. Pace counts the days to it and how many videos a day get you there.</p>
+    <label for="goalName">Name</label>
+    <input class="field" id="goalName" type="text" autocomplete="off" maxlength="40" placeholder="Step 2 CK">
+    <label for="goalDate">Date</label>
+    <input class="field mono" id="goalDate" type="date">
+    <div class="msgline" id="goalMsg" role="status"></div>
+    <button type="submit" class="primary">Save goal</button>
+    <button type="button" class="ghost" data-act="goal-reset">Back to Step 2 CK, 30 Nov</button>
+  </form>
 </dialog>
 
 <dialog id="keyDlg" aria-labelledby="keyH">

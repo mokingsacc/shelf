@@ -49,13 +49,15 @@ for (const [w, h] of [[390, 844], [375, 667], [820, 1180], [1180, 820]]) for (co
   await p.keyboard.press('Escape');
   await p.locator('#coursesBtn').click(); await shot('courses');
   await p.locator('.course .cr').first().click(); await shot('courses-open');
-  await p.locator('[data-act="open-pace"]').click(); await shot('pace'); await p.keyboard.press('Escape');
+  await p.locator('[data-act="open-pace"]').click(); await shot('pace'); await p.locator('#paceBody .goal').click(); await shot('goal'); await p.keyboard.press('Escape');
+  await p.locator('.course [data-act="course-place"]').first().click().catch(() => {}); await shot('courses-place');
   await p.locator('#searchBtn').click(); await p.fill('#sq', 'hy arrows'); await p.press('#sq', 'Enter'); await p.waitForTimeout(500); await shot('search');
   await p.locator('#todayBtn').click(); await p.waitForTimeout(300);
   await p.locator('.band.c3 .hd .tm').click(); await p.locator('#page .item').first().click(); await p.waitForTimeout(800);
   await p.locator('#nSeg button[data-m="45"]').click(); await shot('night');
   await p.locator('[data-act="close-night"]').click(); await shot('home-mini');
-  await p.locator('#todayBtn').click(); await p.locator('#statusBtn').click(); await shot('check');
+  await p.locator('#todayBtn').click(); await p.locator('[data-act="paste-url"]').first().click(); await shot('url'); await p.keyboard.press('Escape');
+  await p.locator('#statusBtn').click(); await shot('check');
   await p.keyboard.press('Escape');
   
   const dark = await p.evaluate(() => [getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('.band.c1')).backgroundColor]);
