@@ -12,12 +12,13 @@ var Library = (function () {
   var SEED_SOURCES = [
     { input: '@DirtyMedicine', section: 'med' },
     { input: '@MehlmanMedical', section: 'med' },
+    { input: '@AJsMnemonics', section: 'med', since: 3 }, // AJmonics
     { input: '@BreakingPoints', section: 'ent' },
     { input: 'The Ezra Klein Show', section: 'ent', since: 2 }, // the video show (was its podcast before seed version 2)
     { input: 'https://feeds.megaphone.fm/finvshistory', section: 'sleep' },
     { input: 'Fall of Civilizations', section: 'sleep', audio: true }
   ];
-  var SEED_V = 2; // seeds marked since: n are added once to libraries seeded before version n
+  var SEED_V = 3; // seeds marked since: n are added once to libraries seeded before version n
   var CONSENT = { Cookie: 'SOCS=CAI; CONSENT=YES+1' };
 
   function hash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return 'p' + (h >>> 0).toString(36); }

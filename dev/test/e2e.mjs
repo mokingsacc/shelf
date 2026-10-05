@@ -40,7 +40,7 @@ let { ctx, p } = await appPage({ fakes: { fresh: true } });
 await settle(p);
 const names = await p.locator('.band .hd h2').allTextContents();
 ok(names.join(',') === 'Medicine,Entertainment,Sleep', '1 sections in day order: ' + names.join(', '));
-ok(await shelf(p, () => window.__shelf.lib.sources().length) === 6, '1 all six of Mo\'s channels found on first run');
+ok(await shelf(p, () => window.__shelf.lib.sources().length) === 7, '1 all seven of Mo\'s channels found on first run');
 await p.waitForFunction(() => document.querySelector('#statusDot').classList.contains('good'), null, { timeout: 6000 }).catch(() => {});
 ok(await p.locator('#statusDot.good').count() === 1 && (await p.locator('#statusText').textContent()) === 'All good', '1 corner says All good');
 ok(await p.locator('.band .nw').count() === 0, '1 nothing marked new on the very first run');
@@ -49,17 +49,17 @@ ok(calls.some((c) => /youtube\.com\/@/.test(c.url) && /SOCS=/.test(c.headers.Coo
 
 console.log('\n== 2 New uploads');
 await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
-ok(await p.locator('.band.c1 .nw').count() === 2, '2 Medicine shows 2 NEW uploads');
-ok((await p.locator('.band.c1 .tm').textContent()).includes('2 new'), '2 Medicine header says 2 new');
-ok(/6 new/.test(await p.locator('#summary').textContent()), '2 date line counts new uploads: ' + await p.locator('#summary').textContent());
+ok(await p.locator('.band.c1 .nw').count() === 3, '2 Medicine shows 3 NEW uploads');
+ok((await p.locator('.band.c1 .tm').textContent()).includes('3 new'), '2 Medicine header says 3 new');
+ok(/7 new/.test(await p.locator('#summary').textContent()), '2 date line counts new uploads: ' + await p.locator('#summary').textContent());
 await p.locator('.band.c1 .hd').click();
-ok(await p.locator('#page .top h1').textContent() === 'Medicine' && await p.locator('#page .chrow').count() === 2, '2 Medicine page lists its 2 channels');
+ok(await p.locator('#page .top h1').textContent() === 'Medicine' && await p.locator('#page .chrow').count() === 3, '2 Medicine page lists its 3 channels');
 await p.locator('#page .chrow', { hasText: 'Dirty Medicine' }).click();
 ok(await p.locator('#page .item').count() === 3 && await p.locator('#page .item .nw').count() === 1, '2 channel shows its latest videos with the new one marked (' + await p.locator('#page .item').count() + ' items, ' + await p.locator('#page .item .nw').count() + ' new)');
 ok(!(await p.content()).toLowerCase().includes('recommended'), '2 no recommendations anywhere');
 await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
 await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
-ok(await p.locator('.band.c1 .nw').count() === 1, '2 opening the channel clears its new mark');
+ok(await p.locator('.band.c1 .nw').count() === 2, '2 opening the channel clears its new mark');
 const savedPrefs = await shelf(p, () => window.__prefs);
 ok(!!savedPrefs['shelf.v2.library'], '2 channel list saved on the phone');
 

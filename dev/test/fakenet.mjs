@@ -6,6 +6,7 @@ const id = (s) => ('UC' + s.replace(/[^A-Za-z0-9]/g, '') + 'xxxxxxxxxxxxxxxxxxxx
 export const CHANNELS = {
   '@DirtyMedicine': { id: id('DirtyMedicine'), name: 'Dirty Medicine', videos: [['Hyperkalemia Mnemonics and Treatment', 2 * H], ['Acid-Base Disorders Made Ridiculously Easy', 3 * D], ['Pediatric Milestones in 10 Minutes', 9 * D]] },
   '@MehlmanMedical': { id: id('MehlmanMedical'), name: 'Mehlman Medical', videos: [['HY Arrows: Renal Physiology', 5 * H], ['HY Arrows: Endocrine', 2 * D], ['Step 2 CK Psychiatry Pearls', 6 * D]] },
+  '@AJsMnemonics': { id: id('AJsMnemonics'), name: 'AJmonics', videos: [['Dermatology COMPLETE Review for the USMLE', 3 * H], ['How to EASILY Memorize the Cranial Nerves', 5 * D]] },
   '@BreakingPoints': { id: id('BreakingPoints'), name: 'Breaking Points', videos: [['Krystal and Saagar: Fed Cuts Rates Again', 1 * H], ['Full Show: Shutdown Week Two', 1 * D], ['Saagar on the Polling Mess', 2 * D]] },
   '@EzraKleinShow': { id: id('EzraKleinShow'), name: 'The Ezra Klein Show', videos: [['Why the Housing Market Is Stuck', 20 * H], ['The Case for Boredom', 4 * D]] }
 };

@@ -128,9 +128,10 @@ const page = fx('channel.html');
   // Seed version 2: a library seeded with the Ezra Klein podcast gets the video channel once, and keeps the podcast
   const old = { 'shelf.v2.library': JSON.stringify({ sections: [{ id: 'med', name: 'Medicine', kind: 'video' }, { id: 'ent', name: 'Entertainment', kind: 'video' }],
     sources: { pez: { id: 'pez', type: 'podcast', url: 'https://example.com/ezra.xml', name: 'The Ezra Klein Show', section: 'ent' } }, seeded: true, seedMisses: [] }) };
-  r = setup([[/results\?/, '..."channelRenderer":{"channelId":"UCezraezraezraezraezraez","title"...'], [/UULF/, ytFeed]], old);
+  r = setup([[/results\?/, '..."channelRenderer":{"channelId":"UCezraezraezraezraezraez","title"...'], [/@AJsMnemonics/, '<meta itemprop="name" content="AJmonics">"externalId":"UCajajajajajajajajajajaj"'], [/UULF/, ytFeed]], old);
   const up = await r.lib.seed();
-  assert.deepStrictEqual(up.map((x) => [x.input, x.ok]), [['The Ezra Klein Show', true]]);
+  assert.deepStrictEqual(up.map((x) => [x.input, x.ok]), [['@AJsMnemonics', true], ['The Ezra Klein Show', true]]);
+  assert.strictEqual(r.lib.source('UCajajajajajajajajajajaj').section, 'med', 'seed version 3 adds AJmonics to Medicine once');
   assert.strictEqual(r.lib.source('UCezraezraezraezraezraez').type, 'youtube');
   assert.strictEqual(r.lib.source('UCezraezraezraezraezraez').section, 'ent');
   assert.ok(r.lib.source('pez'), 'the podcast stays');
@@ -138,8 +139,8 @@ const page = fx('channel.html');
   // ...and a library that already has the video channel isn't touched
   r = setup([], { 'shelf.v2.library': JSON.stringify({ sections: [{ id: 'ent', name: 'Entertainment', kind: 'video' }],
     sources: { UCx: { id: 'UCx', type: 'youtube', name: 'The Ezra Klein Show', section: 'ent' } }, seeded: true }) });
-  assert.deepStrictEqual(await r.lib.seed(), []);
-  assert.ok(r.calls.length === 0);
+  assert.ok((await r.lib.seed()).every((x) => x.input !== 'The Ezra Klein Show'));
+  assert.ok(r.calls.every((c) => !/results\?/.test(c.url)), 'Ezra is not searched for again');
 
   // Garbage input
   await assert.rejects(r.lib.add('', 'med'), /doesn't look like/);
