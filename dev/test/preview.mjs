@@ -22,7 +22,7 @@ const audit = (p, where) => p.evaluate((where) => {
   const nb = document.querySelector('.now b'); if (nb && !document.querySelector('#cont').hidden) { const lh = parseFloat(getComputedStyle(nb).lineHeight); if (nb.getBoundingClientRect().height > lh * 2 + 1) out.push(where + ': Continue title over 2 lines'); }
   return out;
 }, where);
-for (const [w, h] of [[390, 844], [375, 667]]) for (const scheme of ['light', 'dark']) {
+for (const [w, h] of [[390, 844], [375, 667], [820, 1180], [1180, 820]]) for (const scheme of ['light', 'dark']) {
   const tag = `${w}-${scheme}`;
   const ctx = await b.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await installFakes(ctx, { fresh: true, fontsDir: FONTS });
@@ -35,27 +35,29 @@ for (const [w, h] of [[390, 844], [375, 667]]) for (const scheme of ['light', 'd
   // a half-watched lecture so Continue shows
   await p.evaluate(() => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(500);
   await p.evaluate(() => window.__fake.advance(140)); await p.waitForTimeout(5400);
-  await p.locator('#vRate [data-r="1.5"]').click(); await p.locator('#vSeg [data-m="30"]').click(); await p.waitForTimeout(1100);
+  await p.locator('#vRate [data-r="1.5"]').click(); await shot('player-folded'); await p.locator('#vTmBtn').click(); await p.locator('#vSeg [data-m="30"]').click(); await p.waitForTimeout(1100);
   await shot('player');
   await p.locator('[data-act="close-video"]').click(); await p.waitForTimeout(400);
   await shot('home');
   await p.screenshot({ path: `${OUT}/v3-homefull-${tag}.png`, fullPage: true });
-  await p.locator('.band .hd').first().click(); await shot('section');
+  await p.locator('.band .hd .tg').first().click(); await shot('home-open');
+  await p.locator('.band .hd .tm').first().click(); await shot('section');
   await p.evaluate(() => document.querySelector('#page').scrollTo(0, 99999)); await shot('section-bottom');
+  await p.locator('#page details.fold summary', { hasText: 'Channels' }).click(); await shot('section-channels');
   await p.locator('.chrow').first().click(); await shot('channel');
   await p.locator('[data-act="channel-menu"]').click(); await shot('channel-menu');
   await p.keyboard.press('Escape');
   await p.locator('#coursesBtn').click(); await shot('courses');
   await p.locator('.course .cr').first().click(); await shot('courses-open');
+  await p.locator('[data-act="open-pace"]').click(); await shot('pace'); await p.keyboard.press('Escape');
   await p.locator('#searchBtn').click(); await p.fill('#sq', 'hy arrows'); await p.press('#sq', 'Enter'); await p.waitForTimeout(500); await shot('search');
   await p.locator('#todayBtn').click(); await p.waitForTimeout(300);
-  await p.locator('.band.c3 li button').first().click(); await p.waitForTimeout(800);
+  await p.locator('.band.c3 .hd .tm').click(); await p.locator('#page .item').first().click(); await p.waitForTimeout(800);
   await p.locator('#nSeg button[data-m="45"]').click(); await shot('night');
   await p.locator('[data-act="close-night"]').click(); await shot('home-mini');
-  await p.locator('#statusBtn').click(); await shot('check');
+  await p.locator('#todayBtn').click(); await p.locator('#statusBtn').click(); await shot('check');
   await p.keyboard.press('Escape');
-  await p.locator('[data-act="add-section"]').click(); await shot('add-section');
-  await p.keyboard.press('Escape');
+  
   const dark = await p.evaluate(() => [getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('.band.c1')).backgroundColor]);
   if (scheme === 'dark' && (dark[0] !== 'rgb(10, 10, 14)' || dark[1] !== 'rgb(29, 27, 8)')) problems.push(tag + ': dark colours ' + dark.join(' '));
   await ctx.close();
@@ -68,7 +70,7 @@ for (const [w, h] of [[390, 844], [375, 667]]) for (const scheme of ['light', 'd
   await ctx.addInitScript(CAP({}, ''));
   const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
   await p.goto('http://localhost:8767/'); await p.waitForTimeout(2500);
-  await p.locator('.band.c3 .hd').click(); await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTimeout(1500);
+  await p.locator('.band.c3 .hd .tm').click(); await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTimeout(1500);
   await p.screenshot({ path: `${OUT}/v3-night-auto.png` });
   await p.locator('[data-act="close-night"]').click(); await p.evaluate(() => document.querySelector('#audio').pause()); await p.waitForTimeout(400);
   await p.evaluate(() => { window.__shelf.engine.capture(true); }); await p.waitForTimeout(200);

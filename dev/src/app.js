@@ -169,6 +169,13 @@
     return (days ? '<b>' + days + (days === 1 ? ' day' : ' days') + '</b> to Step 2 CK' : '<b>Step 2 CK</b> today') +
       (pc ? ' · ' + esc(c.name) + ' ' + pc.left + ' left' + (pc.perDay ? ' · ' + Courses.perDay(pc.perDay) : '') : td.left ? ' · ' + td.left + ' left' + (td.perDay ? ' · ' + Courses.perDay(td.perDay) : '') : '');
   }
+  // Home's sections start folded: the name opens and closes one (remembered), the count on the right opens its page
+  function isOpenBand(id) { return !!(prefs.open && prefs.open[id]); }
+  function bandHead(id, cls, name, count, act, open) {
+    return '<section class="band ' + cls + (open ? ' open' : '') + '" aria-label="' + esc(name) + '"><div class="hd">' +
+      '<button type="button" class="tg" data-act="toggle-band" data-id="' + esc(id) + '" aria-expanded="' + open + '"><h2>' + esc(name) + '</h2><span class="car" aria-hidden="true">' + I.down + '</span></button>' +
+      '<button type="button" class="tm mono" data-act="' + act + '" data-id="' + esc(id) + '" aria-label="Open ' + esc(name) + ': ' + esc(count) + '">' + esc(count) + ' ›</button></div>';
+  }
   var refreshing = false;
   function renderHome() {
     reg.h = [];
@@ -185,11 +192,9 @@
       // At most three: the newest uploads and the one you're in the middle of, then "+N more"
       var list = fresh.slice(0, go.length ? 2 : 3).concat(go.slice(0, 1));
       fresh.slice(list.length - Math.min(go.length, 1)).concat(go.slice(1)).forEach(function (e) { if (list.length < 3 && list.indexOf(e) < 0) list.push(e); });
-      var rest = fresh.length + go.length - list.length, srcs = lib.sources(sec.id).length;
-      html += '<section class="band ' + bandClass(sec.id) + '" aria-label="' + esc(sec.name) + '">' +
-        '<button type="button" class="hd" data-act="open-section" data-id="' + esc(sec.id) + '"><h2>' + esc(sec.name) + '</h2><span class="tm mono">' +
-        (fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty') + ' ›</span></button>';
-      if (sec.id === Courses.SEED.section) { var sub = examSub(); if (sub) html += '<p class="sub mono">' + sub + '</p>'; }
+      var rest = fresh.length + go.length - list.length, srcs = lib.sources(sec.id).length, open = isOpenBand(sec.id);
+      html += bandHead(sec.id, bandClass(sec.id), sec.name, fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty', 'open-section', open);
+      if (!open) { html += '</section>'; return; }
       if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
       else if (!srcs && !feedsOn) html += '<p class="empty">Your channels show here in the Shelf app on your iPhone.</p>';
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
@@ -200,8 +205,9 @@
     // Pasted videos that belong to no section
     var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
-    if (loose.length) {
-      html += '<section class="band c0" aria-label="Pasted"><button type="button" class="hd" data-act="open-pasted"><h2>Pasted</h2><span class="tm mono">' + loose.length + ' ›</span></button>' +
+    if (loose.length && !isOpenBand('_pasted')) html += bandHead('_pasted', 'c0', 'Pasted', String(loose.length), 'open-pasted', false) + '</section>';
+    else if (loose.length) {
+      html += bandHead('_pasted', 'c0', 'Pasted', String(loose.length), 'open-pasted', true) +
         '<ul>' + loose.slice(0, 3).map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>' +
         (loose.length > 3 ? '<button type="button" class="more" data-act="open-pasted"><span>+' + (loose.length - 3) + ' more pasted</span><span aria-hidden="true">›</span></button>' : '') + '</section>';
     }
@@ -212,14 +218,15 @@
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
     var top = all[0], bed = night && all.filter(function (e) { return e.type === 'audio'; })[0];
     if (bed) top = bed;
+    // The podcast bar at the bottom already is "continue" for the episode it holds
+    var held = engine && engine.state().episode;
+    if (held) { top = all.filter(function (e) { return !(e.type === 'audio' && e.key === held.guid); })[0]; bed = null; }
+    if (held && top && top.type === 'audio') top = null;
     $('#cont').hidden = !top;
     if (top) {
-      var p = prog(top), th = thumbOf(top), img = $('#contImg');
+      var p = prog(top);
       $('#cont').setAttribute('data-e', regE('h', top));
       $('#cont').setAttribute('data-bed', bed ? '1' : '');
-      $('#contThumb').className = 'th' + (top.type === 'audio' ? ' sq' : '');
-      if (th) { if (img.getAttribute('src') !== th) { img.hidden = false; img.onerror = function () { this.hidden = true; }; img.src = th; } } else img.hidden = true;
-      $('#contLen').hidden = !p.dur; $('#contLen').textContent = p.dur ? Core.fmt(p.dur) : '';
       $('#contK').textContent = (bed ? 'Bedtime' : 'Continue') + (top.srcName ? ' · ' + top.srcName : '');
       $('#contTitle').textContent = top.title;
       var tm = engine && engine.state().timer, lights = tm && tm.mode === 'min' ? tm.endsAt : Date.now() + (p.dur ? Math.min(45 * 60, (p.dur - p.t)) * 1000 : 45 * 60000);
@@ -238,7 +245,7 @@
       $('#nextT').innerHTML = esc(epLabel(nx, npr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' <span class="mono">' + Core.fmt(nx.dur) + '</span>' : '');
       $('#next').setAttribute('aria-label', 'Play next in ' + nc.name + ': ' + epLabel(nx, npr.notch));
     }
-    $('#summary').textContent = refreshing ? 'Checking for new uploads…' : allNew + ' new · ' + unfinished + ' unfinished';
+    $('#summary').textContent = refreshing ? 'Checking for new uploads…' : '';
     var wn = $('#webNote');
     if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can pick up where you left off, or paste a YouTube link into Search.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can pick up where you left off, or press ⌘V to play a YouTube link.'; }
     else wn.hidden = true;
@@ -292,7 +299,15 @@
       (started(e) ? '<span class="pr"><i style="width:' + pc.toFixed(1) + '%"></i></span>' : '') + '</span></button>';
   }
   // A folded list: "Watched · 12", "Older · 8"
-  function fold(label, html, n) { return n ? '<details class="fold"><summary><span>' + esc(label) + ' · ' + n + '</span>' + I.down + '</summary>' + html + '</details>' : ''; }
+  // A folded list; it stays open or shut across re-renders of the same page
+  var foldOpen = {};
+  function foldKey(label) { var v = stack[stack.length - 1]; return (v ? v.name + ':' + (v.id || '') : 'home') + ':' + label; }
+  function fold(label, html, n, open) {
+    if (!n && !open) return '';
+    var k = foldKey(label), on = k in foldOpen ? foldOpen[k] : !!open;
+    return '<details class="fold" data-k="' + esc(k) + '"' + (on ? ' open' : '') + '><summary><span>' + esc(label) + ' · ' + n + '</span>' + I.down + '</summary>' + html + '</details>';
+  }
+  document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.classList && d.classList.contains('fold') && d.getAttribute('data-k')) foldOpen[d.getAttribute('data-k')] = d.open; }, true);
   function viewLabel(v) {
     if (!v) return 'Today';
     if (v.name === 'section') { var s = lib.section(v.id); return s ? s.name : 'Back'; }
@@ -340,11 +355,9 @@
       var sec = lib.section(v.id);
       if (!sec) { stack.pop(); return renderPage(); }
       var srcs = lib.sources(sec.id), nn = newCountFor(sec.id), med = sec.id === Courses.SEED.section && cs && cs.list().length;
-      html += topHTML(bandClass(sec.id), sec.name, '<b>' + srcs.length + (srcs.length === 1 ? ' channel' : ' channels') + '</b>' + (nn ? ' · ' + nn + ' new' : '') + (med ? ' · ' + cs.daysLeft() + ' days to Step 2 CK' : ''),
+      html += topHTML(bandClass(sec.id), sec.name, '<b>' + srcs.length + (srcs.length === 1 ? ' channel' : ' channels') + '</b>' + (nn ? ' · ' + nn + ' new' : ''),
         ib('add-channel', sec.id, I.plus, 'Add channel') + (nn ? ib('seen-section', sec.id, I.check, 'Mark all seen') : '') + (med ? ib('open-marks', null, I.mark, 'Marks') : '') + ib('edit-section', sec.id, I.dots, 'Edit section'));
-      lib.seedMisses.filter(function (m) { return m.section === sec.id && !alreadyHave(m.input); }).forEach(function (m) {
-        html += '<p class="pnote err">Couldn\'t find ' + esc(m.input) + ' automatically (' + esc(m.error) + ') <button type="button" data-act="fix-seed" data-in="' + esc(m.input) + '" data-id="' + esc(sec.id) + '">Fix</button></p>';
-      });
+      var misses = lib.seedMisses.filter(function (m) { return m.section === sec.id && !alreadyHave(m.input); });
       if (!feedsOn) html += '<p class="pnote">Channels load in the Shelf app on your iPhone.</p>';
       var items = feedEntries(sec.id);
       var have = {}; items.forEach(function (e) { have[e.key] = 1; });
@@ -352,15 +365,19 @@
       items.sort(function (a, b) { return (started(b) - started(a)) || (started(a) ? (b.updated || 0) - (a.updated || 0) : 0); });
       if (srcs.length && !items.length) html += '<p class="pnote">' + (refreshing ? 'Checking for new uploads…' : 'Nothing here yet. Open a channel below to see its videos.') + '</p>';
       else if (items.length) html += listHTML(items, 'p', null, 'Latest');
-      html += '<h2 class="subh"><span>Channels</span><span class="mono">' + srcs.length + '</span></h2>';
-      if (!srcs.length) html += '<p class="pnote">No channels here yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
+      // Channels sit folded under the videos (open straight away when there are no videos yet)
+      var ch = '';
+      if (!srcs.length) ch += '<p class="pnote">No channels here yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
       srcs.forEach(function (s) {
         var st = lib.status(s.id), n = srcNewCount(s.id), hid = hidesShorts(s) ? lib.items(s.id).filter(isShort).length : 0;
         var sub = st && !st.ok ? '<span class="err">Couldn\'t update: ' + esc(st.error) + '</span>' : (n ? n + ' new' : st ? 'Updated ' + esc(Core.ago(st.fetched)) : 'Not checked yet') + (hid ? ' · ' + hid + ' Shorts hidden' : '');
-        html += '<button type="button" class="chrow" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="av">' + esc(s.name.charAt(0)) + (s.image ? '<img src="' + esc(s.image) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>' +
+        ch += '<button type="button" class="chrow" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="av">' + esc(s.name.charAt(0)) + (s.image ? '<img src="' + esc(s.image) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>' +
           '<span class="tx"><b>' + esc(s.name) + '</b><small>' + (s.type === 'podcast' ? (s.private ? 'Private podcast · ' : 'Podcast · ') : '') + sub + '</small></span><span class="chev">' + I.chev + '</span></button>';
       });
-      html += '<button type="button" class="more" data-act="add-channel" data-id="' + esc(sec.id) + '"><span>+ Add channel</span><span class="mono">a link, @handle or name</span></button>';
+      // A channel Shelf couldn't find on its own is one quiet line with a way to add it
+      misses.forEach(function (m) { ch += '<button type="button" class="more quiet" data-act="fix-seed" data-in="' + esc(m.input) + '" data-id="' + esc(sec.id) + '"><span>' + esc(m.input.replace(/^@/, '')) + ' · not found</span><span class="mono">+ Add it</span></button>'; });
+      ch += '<button type="button" class="more" data-act="add-channel" data-id="' + esc(sec.id) + '"><span>+ Add channel</span><span class="mono">a link, @handle or name</span></button>';
+      html += fold('Channels', ch, srcs.length, !items.length);
     } else if (v.name === 'channel') {
       var s = lib.source(v.id);
       if (!s) { stack.pop(); return renderPage(); }
@@ -531,7 +548,7 @@
     wantRate = rateFor(v); renderRateUI(v); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
-    renderTimerUI('v');
+    vTmOpen = false; renderTimerUI('v');
     if (ytFailed && !playerReady) {
       current = null;
       showError("Can't reach YouTube. Check your internet, or turn off any content blocker, then reopen Shelf.", v);
@@ -696,6 +713,7 @@
     renderTimerUI(which);
     if (which === 'a') renderAudio();
   }
+  var vTmOpen = false;
   function renderTimerUI(which, msg) {
     var t = timerFor(which), now = Date.now();
     Array.prototype.forEach.call(document.querySelectorAll((which === 'v' ? '#vSeg' : '#nSeg') + ' button'), function (b) {
@@ -703,7 +721,9 @@
       b.setAttribute('aria-pressed', String(!!t && (t.mode === 'end' ? m === 'end' : String(t.minutes) === m)));
     });
     if (which === 'v') {
-      var lab = $('#vStops');
+      // The numbers stay folded until you open them, or while a timer runs
+      var lab = $('#vStops'), show = !!t || vTmOpen;
+      $('#vSeg').hidden = !show; $('#vTmBtn').setAttribute('aria-expanded', String(show));
       if (!t) lab.textContent = msg || vTimerMsg || 'Off';
       else lab.innerHTML = t.mode === 'end' ? 'stops when it ends' : '<b>' + SleepTimer.countdown(SleepTimer.remaining(t, now)) + '</b> · stops ' + esc(clockText(t.endsAt));
       return;
@@ -732,7 +752,7 @@
   function renderRateUI(v) {
     v = v || current && videos[current];
     Array.prototype.forEach.call(document.querySelectorAll('#vRate button'), function (b) { b.setAttribute('aria-pressed', String(+b.getAttribute('data-r') === wantRate)); });
-    $('#vRateLab').textContent = !v ? '' : wantRate === 1 ? chanName(v) + ' plays at 1×' : chanName(v) + ' remembers ' + wantRate + '×';
+    $('#vRate').setAttribute('aria-label', !v ? 'Speed' : 'Speed for ' + chanName(v) + ', remembered for the channel');
   }
   function podKey(guid) { var r = arec[guid] || {}, m = aMeta[guid] || {}; return 'a:' + (r.source || m.source || r.podcast || 'pod'); }
   function podRate(guid) { var r = prefs.rates && prefs.rates[podKey(guid)]; return r > 0 ? r : prefs.arate > 0 ? prefs.arate : 1; }
@@ -977,7 +997,7 @@
     $('#secH').textContent = s ? 'Edit section' : 'New section';
     $('#secName').value = s ? s.name : '';
     secKind = s ? s.kind : 'video'; paintKind();
-    $('#secMore').hidden = !s;
+    $('#secMore').hidden = !s; $('#secNew').hidden = !s;
     $('#secDel').textContent = 'Delete section';
     $('#secMsg').textContent = ''; $('#secMsg').className = 'msgline';
     openDlg($('#secDlg'));
@@ -1032,10 +1052,15 @@
     if (pr.notch >= 0) h += '<span class="nk" style="left:' + pc(pr.notch + 0.5) + '"></span>';
     return '<span class="rl dense" aria-hidden="true">' + h + '</span>';
   }
-  function courseSub(c, pr, arr) {
+  function courseShort(c, pr, arr) {
     var st = cs.status(c.id);
-    if (!arr.length) return st.loading ? 'Loading episodes…' : !st.ok ? 'Couldn\'t load it. Tap to see why.' : c.seed ? 'Loading episodes…' : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app on your iPhone';
-    if (pr.state === 'done') return 'Done · ' + pr.done + '/' + pr.total;
+    if (!arr.length) return st.loading ? 'Loading episodes…' : !st.ok ? 'Couldn\'t load it. Tap to see why.' : c.seed ? 'Loading episodes…' : feedsOn || prefs.apiKey ? 'Not loaded yet' : 'Episodes load in the Shelf app';
+    if (pr.state === 'done') return 'Done';
+    if (pr.state === 'new') return pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '');
+    return (pr.total - pr.done) + ' left';
+  }
+  function courseSub(c, pr, arr) {
+    if (!arr.length || pr.state === 'done') return courseShort(c, pr, arr);
     var pc = cs.pace(c.id), per = pc && pc.perDay ? Courses.perDay(pc.perDay) : '';
     if (pr.state === 'new') return pr.total + ' videos' + (pr.hours ? ' · ' + pr.hours : '') + (per ? ' · <b>' + per + '</b> by the exam' : '');
     var late = pc.finishBy && pc.finishBy > Courses.EXAM.getTime();
@@ -1046,7 +1071,7 @@
     var h = '<div class="course ' + pr.state + (open ? ' open' : '') + '">' +
       '<button type="button" class="cr" data-act="course-open" data-id="' + esc(c.id) + '" aria-expanded="' + open + '" aria-label="' + esc(c.name + ', ' + pr.done + ' of ' + pr.total + ' watched. ' + (open ? 'Close' : 'Open')) + '">' +
       '<span class="cl">' + esc(c.name) + '</span>' + rulerHTML(c, pr, arr) + '<span class="cn mono">' + (arr.length ? pr.done + '/' + pr.total : '–') + '</span>' +
-      '<span class="cx mono">' + courseSub(c, pr, arr) + '</span>' + (nx && pr.state !== 'new' ? '<span class="cx mono">Next · ' + esc(epLabel(nx, pr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (spotOf(nx) ? ' · ' + esc(spotOf(nx)) : '') + '</span>' : '') + '</button>';
+      '<span class="cx mono">' + (open ? courseSub(c, pr, arr) : courseShort(c, pr, arr)) + '</span>' + (open && nx && pr.state !== 'new' ? '<span class="cx mono">Next · ' + esc(epLabel(nx, pr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (spotOf(nx) ? ' · ' + esc(spotOf(nx)) : '') + '</span>' : '') + '</button>';
     if (nx) h += '<button type="button" class="cgo" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '" aria-label="' + esc((pr.state === 'new' ? 'Start ' : 'Play next: ') + epLabel(nx, pr.notch)) + '">' + I.play + '</button>';
     else h += '<span class="cgo" aria-hidden="true">' + (pr.state === 'done' ? '✓' : '') + '</span>';
     var pins = arr.map(function (x, i) { return c.pins[x.id] ? { x: x, i: i } : null; }).filter(Boolean);
@@ -1106,13 +1131,39 @@
       '<div class="week" role="img" aria-label="Episodes ticked each day, last 7 days: ' + td.week.join(', ') + '">' + td.week.map(function (n) { return '<i class="' + (n ? '' : 'z') + '" style="height:' + (n ? Math.max(15, Math.round(n / max * 100)) : 8) + '%"></i>'; }).join('') + '</div>' +
       '</div></div>';
   }
+  // Pace: everything with numbers lives here, one tap away from Courses
+  function leftSecs(c) { return cs.items(c.id).reduce(function (a, x) { return a + (cs.isDone(c.id, x.id) ? 0 : x.dur || 0); }, 0); }
+  function hrs(sec) { var h = sec / 3600; return h >= 10 ? Math.round(h) + ' h' : h >= 1 ? (Math.round(h * 10) / 10) + ' h' : Math.max(1, Math.round(sec / 60)) + ' min'; }
+  function paceHTML() {
+    var h = examHTML(), open = cs.list().filter(function (c) { var pr = cs.progress(c.id); return pr.total && pr.state !== 'done'; }), tot = 0, tsec = 0;
+    h += '<ul class="plist">' + open.map(function (c) {
+      var pr = cs.progress(c.id), pc = cs.pace(c.id), left = pr.total - pr.done, sec = leftSecs(c); tot += left; tsec += sec;
+      return '<li><b>' + esc(c.name) + '</b><span class="mono">' + left + ' left' + (sec ? ' · ' + hrs(sec) : '') + (pc && pc.perDay ? ' · ' + esc(Courses.perDay(pc.perDay)) : '') + '</span></li>';
+    }).join('');
+    var td = cs.today();
+    if (open.length > 1) h += '<li class="tot"><b>All</b><span class="mono">' + tot + ' left' + (tsec ? ' · ' + hrs(tsec) : '') + (td.perDay ? ' · ' + esc(Courses.perDay(td.perDay)) : '') + '</span></li>';
+    return h + '</ul>';
+  }
+  function paceText() {
+    var d = new Date(), days = cs.daysLeft(), td = cs.today(), lines = [];
+    lines.push('My USMLE Step 2 CK study plan, from my Shelf app (' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() + ').');
+    lines.push(cs.examPast() ? 'My exam was on 30 November 2026.' : 'Exam: 30 November 2026, ' + days + (days === 1 ? ' day' : ' days') + ' from today.');
+    lines.push('Mehlman Medical video courses (YouTube playlists):');
+    cs.list().forEach(function (c) {
+      var pr = cs.progress(c.id); if (!pr.total) return;
+      var sec = leftSecs(c);
+      lines.push('- ' + c.name + ': ' + pr.done + ' of ' + pr.total + ' watched' + (pr.state === 'done' ? ' (done)' : ', ' + (pr.total - pr.done) + ' left' + (sec ? ', about ' + hrs(sec) + ' of video' : '')));
+    });
+    lines.push('Watched today: ' + td.n + '. Last 7 days: ' + td.weekN + '.');
+    lines.push('Work out how many videos a day I need to finish before the exam, which order to do the courses in, and a simple week-by-week schedule that leaves the last week for review. Keep it short.');
+    return lines.join('\n');
+  }
   function courseGroups(list) {
     var groups = { go: [], new: [], done: [] }, h = '';
     list.forEach(function (c) { var s = cs.progress(c.id).state; (groups[s === 'empty' ? (c.touched || c.seed ? 'go' : 'new') : s] || groups.new).push(c); });
     groups.go.sort(function (a, b) { return (b.touched || 0) - (a.touched || 0); });
-    [['go', 'On the go'], ['new', 'Not started'], ['done', 'Done']].forEach(function (g) {
-      if (!groups[g[0]].length) return;
-      h += '<h2 class="subh"><span>' + g[1] + '</span><span class="mono">' + groups[g[0]].length + '</span></h2><div class="cgroup">' + groups[g[0]].map(courseRow).join('') + '</div>';
+    ['go', 'new', 'done'].forEach(function (g) {
+      if (groups[g].length) h += '<div class="cgroup g-' + g + '">' + groups[g].map(courseRow).join('') + '</div>';
     });
     return h;
   }
@@ -1121,20 +1172,22 @@
     var chans = {}; all.forEach(function (c) { if (c.channel) chans[c.channel] = 1; });
     var who = Object.keys(chans).length === 1 ? Object.keys(chans)[0] : sec.name;
     h += topHTML(bandClass(sec.id), 'Courses', esc(who) + ' · ' + all.length + (all.length === 1 ? ' course' : ' courses'),
-      ib('open-marks', null, I.mark, 'Marks') + ib('add-course', sec.id, I.plus, 'Add course'), cs.list().length ? examHTML() : '');
-    if (sec.id === Courses.SEED.section) cs.misses.forEach(function (m) {
-      h += '<p class="pnote err">Couldn\'t find your ' + esc(m.name) + ' playlist on Mehlman\'s channel (' + esc(m.error) + '). <button type="button" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '">Fix</button></p>';
-    });
+      ib('open-marks', null, I.mark, 'Marks') + ib('add-course', sec.id, I.plus, 'Add a playlist'));
+    if (cs.list().length) h += '<button type="button" class="more" data-act="open-pace"><span>Pace</span><span class="mono">' + (cs.examPast() ? 'what\'s left' : cs.daysLeft() + ' days to Step 2 CK') + ' ›</span></button>';
     if (!feedsOn && !prefs.apiKey) h += '<p class="pnote">Episodes load in the Shelf app on your iPhone.</p>';
     h += courseGroups(all);
     if (!all.length) h += '<p class="pnote">No courses yet. Add a playlist and Shelf ticks it episode by episode.</p>';
+    // A Mehlman playlist Shelf couldn't find on its own: one quiet line that adds it
+    if (sec.id === Courses.SEED.section) cs.misses.forEach(function (m) {
+      h += '<button type="button" class="more quiet" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '"><span>' + esc(m.name) + ' · not found</span><span class="mono">+ Add playlist</span></button>';
+    });
     // Courses kept in other sections follow under their own band colour
     lib.sections().forEach(function (o) {
       if (o.id === sec.id) return;
       var mine = cs.list().filter(function (c) { return courseSec(c) === o.id; });
       if (mine.length) h += '<h2 class="subh band ' + bandClass(o.id) + '"><span>' + esc(o.name) + '</span><span class="mono">' + mine.length + '</span></h2><div class="cgroup">' + mine.map(courseRow).join('') + '</div>';
     });
-    h += '<button type="button" class="more" data-act="add-course" data-id="' + esc(sec.id) + '"><span>+ Add course</span><span class="mono">a playlist link, or type a name</span></button>';
+    h += '<button type="button" class="more" data-act="add-course" data-id="' + esc(sec.id) + '"><span>+ Add a playlist</span><span class="mono">a link, or type a name</span></button>';
     return h;
   }
   function courseSec(c) { return lib.section(c.section) ? c.section : lib.sections()[0].id; }
@@ -1333,6 +1386,10 @@
       case 'fix-seed': openAdd(b.getAttribute('data-in'), id); break;
       case 'add-pick': addSec = id; Array.prototype.forEach.call(document.querySelectorAll('#addPicks button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); $('#addGo').textContent = 'Add to ' + lib.section(id).name; break;
       case 'add-section': openSec(null); break;
+      case 'v-timer-toggle': vTmOpen = !vTmOpen; renderTimerUI('v'); break;
+      case 'open-pace': $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); break;
+      case 'pace-copy': copyText(paceText(), function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy for Claude'; }, 2500); toast('Copied. Paste it into Claude.'); }); break;
+      case 'toggle-band': prefs.open = prefs.open || {}; if (prefs.open[id]) delete prefs.open[id]; else prefs.open[id] = 1; savePrefs(); renderHome(); var tg = document.querySelector('.band [data-act="toggle-band"][data-id="' + id + '"]'); if (tg) tg.focus({ preventScroll: true }); break;
       case 'edit-section': openSec(id); break;
       case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
       case 'sec-delete':
@@ -1492,10 +1549,6 @@
       else if (srcs.length && failed.length === srcs.length) out.push({ ok: 0, text: "Couldn't check any of your channels. Check your internet, then tap the date at the top to try again." });
       else if (failed.length) out.push({ ok: 0, text: "Couldn't update " + failed.map(function (s) { return s.name + ' (' + lib.status(s.id).error + ')'; }).join(', ') + '. Open the channel and tap Refresh.' });
       else if (srcs.length) out.push({ ok: 1, text: 'Checked ' + srcs.length + ' channels for new uploads' + (lastRefresh ? ' ' + Core.ago(lastRefresh) : '') });
-      lib.seedMisses.filter(function (m) { return !alreadyHave(m.input); }).forEach(function (m) {
-        var sec = lib.section(m.section);
-        out.push({ ok: 0, text: "Couldn't find " + m.input + ' automatically. Open ' + (sec ? sec.name : 'its section') + ' and tap Fix next to it.' });
-      });
     } else out.push({ ok: 1, text: 'Channels and new uploads load in the Shelf app on your iPhone; here you can paste and resume' });
     if (cs && cs.list().length && (feedsOn || prefs.apiKey)) {
       var cbad = cs.list().filter(function (c) { return !cs.status(c.id).ok; });
@@ -1503,7 +1556,6 @@
       else if (cbad.length) out.push({ ok: 0, text: "Couldn't load " + cbad.map(function (c) { return c.name; }).join(', ') + ' from YouTube. Open Courses and tap Retry; your ticks are safe.' });
       else out.push({ ok: 1, text: 'Tracking ' + cs.list().length + (cs.list().length === 1 ? ' course' : ' courses') + ' episode by episode' });
     }
-    if (cs && feedsOn) cs.misses.forEach(function (m) { out.push({ ok: 0, text: "Couldn't find your " + m.name + " playlist on Mehlman's channel. Open Courses and tap Fix next to it." }); });
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
@@ -1536,10 +1588,9 @@
   function updateDot() {
     var c = checks(), vd = verdictOf(c), btn = $('#statusBtn'), txt = $('#statusText');
     $('#statusDot').className = 'dot ' + vd.state;
-    // The square shows only colour when all is well; a problem widens it to say so
-    btn.classList.toggle('bad', vd.state === 'bad');
+    // Just the coloured square: green, amber while starting, red when something needs a look
     txt.textContent = vd.state === 'bad' ? (vd.bad.length === 1 ? '1 problem' : vd.bad.length + ' problems') : vd.label;
-    txt.className = vd.state === 'bad' ? '' : 'sr';
+    txt.className = 'sr';
     checkedAt = Date.now();
     btn.setAttribute('aria-label', 'Self-check: ' + vd.label + '. Show details.');
     if ($('#checkDlg').open) fillCheck();

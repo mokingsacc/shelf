@@ -77,14 +77,12 @@ svg{display:block;flex:none}
 .note{margin:0;padding:12px var(--g);font-size:13px;border-bottom:2px solid var(--hair);background:var(--soft)}
 
 /* Continue card and Up next */
-.now{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:center;width:100%;padding:12px var(--g);border-bottom:3px solid var(--rule);position:relative}
+.now{display:grid;grid-template-columns:minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;padding:12px var(--g);border-bottom:3px solid var(--rule);position:relative}
 .th{display:block;aspect-ratio:16/9;width:100%;max-width:100%;position:relative;overflow:hidden;background:var(--soft)}
 .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .th .len{position:absolute;right:4px;bottom:4px;font:600 10px/1.3 var(--mono);background:rgba(0,0,0,.78);color:#fff;padding:1px 4px}
 .th.sq{aspect-ratio:16/9}
 .th.sq img{object-fit:contain;background:#000}
-.now .playsq{position:absolute;left:0;bottom:0;width:36px;height:36px;background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center}
-.now .playsq svg{width:16px;height:16px}
 .now .tx{min-width:0}
 .now b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:17px;line-height:1.1;font-weight:800;letter-spacing:-.02em;font-stretch:108%;margin-top:3px;overflow-wrap:anywhere}
 .now .meta{display:block;font-size:12px;line-height:1.35;color:var(--grey);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -105,6 +103,13 @@ svg{display:block;flex:none}
 .band.c3{--pin:#ff6a52;--bg:var(--b3-bg);--fg:var(--b3-fg);--tb:var(--b3-tag-bg);--tf:var(--b3-tag-fg)}
 .band.c0{--bg:var(--b0-bg);--fg:var(--b0-fg);--tb:var(--b0-tag-bg);--tf:var(--b0-tag-fg)}
 .band .hd{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;min-height:var(--tap);width:100%}
+.band .hd .tg{display:flex;align-items:center;gap:8px;min-width:0;min-height:var(--tap);text-align:left}
+.band .hd .tg h2{flex:0 1 auto}
+.band .hd .car{flex:none;width:22px;height:22px;opacity:.8;transition:transform .15s}
+.band .hd .car svg{width:22px;height:22px;display:block;transform:rotate(-90deg)}
+.band.open .hd .car svg{transform:none}
+.band .hd .tm{min-height:var(--tap);min-width:var(--tap);display:flex;align-items:center;justify-content:flex-end}
+.band:not(.open){padding-bottom:12px}
 .band .hd h2{margin:0;font-size:30px;line-height:.9;font-weight:900;font-stretch:125%;letter-spacing:-.035em;text-transform:uppercase;white-space:nowrap;overflow:hidden;min-width:0;padding:2px 0}
 .band .hd .tm{font-size:12px;font-weight:600;white-space:nowrap}
 .band .sub{margin:0 0 2px;font-size:12px;opacity:.88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -123,12 +128,11 @@ svg{display:block;flex:none}
 .nw{display:inline-block;background:var(--tb,var(--ink));color:var(--tf,var(--paper));padding:1px 5px;font:800 10px/1.4 var(--font);letter-spacing:.1em;margin-right:6px;vertical-align:2px}
 .pr{display:block;height:3px;margin-top:6px;background:color-mix(in srgb,currentColor 22%,transparent);position:relative}
 .pr i{position:absolute;left:0;top:0;bottom:0;background:currentColor}
-.addsec{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:52px;padding:0 var(--g);border-top:3px solid var(--rule);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
-.addsec span.mono{text-transform:none;letter-spacing:0;font-weight:400;color:var(--grey)}
-@media (min-width:900px){
-  .bands{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
-  .band{min-height:300px}
-  .band .hd h2{font-size:38px}
+/* iPad and wide windows: colour runs edge to edge, the content sits in one readable column */
+@media (min-width:700px){
+  :root{--g:max(28px,calc((100vw - 720px) / 2))}
+  dialog{--g:24px}
+  #vsheet .vid{width:min(100%,calc((100vh - 330px) * 16 / 9));margin:0 auto}
 }
 
 /* ---------- Tab bar ---------- */
@@ -193,6 +197,7 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .chrow .chev svg{width:20px;height:20px}
 .more{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:0 var(--g);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-bottom:2px solid var(--hair);min-height:52px}
 .more .mono{text-transform:none;letter-spacing:0;font-weight:400;color:var(--grey);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.more.quiet{color:var(--grey);font-weight:600}
 .pnote{margin:0;padding:14px var(--g);font-size:14px;color:var(--grey);border-bottom:2px solid var(--hair)}
 .pnote.err{color:var(--bad)}
 .pnote button{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px;min-height:var(--tap)}
@@ -237,6 +242,13 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .week i.z{opacity:.25}
 .week i:last-child{outline:2px solid currentColor;outline-offset:1px}
 .cgroup{color:var(--ink)}
+.cgroup+.cgroup{border-top:3px solid var(--rule)}
+.cnote.pace{font-size:12px}
+.plist{list-style:none;margin:14px 0 4px;padding:0;border-top:3px solid var(--rule)}
+.plist li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 0;border-bottom:2px solid var(--hair)}
+.plist li b{font-weight:800;text-transform:uppercase;letter-spacing:.04em;font-size:13px}
+.plist li .mono{font-size:12px;text-align:right}
+.plist li.tot{border-bottom:3px solid var(--rule)}
 .course{display:grid;grid-template-columns:minmax(0,1fr) var(--tap);gap:0 10px;border-bottom:2px solid var(--hair);padding:8px var(--g);align-items:start}
 .course .cr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:center;min-height:var(--tap);width:100%;min-width:0}
 .course .cl{font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:9em}
@@ -336,6 +348,8 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .lab{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--pl-mute);margin:16px var(--g) 0;flex:none}
 .lab .mono{font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .lab .mono b{color:var(--pl-fg);font-weight:600}
+.lab.tgl{width:calc(100% - 2*var(--g));min-height:var(--tap);margin-top:8px;border-bottom:2px solid var(--pl-dim)}
+#checkMore .grid2{margin:8px 0 12px}
 .chips{display:grid;grid-template-columns:repeat(5,1fr);margin:8px var(--g) 0;border:2px solid var(--pl-dim);flex:none}
 .chips button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;text-align:center;min-height:var(--tap);display:flex;align-items:center;justify-content:center;font:600 14px var(--mono);border-left:2px solid var(--pl-dim)}
 .chips button:first-child{border-left:0}
@@ -457,8 +471,8 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   </header>
   <p class="note" id="webNote" hidden></p>
   <button type="button" class="now" id="cont" data-act="resume" hidden>
-    <span class="th" id="contThumb"><img alt="" id="contImg" hidden><span class="len mono" id="contLen" hidden></span><span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span></span>
     <span class="tx"><span class="k" id="contK">Continue</span><b id="contTitle"></b><span class="meta mono" id="contMeta"></span></span>
+    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
     <span class="bar" aria-hidden="true"><i id="contBar"></i></span>
   </button>
   <button type="button" class="next" id="next" data-act="ep-play" hidden>
@@ -466,7 +480,6 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
   </button>
   <div class="bands" id="bands"></div>
-  <button type="button" class="addsec" data-act="add-section"><span>+ Add section</span><span class="mono">for a new part of your day</span></button>
 </main>
 
 <section class="page" id="page" hidden></section>
@@ -491,10 +504,10 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <button type="button" class="scrub" id="vScrub" role="slider" aria-label="Position in the video" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><span class="line"><i id="vLine"></i><u id="vKnob"></u></span><span class="nums mono"><b id="vT">0:00</b><span id="vLeft"></span></span></button>
   <div class="vcourse" id="vCourse" hidden></div>
   <div class="nextup" id="vNext" hidden></div>
-  <div class="lab"><span>Speed</span><span class="mono" id="vRateLab"></span></div>
+  <div class="lab"><span>Speed</span></div>
   <div class="chips" id="vRate" role="group" aria-label="Speed"></div>
-  <div class="lab"><span>Sleep timer</span><span class="mono" id="vStops"></span></div>
-  <div class="chips tm" id="vSeg" role="group" aria-label="Sleep timer"></div>
+  <button type="button" class="lab tgl" id="vTmBtn" data-act="v-timer-toggle" aria-expanded="false" aria-controls="vSeg"><span>Sleep timer</span><span class="mono" id="vStops"></span></button>
+  <div class="chips tm" id="vSeg" role="group" aria-label="Sleep timer" hidden></div>
   <div class="twin" id="vTwin"><button type="button" class="act" id="vMark" data-act="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Mark</span></button><button type="button" class="act solid" id="vNextBtn" data-act="ep-play" hidden></button></div>
   <div class="spacer"></div>
   <div class="ctl"><button type="button" data-act="v-back" aria-label="Back 15 seconds">−15</button><button type="button" id="vPlay" data-act="v-toggle" aria-label="Pause" class="on"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button type="button" data-act="v-fwd" aria-label="Forward 15 seconds">+15</button></div>
@@ -559,6 +572,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <div class="picks" id="secKind" role="group" aria-label="Kind"><button type="button" data-kind="video" aria-pressed="true">YouTube channels</button><button type="button" data-kind="audio" aria-pressed="false">Podcasts</button></div>
     <div class="msgline" id="secMsg" role="status"></div>
     <button type="submit" class="primary">Save</button>
+    <button type="button" class="ghost" data-act="add-section" id="secNew">+ New section</button>
     <div class="grid3" id="secMore"><button type="button" class="ghost" data-act="sec-up">Move up</button><button type="button" class="ghost" data-act="sec-down">Move down</button><button type="button" class="ghost danger" data-act="sec-delete" id="secDel">Delete</button></div>
   </form>
 </dialog>
@@ -590,10 +604,22 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="db">
     <div class="verdict" id="checkVerdict"><i></i><span><b>Checking…</b><small class="mono"></small></span></div>
     <div id="checkProblems"></div>
-    <div class="grid2" id="checkActs"></div>
     <details class="all" id="checkAll"><summary><span id="checkAllSum">Show all checks</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><ul class="checks" id="checkList"></ul></details>
-    <div class="lastline"><button type="button" data-act="settings">Search key</button><button type="button" id="trackBtn" data-act="yt-settings" hidden>iPhone Settings for Shelf</button></div>
-    <p class="small" id="sendNote">The shelf link carries your spots to Safari on another device. Your private feeds never go in it.</p>
+    <details class="all" id="checkMore"><summary><span>More</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+      <div class="grid2" id="checkActs"></div>
+      <div class="lastline"><button type="button" data-act="settings">Search key</button><button type="button" id="trackBtn" data-act="yt-settings" hidden>iPhone Settings for Shelf</button></div>
+      <p class="small" id="sendNote">The shelf link carries your spots to Safari on another device. Your private feeds never go in it.</p>
+    </details>
+  </div>
+</dialog>
+
+<dialog id="paceDlg" aria-labelledby="paceH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="paceH">Pace</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db">
+    <div id="paceBody"></div>
+    <button type="button" class="primary" id="paceCopy" data-act="pace-copy">Copy for Claude</button>
+    <p class="small">Copies your numbers with a question. Paste it into Claude to get a day-by-day plan.</p>
   </div>
 </dialog>
 
