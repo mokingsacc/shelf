@@ -588,9 +588,12 @@ console.log('\n== D Day or night (light from an hour after sunrise, dark from an
 await settle(p);
 const bg = () => p.evaluate(() => getComputedStyle(document.body).backgroundColor);
 ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'light' && await bg() === 'rgb(255, 255, 255)', 'D 1 pm: Shelf is light even with the iPhone in dark mode (' + await bg() + ')');
-ok(await p.evaluate(() => document.documentElement.classList.contains('sb-dark')), 'D the strip under the clock stays dark, so the iPhone\'s white clock stays readable');
+const strip = () => p.evaluate(() => { const c = getComputedStyle(document.documentElement, '::before'); return c.content === 'none' ? 'none' : c.backgroundColor; });
+ok(await strip() === 'rgb(12, 12, 16)', 'D the strip under the clock stays dark, so the iPhone\'s white clock stays readable (' + await strip() + ')');
 ok(await p.locator('#lookBtn svg circle').count() === 1, 'D the top shows a sun');
+ok(await p.evaluate(() => JSON.parse(localStorage.getItem('shelf.look')).u > Date.now()), 'D the look is kept for the next launch with the time it changes');
 await p.locator('#lookBtn').click(); await p.waitForTimeout(150);
+ok(!(await p.locator('#lookDlg [data-act="look-here"]').isVisible()), 'D in this app build Use my location is hidden (it has no location permission yet)');
 const when = await p.locator('#lookWhen').textContent();
 ok(await p.locator('#lookDlg[open]').count() === 1 && /^Light until \d{1,2}:\d\d pm, then dark\.$/.test(when) && /Sun times for London/.test(await p.locator('#lookWhere').textContent()), 'D the sun sheet says when it turns dark: ' + when);
 ok(await p.locator('#lookPicks [data-id="auto"][aria-pressed="true"]').count() === 1, 'D Auto is picked');
@@ -609,7 +612,7 @@ ok(/No town called "Nowhereville"/.test(await p.locator('#lookMsg').textContent(
 await p.keyboard.press('Escape');
 // Evening comes: it turns dark by itself, without reopening
 await p.evaluate(() => { window.__hour = 22; window.__shelf.applyLook(); }); await p.waitForTimeout(100);
-ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dark' && await p.locator('#lookBtn svg circle').count() === 0 && !(await p.evaluate(() => document.documentElement.classList.contains('sb-dark'))), 'D at 10 pm it is dark by itself, with a moon');
+ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dark' && await p.locator('#lookBtn svg circle').count() === 0 && await strip() === 'none', 'D at 10 pm it is dark by itself, with a moon, and no strip is needed');
 await p.locator('#lookBtn').click(); await p.waitForTimeout(100);
 ok(/^Dark until \d{1,2}:\d\d am tomorrow, then light\.$/.test(await p.locator('#lookWhen').textContent()), 'D at night it says when it turns light: ' + await p.locator('#lookWhen').textContent());
 await p.keyboard.press('Escape');

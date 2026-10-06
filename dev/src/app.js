@@ -1887,7 +1887,7 @@
       case 'a-fwd': engine.seekBy(engine.FWD); break;
       case 'a-rate': var ast = engine.state(), nr = RATES[(RATES.indexOf(ast.rate) + 1) % RATES.length]; engine.setRate(nr); if (ast.episode) { prefs.rates = prefs.rates || {}; prefs.rates[podKey(ast.episode.guid)] = nr; savePrefs(); } break;
       case 'check': openCheck(); break;
-      case 'look': $('#lookMsg').textContent = ''; fillLook(); openDlg($('#lookDlg')); break;
+      case 'look': $('#lookMsg').textContent = ''; $('#lookDlg [data-act="look-here"]').hidden = Native.inApp && !Native.canLocate; fillLook(); openDlg($('#lookDlg')); break;
       case 'look-set': prefs.look = id; savePrefs(); applyLook(); fillLook(); break;
       case 'look-here': lookHere(); break;
       case 'dismiss': var d = b.closest('dialog'); if (d) d.close(); break;
@@ -1996,9 +1996,9 @@
     if (!prefs) return;
     var st = lookState(), theme = st.light ? 'light' : 'dark', root = document.documentElement, phoneDark = !!(sysDark && sysDark.matches);
     if (root.getAttribute('data-theme') !== theme) root.setAttribute('data-theme', theme);
-    try { localStorage.setItem('shelf.look', theme); } catch (e) {}
-    root.classList.toggle('sb-dark', Native.inApp && phoneDark && theme === 'light');
-    root.classList.toggle('sb-light', Native.inApp && !phoneDark && theme === 'dark');
+    // Kept for the next launch's first paint, with the time it stops being right (Auto only)
+    try { localStorage.setItem('shelf.look', JSON.stringify({ t: theme, u: st.mode === 'auto' ? st.sun.next : 0, app: Native.inApp ? 1 : 0 })); } catch (e) {}
+    root.classList.toggle('app', Native.inApp); root.classList.toggle('ph-dark', phoneDark); root.classList.toggle('ph-light', !phoneDark);
     Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function (m) { m.setAttribute('content', theme === 'light' ? '#FFFFFF' : '#0A0A0E'); });
     var b = $('#lookBtn');
     if (b.getAttribute('data-g') !== theme) { b.innerHTML = theme === 'light' ? I.sun : I.moon; b.setAttribute('data-g', theme); }
