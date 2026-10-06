@@ -195,6 +195,21 @@ var Courses = (function () {
     for (var i = 1; i < out.length; i++) if (out[i].published >= out[i - 1].published) out[i].published = out[i - 1].published - 1000;
     return out;
   }
+  // The channels on the signed-in account's Subscriptions page (/feed/channels), A to Z
+  function subChannels(html) {
+    var data = initialData(html), out = [], seen = {};
+    if (!data) return null;
+    function thumbOf(o) { var u = ''; walk(o, function (k, v) { if (!u && k === 'url' && typeof v === 'string' && /ggpht|ytimg|googleusercontent/.test(v)) u = v; }); return u ? (u.indexOf('//') === 0 ? 'https:' + u : u) : ''; }
+    function push(id, title, thumb) { if (/^UC[\w-]{22}$/.test(id || '') && title && !seen[id]) { seen[id] = 1; out.push({ id: id, title: title, thumb: thumb || '' }); } }
+    walk(data, function (k, v) {
+      if ((k === 'channelRenderer' || k === 'gridChannelRenderer') && v && v.channelId) { push(v.channelId, txt(v.title), thumbOf(v.thumbnail)); return false; }
+      if (k === 'lockupViewModel' && v && /CHANNEL/.test(v.contentType || '') && v.contentId) {
+        var md = v.metadata && v.metadata.lockupMetadataViewModel;
+        push(v.contentId, txt(md && md.title), thumbOf(v.contentImage)); return false;
+      }
+    });
+    return out.sort(function (a, b) { return a.title.toLowerCase() < b.title.toLowerCase() ? -1 : 1; });
+  }
   function duration(t) { return /^\d{1,2}(:\d\d){1,2}$/.test(t || '') ? t.split(':').reduce(function (a, p) { return a * 60 + (+p); }, 0) : 0; }
   // Playlists on a channel's Playlists page
   function readPlaylists(data) {
@@ -480,7 +495,7 @@ var Courses = (function () {
     // First run in the app: find Mo's six playlists. Later runs retry only the misses.
     function seed() {
       var todo = SEED.courses.filter(function (s) {
-        return !list().some(function (c) { return c.seedName === s.name; }) && (!state.found || (state.misses || []).some(function (m) { return m.name === s.name; }));
+        return !list().some(function (c) { return c.seedName === s.name; }) && !(state.dropped && state.dropped[s.name]) && (!state.found || (state.misses || []).some(function (m) { return m.name === s.name; }));
       });
       if (!todo.length) return Promise.resolve([]);
       return channelPlaylists(SEED.channel).then(function (all) {
@@ -499,6 +514,8 @@ var Courses = (function () {
       });
     }
     // A miss fixed by hand (pasted link) clears it
+    // A "not found" line Mo doesn't want: gone for good
+    function dropMiss(name) { state.dropped = state.dropped || {}; state.dropped[name] = 1; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); save(); }
     function fixMiss(name, c) { c.seedName = name; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
     function loadAll(force, onEach) {
       var ids = list().map(function (c) { return c.id; }), i = 0;
@@ -542,12 +559,12 @@ var Courses = (function () {
     return {
       pace: pace, today: today, daysLeft: daysLeft, examPast: examPast,
       list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
-      tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, move: move, remove: remove,
+      tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, move: move, remove: remove, dropMiss: dropMiss,
       load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists,
       get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
     };
   }
   return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
-    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot, historyLatest: historyLatest, historyItems: historyItems };
+    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot, historyLatest: historyLatest, historyItems: historyItems, subChannels: subChannels };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;

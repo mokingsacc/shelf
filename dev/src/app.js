@@ -323,7 +323,7 @@
     unwind(function () { push(view); }); return true;
   }
   function renderTabs() {
-    var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && v.name === 'search' ? 'searchBtn' : 'todayBtn';
+    var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && (v.name === 'search' || v.name === 'subch') ? 'searchBtn' : 'todayBtn';
     ['todayBtn', 'coursesBtn', 'searchBtn'].forEach(function (id) { var b = document.getElementById(id); if (id === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   }
   function itemHTML(e, scope, opts) {
@@ -355,6 +355,7 @@
     if (!v) return 'Today';
     if (v.name === 'section') { var s = lib.section(v.id); return s ? s.name : 'Back'; }
     if (v.name === 'channel') { var c = lib.source(v.id); return c ? c.name : 'Back'; }
+    if (v.name === 'subch') return v.title || 'Back';
     return { courses: 'Courses', search: 'Search', marks: 'Marks', pasted: 'Pasted' }[v.name] || 'Back';
   }
   function ib(act, id, icon, label, on) { return '<button type="button" class="ib' + (on ? ' on' : '') + '" data-act="' + act + '"' + (id != null ? ' data-id="' + esc(id) + '"' : '') + ' aria-label="' + esc(label) + '">' + icon + '</button>'; }
@@ -442,6 +443,7 @@
       html += coursesPage(v);
     } else if (v.name === 'search') {
       html += topHTML('c2', 'Search', '', '', '<form class="sform" id="sform"><input id="sq" type="search" enterkeyhint="search" autocomplete="off" placeholder="hyperkalemia, or paste a link" value="' + esc(v.q || '') + '" aria-label="Search YouTube, or paste a link"><button type="submit">Go</button></form>');
+      html += subsHTML();
       if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
       (v.results || []).forEach(function (r) {
         if (r.kind === 'channel') {
@@ -453,6 +455,12 @@
           html += itemHTML(e, 'p');
         }
       });
+    } else if (v.name === 'subch') {
+      var sl = v.list || [];
+      html += topHTML('c2', v.title, '<b>YouTube</b>' + (sl.length ? ' · latest ' + sl.length : ''), '',
+        '<button type="button" class="btn addch" data-act="add-channel" data-in="' + esc(v.id) + '">+ Add to your shelf</button>');
+      if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
+      if (sl.length) html += listHTML(sl.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.id, srcName: v.title, published: x.published, dur: x.dur, thumb: x.thumb }; }), 'p', null, 'Videos');
     } else if (v.name === 'marks') {
       html += marksPage();
     }
@@ -462,7 +470,7 @@
     if (v.name === 'search') {
       var f = $('#sform');
       f.addEventListener('submit', function (ev) { ev.preventDefault(); var q = $('#sq').value.trim(); if (isLinkish(q)) { prefs.lastQ = ''; handleText(q); } else runSearch(q); });
-      if (!v.results && !v.msg && !v.focused) { v.focused = true; setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50); }
+      if (!v.results && !v.msg && !v.focused && !Native.device) { v.focused = true; setTimeout(function () { var q = $('#sq'); if (q) q.focus(); }, 50); }
     }
   }
   // A pasted link in Search plays (or adds) instead of searching
@@ -500,6 +508,53 @@
       if (!Native.inApp && !prefs.apiKey && /Shelf app/.test(m)) m = 'Search without a key works in the Shelf app on your iPhone. Here, add a Google key (self-check, Search key), or search on YouTube and paste the link.';
       v.msg = m; v.err = true; renderPage();
     });
+  }
+
+  // ---------- Subscriptions (Search page) ----------
+  // The channels the YouTube account follows, read with Shelf's YouTube sign-in. A fold under the search box:
+  // tap a channel for its latest videos, no home feed, no Shorts, no recommendations
+  var SUBS_KEY = 'shelf.subs', SUBS_URL = 'https://www.youtube.com/feed/channels', subs = load(SUBS_KEY, null), subsBusy = false, subsErr = '';
+  function loadSubs(force) {
+    if (!Native.device || subsBusy || (!force && subs && Date.now() - subs.at < 6 * 3600e3)) return;
+    subsBusy = true; subsErr = '';
+    Native.youtubeGet(SUBS_URL).then(function (r) {
+      subsBusy = false;
+      if (!r || !r.signedIn) subsErr = 'Sign in to YouTube in the self-check to see your subscriptions here.';
+      else {
+        var list = Courses.subChannels(r.data || '');
+        if (list && list.length) { subs = { at: Date.now(), list: list }; store(SUBS_KEY, subs); }
+        else subsErr = r.status !== 200 ? 'YouTube said ' + r.status + '. Tap to try again.' : "Shelf couldn't read your subscriptions page. Self-check › More › Copy YouTube report, and send it to Claude.";
+      }
+      renderSubs();
+    }, function (e) { subsBusy = false; subsErr = "Couldn't reach YouTube: " + (e && e.message || e); renderSubs(); });
+    renderSubs();
+  }
+  function renderSubs() { var v = stack[stack.length - 1]; if (v && v.name === 'search') keepTyping(renderPage); }
+  function subsHTML() {
+    if (!Native.device) return '';
+    var list = (subs && subs.list) || [], k = foldKey('Subscriptions');
+    if (!(k in foldOpen)) foldOpen[k] = false;
+    var h = '<details class="fold subs" data-k="' + esc(k) + '"' + (foldOpen[k] ? ' open' : '') + '><summary><span class="sh">Subscriptions</span><span class="mono">' + (list.length || (subsBusy ? '…' : '')) + '</span>' + I.down + '</summary>';
+    if (subsErr) h += '<button type="button" class="more quiet" data-act="subs-retry"><span>' + esc(subsErr) + '</span><span class="mono">↻</span></button>';
+    else if (!list.length) h += '<p class="pnote">Reading your subscriptions…</p>';
+    if (list.length) {
+      h += '<div class="subgrid">' + list.map(function (c) {
+        var mine = !!lib.source(c.id);
+        return '<button type="button" class="sub" data-act="sub-open" data-id="' + esc(c.id) + '" data-t="' + esc(c.title) + '"><span class="av">' + esc(c.title.charAt(0)) + (c.thumb ? '<img src="' + esc(c.thumb) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + (mine ? '<i aria-label="On your shelf"></i>' : '') + '</span><span class="nm">' + esc(c.title) + '</span></button>';
+      }).join('') + '</div>';
+      h += '<button type="button" class="more quiet" data-act="subs-retry"><span>Updated ' + esc(Core.ago(subs.at)) + '</span><span class="mono">' + (subsBusy ? 'Checking…' : '↻ Refresh') + '</span></button>';
+    }
+    return h + '</details>';
+  }
+  function openSub(id, title) {
+    if (lib.source(id)) return openChannel(id);
+    var v = { name: 'subch', id: id, title: title, list: null, msg: 'Loading the latest videos…' };
+    push(v);
+    fetchText('https://www.youtube.com/channel/' + id + '/videos', { Cookie: 'SOCS=CAI; CONSENT=YES+1' }).then(function (html) {
+      var l = Courses.channelVideos(html, Date.now());
+      v.list = l || []; v.msg = l && l.length ? '' : "Couldn't read this channel's videos. Try again in a minute."; v.err = !!v.msg;
+      if (stack[stack.length - 1] === v) renderPage();
+    }, function (e) { v.msg = (e && e.message) || "Couldn't load it."; v.err = true; if (stack[stack.length - 1] === v) renderPage(); });
   }
 
   // ---------- Feeds ----------
@@ -1127,7 +1182,14 @@
         '\nmarkers: startTimeSeconds ' + (page.match(/"startTimeSeconds"/g) || []).length + ', startPercent ' + (page.match(/"startPercent"/g) || []).length + ', percentDurationWatched ' + (page.match(/"percentDurationWatched"/g) || []).length + ', &t= ' + (page.match(/(?:\\u0026|&)t=\d+s/g) || []).length +
         '\nfirst videos: ' + Courses.historyItems(page, 5).map(function (x) { return x.id + ' "' + x.title + '" t=' + x.t + ' pct=' + x.pct + ' dur=' + x.dur; }).join(' | ') +
         '\n\npage start:\n' + (at >= 0 ? page.slice(Math.max(0, at - 4000), at + 3000) : '(none)');
-      copyText(txt, function () { b.textContent = 'Copied. Paste it to Claude'; toast('Copied. Paste it in the chat with Claude.'); });
+      // Subscriptions page too, so a misread can be fixed from the real thing
+      Native.youtubeGet(SUBS_URL).then(function (r2) { return r2; }, function () { return null; }).then(function (r2) {
+        var sp = (r2 && r2.data) || '', ss = sp.indexOf('ytInitialData'), sc = Courses.subChannels(sp) || [], cm = ss >= 0 && /"(?:channelId|browseId)":"(UC[\w-]{22})"/.exec(sp.slice(ss));
+        var sat = cm ? ss + cm.index : -1;
+        txt += '\n\nsubscriptions: status ' + (r2 && r2.status) + ' · ' + sp.length + ' chars · ' + sc.length + ' found: ' + sc.slice(0, 5).map(function (c) { return c.title; }).join(' | ') +
+          '\nsubs page start:\n' + (sat >= 0 ? sp.slice(Math.max(0, sat - 1500), sat + 2500) : '(none)');
+        copyText(txt, function () { b.textContent = 'Copied. Paste it to Claude'; toast('Copied. Paste it in the chat with Claude.'); });
+      });
     }, function (e) { b.textContent = 'Copy YouTube report for Claude'; toast("Couldn't read YouTube: " + (e && e.message || e), 'warn'); });
   }
   function copyText(text, done) {
@@ -1465,7 +1527,7 @@
   });
 
   // ---------- Courses (playlists ticked episode by episode) ----------
-  var cs = null, openC = null, cwin = {}, cgrid = {}, cplace = {}, confirmCourse = null;
+  var cs = null, openC = null, cwin = {}, cgrid = {}, cplace = {}, confirmCourse = null, cEdit = false;
   function postJSON(url, body, headers) {
     if (!Native.inApp) return Promise.reject(new Error('This needs the Shelf app on your iPhone.'));
     return withTimeout(Native.httpPost(url, body, headers), 20000, 'No answer after 20 seconds.').then(function (r) {
@@ -1521,11 +1583,12 @@
       '<button type="button" class="cr" data-act="course-open" data-id="' + esc(c.id) + '" aria-expanded="' + open + '" aria-label="' + esc(c.name + ', ' + pr.done + ' of ' + pr.total + ' watched. ' + (open ? 'Close' : 'Open')) + '">' +
       '<span class="cl">' + esc(c.name) + '</span>' + rulerHTML(c, pr, arr) + '<span class="cn mono">' + (arr.length ? pr.done + '/' + pr.total : '–') + '</span>' +
       '<span class="cx mono">' + (open ? courseSub(c, pr, arr) : courseShort(c, pr, arr)) + '</span>' + (open && nx && pr.state !== 'new' ? '<span class="cx mono">Next · ' + esc(epLabel(nx, pr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (spotOf(nx) ? ' · ' + esc(spotOf(nx)) : '') + '</span>' : '') + '</button>';
-    if (nx) h += '<button type="button" class="cgo" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '" aria-label="' + esc((pr.state === 'new' ? 'Start ' : 'Play next: ') + epLabel(nx, pr.notch)) + '">' + I.play + '</button>';
+    if (cEdit) h += '<button type="button" class="cgo cdel' + (confirmCourse === c.id ? ' sure' : '') + '" data-act="course-remove" data-id="' + esc(c.id) + '" aria-label="' + esc((confirmCourse === c.id ? 'Tap again to remove ' : 'Remove ') + c.name) + '">' + (confirmCourse === c.id ? 'Sure?' : I.x) + '</button>';
+    else if (nx) h += '<button type="button" class="cgo" data-act="ep-play" data-id="' + esc(c.id) + '" data-v="' + esc(nx.id) + '" aria-label="' + esc((pr.state === 'new' ? 'Start ' : 'Play next: ') + epLabel(nx, pr.notch)) + '">' + I.play + '</button>';
     else h += '<span class="cgo" aria-hidden="true">' + (pr.state === 'done' ? '✓' : '') + '</span>';
     var pins = arr.map(function (x, i) { return c.pins[x.id] ? { x: x, i: i } : null; }).filter(Boolean);
     if (pins.length && !open) h += '<span class="cpin mono"><span class="pin">‼</span> ' + esc(epLabel(pins[0].x, pins[0].i)) + ' · ' + esc(shortTitle(pins[0].x.title)) + (pins.length > 1 ? ' · +' + (pins.length - 1) : '') + '</span>';
-    if (open) h += courseBody(c, pr, arr);
+    if (open && !cEdit) h += courseBody(c, pr, arr);
     return h + '</div>';
   }
   function courseBody(c, pr, arr) {
@@ -1632,14 +1695,16 @@
     var chans = {}; all.forEach(function (c) { if (c.channel) chans[c.channel] = 1; });
     var who = Object.keys(chans).length === 1 ? Object.keys(chans)[0] : sec.name;
     h += topHTML(bandClass(sec.id), 'Courses', esc(who) + ' · ' + all.length + (all.length === 1 ? ' course' : ' courses'),
-      ib('open-marks', null, I.mark, 'Marks') + ib('add-course', sec.id, I.plus, 'Add a playlist'));
-    if (cs.list().length) h += '<button type="button" class="more" data-act="open-pace"><span>Pace</span><span class="mono">' + (cs.examPast() ? 'what\'s left' : cs.daysLeft() + ' days to ' + esc(goalName())) + ' ›</span></button>';
+      ib('open-marks', null, I.mark, 'Marks') + ib('add-course', sec.id, I.plus, 'Add a playlist') + (cs.list().length || cs.misses.length ? ib('courses-edit', null, cEdit ? I.check : I.dots, cEdit ? 'Done removing' : 'Remove courses', cEdit) : ''));
+    if (cEdit) h += '<p class="pnote">Tap × to remove a course, twice to be sure. Its ticks come back if you add it again. Tap ✓ at the top when done.</p>';
+    if (cs.list().length && !cEdit) h += '<button type="button" class="more" data-act="open-pace"><span>Pace</span><span class="mono">' + (cs.examPast() ? 'what\'s left' : cs.daysLeft() + ' days to ' + esc(goalName())) + ' ›</span></button>';
     if (!feedsOn && !prefs.apiKey) h += '<p class="pnote">Episodes load in the Shelf app on your iPhone.</p>';
     h += courseGroups(all);
     if (!all.length) h += '<p class="pnote">No courses yet. Add a playlist and Shelf ticks it episode by episode.</p>';
     // A Mehlman playlist Shelf couldn't find on its own: one quiet line that adds it
     if (sec.id === Courses.SEED.section) cs.misses.forEach(function (m) {
-      h += '<button type="button" class="more quiet" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '"><span>' + esc(m.name) + ' · not found</span><span class="mono">+ Add playlist</span></button>';
+      var mb = '<button type="button" class="more quiet" data-act="add-course" data-id="' + esc(sec.id) + '" data-fix="' + esc(m.name) + '"><span>' + esc(m.name) + ' · not found</span><span class="mono">+ Add playlist</span></button>';
+      h += cEdit ? '<div class="irow">' + mb + ib('miss-drop', m.name, I.x, 'Hide ' + m.name) + '</div>' : mb;
     });
     // Courses kept in other sections follow under their own band colour
     lib.sections().forEach(function (o) {
@@ -1651,7 +1716,7 @@
     return h;
   }
   function courseSec(c) { return lib.section(c.section) ? c.section : lib.sections()[0].id; }
-  function openCourses(secId) { push({ name: 'courses', id: secId || 'med' }); }
+  function openCourses(secId) { cEdit = false; push({ name: 'courses', id: secId || 'med' }); }
   // Re-render without losing what's being typed in a Set place box
   function keepTyping(fn) {
     var a = document.activeElement, id = a && a.id && /^(pl-|sq$)/.test(a.id) ? a.id : null, val = id ? a.value : '', sel = id ? [a.selectionStart, a.selectionEnd] : null;
@@ -1875,10 +1940,12 @@
       case 'play': case 'resume': play(regGet(b.getAttribute('data-e'))); break;
       case 'open-section': openSection(id); break;
       case 'open-channel': openChannel(id); break;
+      case 'sub-open': openSub(id, b.getAttribute('data-t') || ''); break;
+      case 'subs-retry': loadSubs(true); break;
       case 'open-pasted': push({ name: 'pasted' }); break;
       case 'back': back(); break;
       case 'home': goHome(); break;
-      case 'search': if (!openTab({ name: 'search', q: prefs.lastQ || '' })) { var q = $('#sq'); if (q) q.focus(); } break;
+      case 'search': loadSubs(); if (!openTab({ name: 'search', q: prefs.lastQ || '' })) { var q = $('#sq'); if (q) q.focus(); } break;
       case 'refresh': refreshAll(true); break;
       case 'refresh-channel': lib.refresh(id, true).then(function () { lib.saveCache(); renderAll(); }); toast('Checking for new uploads…'); break;
       case 'add-channel': openAdd(b.getAttribute('data-in') || '', id); break;
@@ -1973,7 +2040,10 @@
         toast(pon ? 'Pinned ‼ ' + pn + '. It stays on ' + pc2.name + '\'s row.' : 'Unpinned ' + pn + '.'); break;
       case 'course-remove':
         if (confirmCourse !== id) { confirmCourse = id; renderAll(); break; }
-        cs.remove(id); confirmCourse = null; openC = null; renderAll(); toast('Removed. Its ticks come back if you add it again.'); break;
+        var rn = cs.get(id) ? cs.get(id).name : 'it';
+        cs.remove(id); confirmCourse = null; openC = null; if (!cs.list().length && !cs.misses.length) cEdit = false; renderAll(); toast('Removed ' + rn + '. Its ticks come back if you add it again.'); break;
+      case 'courses-edit': cEdit = !cEdit; confirmCourse = null; renderAll(); break;
+      case 'miss-drop': cs.dropMiss(id); if (!cs.list().length && !cs.misses.length) cEdit = false; renderAll(); toast('Hidden. Add it any time with + Add a playlist.'); break;
       case 'course-retry': cs.load(id, true).then(function () { renderAll(); updateDot(); }); renderAll(); toast('Loading the playlist…'); break;
       case 'course-back': closeVideo(); openCourses(id); break;
       case 'add-course': openCourseAdd('', id, b.getAttribute('data-fix') || ''); break;
@@ -2032,9 +2102,11 @@
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
     var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
     // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
-    var lock = !!prefs.autoLock && !noLock;
-    var href = !Native.inApp ? web : lock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
-    return { v: v, t: t, web: web, href: href, lock: lock, rate: wantRate || 1 };
+    // YouTube ↗ goes through the same Shortcut with "nolock" on the end: the Shortcut stops before locking, and its
+    // "pass" note lets the YouTube guard automation (bounces you back to Shelf when you open YouTube yourself) let it through
+    var viaShortcut = !!prefs.autoLock;
+    var href = !Native.inApp ? web : viaShortcut ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + (noLock ? '&shelf=nolock' : '')) : app;
+    return { v: v, t: t, web: web, href: href, lock: viaShortcut, rate: wantRate || 1 };
   }
   function handOff(h) {
     catchSeq++; // a history check still running from the last return stops

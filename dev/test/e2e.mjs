@@ -249,7 +249,7 @@ const sc = await p.evaluate(() => { const a = document.querySelector('#ytLink');
 ok(/^shortcuts:\/\/run-shortcut\?name=Shelf%20Play%20Locked&input=text&text=youtube%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D/.test(sc), 'auto-lock: Play locked runs the Shortcut with the YouTube app link');
 ok(await p.locator('#ytOpen').isVisible(), 'auto-lock on: a YouTube button sits beside Play locked');
 const yo = await p.evaluate(() => { const a = document.querySelector('#ytOpen'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
-ok(/^youtube:\/\/www\.youtube\.com\/watch\?v=/.test(yo) && await shelf(p, () => !!JSON.parse(localStorage.getItem('shelf.handoff'))), 'YouTube ↗ opens the YouTube app at the spot without the lock Shortcut, and still counts the time away');
+ok(/^shortcuts:\/\/run-shortcut\?name=Shelf%20Play%20Locked&input=text&text=youtube%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D.*%26shelf%3Dnolock$/.test(yo) && await shelf(p, () => !!JSON.parse(localStorage.getItem('shelf.handoff'))), 'YouTube ↗ goes through the Shortcut marked "nolock" (no lock, and the YouTube guard lets it through), and still counts the time away: ' + yo);
 const bar = await p.evaluate(() => { const r = document.querySelector('.sh-top').getBoundingClientRect(); return [...document.querySelectorAll('.sh-top .x, .sh-top .lnk:not([hidden])')].every((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left - 1 && b.right <= r.right + 1 && b.height < 60; }); });
 ok(bar, 'the top bar fits on a phone with both buttons');
 await shelf(p, () => { window.__shelf.prefs.autoLock = false; localStorage.setItem('shelf.handoff', 'null'); });
@@ -602,7 +602,7 @@ ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) =
 const strip = () => p.evaluate(() => { const c = getComputedStyle(document.documentElement, '::before'); return c.content === 'none' ? 'none' : c.backgroundColor; });
 ok(await strip() === 'rgb(12, 12, 16)', 'D the strip under the clock stays dark, so the iPhone\'s white clock stays readable (' + await strip() + ')');
 ok(await p.locator('#lookBtn svg circle').count() === 1, 'D the top shows a sun');
-ok(await p.evaluate(() => JSON.parse(localStorage.getItem('shelf.look')).u > Date.now()), 'D the look is kept for the next launch with the time it changes');
+ok(await p.evaluate(() => { const d = new Date(); d.setHours(13, 0, 0, 0); return JSON.parse(localStorage.getItem('shelf.look')).u > d.getTime(); }), 'D the look is kept for the next launch with the time it changes');
 await p.locator('#lookBtn').click(); await p.waitForTimeout(150);
 ok(!(await p.locator('#lookDlg [data-act="look-here"]').isVisible()), 'D in this app build Use my location is hidden (it has no location permission yet)');
 const when = await p.locator('#lookWhen').textContent();
@@ -729,6 +729,37 @@ ok(/Copied/.test(await p.locator('#toast').textContent()), 'R the self-check cop
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 await p.locator('#ytLast').click(); await p.waitForTimeout(1500);
 ok(await shelf(p, () => window.__lastId === 'eeeeeeeeeee' && Math.abs(window.__lastStart - 890) < 1), 'R tapping it plays that video from 14:53 in Shelf (3 s back, like every resume)');
+await ctx.close();
+
+console.log('\n== S Subscriptions on Search, removing courses');
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true } }));
+await settle(p);
+const subsHtml = '<script>var ytInitialData = ' + JSON.stringify({ x: [{ channelRenderer: { channelId: 'UCzzzzzzzzzzzzzzzzzzzzzz', title: { simpleText: 'Zebra Medicine' } } }, { channelRenderer: { channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa', title: { simpleText: 'AJ Mnemonics Two' } } }] }) + ';</script>';
+await p.evaluate((h) => { window.__subs = h; }, subsHtml);
+await p.locator('#searchBtn').click(); await p.waitForTimeout(400);
+ok(await p.locator('.fold.subs').count() === 1 && !(await p.evaluate(() => document.activeElement && document.activeElement.id === 'sq')), 'S a Subscriptions fold sits under the search box, and the keyboard stays down so it shows');
+await p.locator('.fold.subs summary').click(); await p.waitForTimeout(150);
+const subNames = await p.locator('.subgrid .sub .nm').allTextContents();
+ok(subNames.join('|') === 'AJ Mnemonics Two|Zebra Medicine', 'S it rolls down to your subscribed channels, A to Z: ' + subNames.join('|'));
+const subBox = await p.evaluate(() => { const g = document.querySelector('.subgrid').getBoundingClientRect(); return g.right <= innerWidth + 1 && document.documentElement.scrollWidth <= innerWidth + 1; });
+ok(subBox, 'S the channel grid fits the phone width');
+if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + '/subs.png' });
+await p.locator('.subgrid .sub').first().click(); await p.waitForTimeout(800);
+ok(/AJ Mnemonics Two/i.test(await p.locator('#page h1').textContent()) && await p.locator('#page [data-act="add-channel"][data-in="UCaaaaaaaaaaaaaaaaaaaaaa"]').count() === 1 && await p.locator('#searchBtn[aria-current="page"]').count() === 1, 'S tapping one opens its page, with + Add to your shelf');
+await p.locator('#page [data-act="back"]').click(); await p.waitForTimeout(300);
+ok(await p.locator('.fold.subs[open]').count() === 1, 'S back on Search the fold is still open');
+await p.locator('#coursesBtn').click(); await p.waitForTimeout(300);
+const nCourses = await p.locator('#page .course').count();
+await p.locator('#page [data-act="courses-edit"]').click(); await p.waitForTimeout(150);
+if (process.env.SHOTS) { await p.locator('#page .cgo.cdel').first().click(); await p.waitForTimeout(100); await p.screenshot({ path: process.env.SHOTS + '/edit.png' }); await p.locator('#page [data-act="courses-edit"]').click(); await p.locator('#page [data-act="courses-edit"]').click(); await p.waitForTimeout(100); }
+ok(nCourses > 0 && await p.locator('#page .cgo.cdel').count() === nCourses, 'S Courses: the ⋯ button puts a × on every course (' + nCourses + ')');
+const firstName = await p.locator('#page .course .cl').first().textContent();
+await p.locator('#page .cgo.cdel').first().click(); await p.waitForTimeout(150);
+ok(/Sure/.test(await p.locator('#page .cgo.cdel').first().textContent()) && await p.locator('#page .course').count() === nCourses, 'S the first tap asks "Sure?"');
+await p.locator('#page .cgo.cdel').first().click(); await p.waitForTimeout(200);
+ok(await p.locator('#page .course').count() === nCourses - 1 && /Removed/.test(await p.locator('#toast').textContent()), 'S the second tap removes ' + firstName);
+await p.locator('#page [data-act="courses-edit"]').click(); await p.waitForTimeout(150);
+ok(await p.locator('#page .cgo.cdel').count() === 0, 'S ✓ ends removing');
 await ctx.close();
 
 console.log('\n== P Polish: a broken duplicate channel');

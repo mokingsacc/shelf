@@ -226,6 +226,18 @@ details.fold>summary{list-style:none;display:flex;justify-content:space-between;
 details.fold>summary::-webkit-details-marker{display:none}
 details.fold>summary svg{width:18px;height:18px;transition:transform .15s}
 details.fold[open]>summary svg{transform:rotate(180deg)}
+.fold.subs>summary{min-height:64px;color:var(--ink);border-bottom:3px solid var(--rule);gap:10px}
+.fold.subs>summary .sh{flex:1;font-size:22px;line-height:1;font-weight:900;font-family:var(--font);font-stretch:125%;letter-spacing:-.03em;text-transform:uppercase}
+.fold.subs>summary .mono{font-weight:600;color:var(--grey)}
+.subgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:16px 8px;padding:18px var(--g);border-bottom:2px solid var(--hair)}
+.sub{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;text-align:center}
+.sub .av{width:60px;height:60px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;position:relative}
+.sub .av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.sub .av i{position:absolute;right:-1px;bottom:-1px;width:16px;height:16px;border-radius:50%;background:var(--ink);border:3px solid var(--paper)}
+.sub .nm{font-size:12px;font-weight:700;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;width:100%}
+.sub:active .av{transform:scale(.94)}
+.cgo.cdel,.course.done .cgo.cdel{background:none;color:var(--bad);border:2px solid currentColor}
+.cgo.cdel.sure{background:var(--bad);color:var(--paper);border-color:var(--bad);font:700 11px var(--mono)}
 .chrow{display:grid;grid-template-columns:44px minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;padding:8px 0 8px var(--g);border-bottom:2px solid var(--hair);min-height:60px}
 .chrow .av{width:44px;height:44px;background:var(--soft);overflow:hidden;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;position:relative}
 .chrow .av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}

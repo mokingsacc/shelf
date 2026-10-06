@@ -307,5 +307,15 @@ function setup(store, opts = {}) {
   assert.strictEqual(Courses.historyLatest(HSS).title, 'OpenAI CEO says');
   assert.strictEqual(Courses.historyLatest(HSS).t, 216);
 
+  // Subscriptions page: channelRenderer (and newer channel lockups), A to Z, no repeats
+  const subsPage = hist([{ channelRenderer: { channelId: 'UCzzzzzzzzzzzzzzzzzzzzzz', title: { simpleText: 'Zebra Medicine' }, thumbnail: { thumbnails: [{ url: '//yt3.ggpht.com/zz=s88' }] } } },
+    { channelRenderer: { channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa', title: { simpleText: 'aj mnemonics' } } },
+    { lockupViewModel: { contentType: 'LOCKUP_CONTENT_TYPE_CHANNEL', contentId: 'UCmmmmmmmmmmmmmmmmmmmmmm', metadata: { lockupMetadataViewModel: { title: { content: 'Mehlman Medical' } } } } },
+    { channelRenderer: { channelId: 'UCzzzzzzzzzzzzzzzzzzzzzz', title: { simpleText: 'Zebra Medicine' } } }]);
+  const sc = Courses.subChannels(subsPage);
+  assert.deepStrictEqual(sc.map((c) => c.title), ['aj mnemonics', 'Mehlman Medical', 'Zebra Medicine']);
+  assert.strictEqual(sc[2].thumb, 'https://yt3.ggpht.com/zz=s88', 'protocol-less avatar links get https');
+  assert.strictEqual(Courses.subChannels('<html>nothing</html>'), null);
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });
