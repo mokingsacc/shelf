@@ -292,5 +292,13 @@ function setup(store, opts = {}) {
   const HR2 = hist([real('dizqYRTo6aI', 30, '12:00', { startTimeSeconds: 222 })]);
   assert.strictEqual(Courses.historyLatest(HR2).t, 222, 'the exact second wins over the bar');
 
+  // A Short watched last is skipped (nothing to pick up); the menu's "Add to queue" is never the title
+  const short = { lockupViewModel: { contentId: 'kkkkkkkkkkk', rendererContext: { commandContext: { onTap: { innertubeCommand: { commandMetadata: { webCommandMetadata: { url: '/shorts/kkkkkkkkkkk' } }, reelWatchEndpoint: { videoId: 'kkkkkkkkkkk' } } } } } } };
+  const menuFirst = real('dizqYRTo6aI', 30, '12:00'); menuFirst.lockupViewModel.contentImage.thumbnailViewModel.overlays.push({ sheet: { listItems: [{ listItemViewModel: { title: { content: 'Add to queue' } } }] } });
+  const HS = hist([short, menuFirst]);
+  assert.strictEqual(Courses.historyLatest(HS).id, 'dizqYRTo6aI', 'a Short at the top is skipped');
+  assert.strictEqual(Courses.historyLatest(HS).title, 'OpenAI CEO says', 'the video title, not a menu item');
+  assert.strictEqual(Courses.historyItems(HR).length, 2);
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

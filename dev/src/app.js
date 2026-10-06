@@ -1125,7 +1125,8 @@
       var txt = 'Shelf YouTube report ' + new Date().toISOString() + '\nstatus ' + (r && r.status) + ' · signed in ' + (r && r.signedIn) + ' · logged in page ' + /"LOGGED_IN":true/.test(page) + ' · ' + page.length + ' chars' +
         '\nfound: ' + JSON.stringify(l) +
         '\nmarkers: startTimeSeconds ' + (page.match(/"startTimeSeconds"/g) || []).length + ', startPercent ' + (page.match(/"startPercent"/g) || []).length + ', percentDurationWatched ' + (page.match(/"percentDurationWatched"/g) || []).length + ', &t= ' + (page.match(/(?:\\u0026|&)t=\d+s/g) || []).length +
-        '\n\nnewest item:\n' + (at >= 0 ? page.slice(Math.max(0, at - 1500), at + 6000) : '(none)');
+        '\nfirst videos: ' + Courses.historyItems(page, 5).map(function (x) { return x.id + ' "' + x.title + '" t=' + x.t + ' pct=' + x.pct + ' dur=' + x.dur; }).join(' | ') +
+        '\n\npage start:\n' + (at >= 0 ? page.slice(Math.max(0, at - 4000), at + 3000) : '(none)');
       copyText(txt, function () { b.textContent = 'Copied. Paste it to Claude'; toast('Copied. Paste it in the chat with Claude.'); });
     }, function (e) { b.textContent = 'Copy YouTube report for Claude'; toast("Couldn't read YouTube: " + (e && e.message || e), 'warn'); });
   }

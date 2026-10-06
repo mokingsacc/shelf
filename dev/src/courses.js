@@ -142,14 +142,30 @@ var Courses = (function () {
   // The newest video in the account's watch history page: { id, title, author, t, dur, pct } (t when YouTube saved a
   // spot), or null.
   function historyLatest(html) {
-    var start = html ? html.indexOf('ytInitialData') : -1; if (start < 0) return null;
-    var re = /"(?:videoId|contentId)":"([\w-]{11})"/g; re.lastIndex = start;
-    var m = re.exec(html); if (!m) return null;
-    var id = m[1], item = itemAround(html, m.index);
+    var all = historyItems(html, 1);
+    return all.length ? all[0] : null;
+  }
+  // The history page's videos, newest first (at most "max"): each item is the slice from one lockupViewModel or
+  // videoRenderer to the next. Shorts are skipped (nothing to pick up), and so is anything without a video id.
+  function historyItems(html, max) {
+    var start = html ? html.indexOf('ytInitialData') : -1, out = []; if (start < 0) return out;
+    var re = /"(?:lockupViewModel|videoRenderer)":\{/g, m, starts = [];
+    re.lastIndex = start;
+    while ((m = re.exec(html))) starts.push(m.index);
+    for (var i = 0; i < starts.length && out.length < (max || 10); i++) {
+      var item = html.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : Math.min(html.length, starts[i] + 20000));
+      if (/reelWatchEndpoint|\/shorts\/|LOCKUP_CONTENT_TYPE_(?!VIDEO)/.test(item)) continue;
+      var idm = item.match(/"contentId":"([\w-]{11})"/) || item.match(/"watchEndpoint":\{"videoId":"([\w-]{11})"/) || item.match(/"videoId":"([\w-]{11})"/);
+      if (!idm) continue;
+      out.push(readItem(item, idm[1]));
+    }
+    return out;
+  }
+  function readItem(item, id) {
     function str(rx) { var r = item.match(rx); if (!r) return ''; try { return JSON.parse('"' + r[1] + '"'); } catch (e) { return r[1]; } }
-    var title = str(/"title":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"/);
+    var title = str(/"lockupMetadataViewModel":\{"title":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"/);
     var author = str(/"metadataParts":\[\{"text":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"(?:longBylineText|shortBylineText|ownerText)":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/);
-    var len = item.match(/"(?:simpleText|text|content)":"(\d{1,2}:\d{2}(?::\d{2})?)"/), dur = 0;
+    var len = item.match(/"(?:thumbnailBadgeViewModel":\{"text|lengthText":\{"simpleText)":"(\d{1,2}:\d{2}(?::\d{2})?)"/), dur = 0;
     if (len) len[1].split(':').forEach(function (x) { dur = dur * 60 + +x; });
     var spot = spotIn(item, id) || {}, t = spot.t != null ? spot.t : null;
     if (t == null && spot.pct != null && dur) t = Math.round(spot.pct / 100 * dur);
@@ -532,6 +548,6 @@ var Courses = (function () {
     };
   }
   return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
-    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot, historyLatest: historyLatest };
+    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot, historyLatest: historyLatest, historyItems: historyItems };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;
