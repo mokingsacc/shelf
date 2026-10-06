@@ -93,6 +93,41 @@ var Feeds = (function () {
     return out;
   }
 
+  // ----- A YouTube channel's podcast twin (the same show as audio, which can play with the phone locked) -----
+  var STOP = { the: 1, and: 1, for: 1, with: 1, from: 1, this: 1, that: 1, are: 1, was: 1, you: 1, your: 1, full: 1, show: 1, episode: 1, podcast: 1, official: 1, video: 1, audio: 1 };
+  function words(s, drop) {
+    var seen = {};
+    return decode(s).toLowerCase().split(/[^a-z0-9]+/).filter(function (w) {
+      if (w.length < 3 || /^\d+$/.test(w) || STOP[w] || (drop && drop[w]) || seen[w]) return false;
+      seen[w] = 1; return true;
+    });
+  }
+  function nameKey(s) { return words(s).join(''); }
+  // The podcast with the channel's name (Apple's search results), or ''
+  function podcastFor(name, results) {
+    var k = nameKey(name);
+    if (k.length < 4) return '';
+    var hit = (results || []).filter(function (r) {
+      var c = r && r.feedUrl ? nameKey(r.collectionName || r.trackName || '') : '';
+      return c && (c === k || c.indexOf(k) >= 0); // the podcast's name holds the channel's (never just a word of it)
+    })[0];
+    return hit ? hit.feedUrl : '';
+  }
+  // The episode that is this video: most title words shared, published within 4 days. null when unsure.
+  function episodeFor(video, items, channel) {
+    var drop = {}; words(channel).forEach(function (w) { drop[w] = 1; });
+    var a = words(video && video.title, drop), best = null, bs = 0;
+    if (a.length < 2) return null;
+    (items || []).forEach(function (it) {
+      if (video.published && it.published && Math.abs(it.published - video.published) > 4 * 864e5) return;
+      var b = words(it.title, drop);
+      var n = a.filter(function (w) { return b.indexOf(w) >= 0; }).length, sc = b.length ? n / Math.min(a.length, b.length) : 0;
+      // Both titles mostly shared: a short clip title doesn't match the full show it was cut from
+      if (n >= 2 && n >= 0.5 * b.length && n >= 0.5 * a.length && sc > bs) { bs = sc; best = it; }
+    });
+    return bs >= (video.published ? 0.75 : 0.9) ? best : null;
+  }
+
   // ----- What did Mo paste into "Add channel"? -----
   function parseChannelInput(text) {
     text = String(text || '').trim();
@@ -136,6 +171,7 @@ var Feeds = (function () {
   function isConsentPage(html) { return /consent\.youtube\.com|consent\.google\.com/i.test(html) && !/itemprop="identifier"/i.test(html); }
 
   return { decode: decode, duration: duration, parseYouTube: parseYouTube, youtubeFeedUrls: youtubeFeedUrls, parsePodcast: parsePodcast,
-    parseChannelInput: parseChannelInput, pageUrl: pageUrl, channelFromHtml: channelFromHtml, isConsentPage: isConsentPage, stripHtml: stripHtml };
+    parseChannelInput: parseChannelInput, pageUrl: pageUrl, channelFromHtml: channelFromHtml, isConsentPage: isConsentPage, stripHtml: stripHtml,
+    podcastFor: podcastFor, episodeFor: episodeFor };
 })();
 if (typeof module !== 'undefined') module.exports = Feeds;

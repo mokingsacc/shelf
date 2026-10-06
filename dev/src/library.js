@@ -144,6 +144,31 @@ var Library = (function () {
       });
     }
 
+    // A YouTube channel's podcast twin, looked up once a week (Apple's podcast search, name must match)
+    var twinFeeds = {};
+    function twinFeed(id) {
+      var s = source(id);
+      if (!s || s.type !== 'youtube') return Promise.resolve('');
+      if (s.twin && now() - s.twin.checked < 7 * 864e5) return Promise.resolve(s.twin.feed || '');
+      return io.fetchText('https://itunes.apple.com/search?media=podcast&limit=8&term=' + encodeURIComponent(s.name)).then(function (t) {
+        var feed = Feeds.podcastFor(s.name, JSON.parse(t).results || []);
+        s.twin = { feed: feed, checked: now() }; save();
+        return feed;
+      }, function () { return ''; }); // offline: ask again next time
+    }
+    // The twin's episode for this video ({ title, published }), or null
+    function twinEpisode(id, video) {
+      return twinFeed(id).then(function (feed) {
+        if (!feed) return null;
+        var c = twinFeeds[feed];
+        var p = c && now() - c.at < TTL ? Promise.resolve(c.f) : io.fetchText(feed).then(Feeds.parsePodcast).then(function (f) { twinFeeds[feed] = { at: now(), f: f }; return f; });
+        return p.then(function (f) {
+          var ep = Feeds.episodeFor(video, f.items, source(id).name);
+          return ep ? Object.assign({ podcast: f.title || source(id).name, feed: feed }, ep) : null;
+        });
+      }).catch(function () { return null; });
+    }
+
     // Add whatever Mo pasted: a channel link, @handle, video link, podcast feed, or a name.
     // Resolves to the stored source. opts: { audio: true } makes a bare name search podcasts.
     function add(input, sectionId, opts) {
@@ -268,7 +293,7 @@ var Library = (function () {
       sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
       sources: sources, source: source, have: have, setSection: setSection, setHideShorts: setHideShorts, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
-      markSeen: markSeen, fresh: fresh, saveCache: saveCache, get seedMisses() { return state.seedMisses || []; }
+      markSeen: markSeen, fresh: fresh, saveCache: saveCache, twinEpisode: twinEpisode, get seedMisses() { return state.seedMisses || []; }
     };
   }
   return { create: create, KEY: KEY, SEED_SOURCES: SEED_SOURCES };

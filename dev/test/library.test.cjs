@@ -164,6 +164,20 @@ const page = fx('channel.html');
   assert.ok((await r.lib.seed()).every((x) => x.input !== 'The Ezra Klein Show'));
   assert.ok(r.calls.every((c) => !/results\?/.test(c.url)), 'Ezra is not searched for again');
 
+  // Podcast twin: looked up by the channel's name once a week, episode matched by title
+  const twinFeedXml = '<rss><channel><title>The Ezra Klein Show</title><item><title>Why the Housing Market Is Stuck</title><guid>ez1</guid><enclosure url="https://a.example/ez1.mp3" type="audio/mpeg"/><pubDate>Sun, 04 Oct 2026 11:00:00 GMT</pubDate></item></channel></rss>';
+  r = setup([[/itunes/, JSON.stringify({ results: [{ feedUrl: 'https://feeds.example/ezra', collectionName: 'The Ezra Klein Show' }] })], [/feeds\.example\/ezra/, twinFeedXml]],
+    { 'shelf.v2.library': JSON.stringify({ sections: [{ id: 'ent', name: 'Entertainment', kind: 'video' }], sources: { UCx: { id: 'UCx', type: 'youtube', name: 'The Ezra Klein Show', section: 'ent' } }, seeded: true }) });
+  const tw = await r.lib.twinEpisode('UCx', { title: 'Why the Housing Market Is Stuck', published: Date.parse('2026-10-04T10:00:00Z') });
+  assert.strictEqual(tw && tw.guid, 'ez1'); assert.strictEqual(tw.url, 'https://a.example/ez1.mp3'); assert.strictEqual(tw.podcast, 'The Ezra Klein Show');
+  assert.strictEqual(await r.lib.twinEpisode('UCx', { title: 'Something Else Entirely', published: 0 }), null);
+  assert.strictEqual(r.calls.filter((c) => /itunes/.test(c.url)).length, 1, 'the podcast search runs once a week, not per video');
+  assert.strictEqual(r.calls.filter((c) => /feeds\.example/.test(c.url)).length, 1, 'the feed is reused for 30 minutes');
+  assert.strictEqual(JSON.parse(r.store['shelf.v2.library']).sources.UCx.twin.feed, 'https://feeds.example/ezra');
+  r = setup([], { 'shelf.v2.library': JSON.stringify({ sections: [{ id: 'ent', name: 'E', kind: 'video' }], sources: { UCy: { id: 'UCy', type: 'youtube', name: 'Dirty Medicine', section: 'ent' } }, seeded: true }) });
+  assert.strictEqual(await r.lib.twinEpisode('UCy', { title: 'Hyperkalemia Mnemonics', published: 0 }), null, 'offline: no twin, no error');
+  assert.ok(!JSON.parse(r.store['shelf.v2.library'] || '{"sources":{"UCy":{}}}').sources.UCy.twin, 'offline is not remembered as "no podcast"');
+
   // Garbage input
   await assert.rejects(r.lib.add('', 'med'), /doesn't look like/);
 

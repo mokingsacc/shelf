@@ -85,7 +85,7 @@
   function startedEntries(sectionId) {
     var out = [];
     Object.keys(videos).forEach(function (id) { var e = entryFromVideo(videos[id]); if (started(e) && e.section === sectionId) out.push(e); });
-    Object.keys(arec).forEach(function (g) { var e = entryFromAudio(g, arec[g]); if (started(e) && (sectionId === undefined || e.section === sectionId)) out.push(e); });
+    Object.keys(arec).forEach(function (g) { if (arec[g].video) return; var e = entryFromAudio(g, arec[g]); if (started(e) && (sectionId === undefined || e.section === sectionId)) out.push(e); });
     return out.sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
   }
   function newCountFor(sectionId) { return feedEntries(sectionId).filter(isNew).length; }
@@ -559,6 +559,7 @@
     $('#vTitle').textContent = v.title || 'YouTube video';
     $('#vCh').textContent = courseTag(v.id) || v.author || '';
     $('#vNext').hidden = true; clearTimeout(nextTimer); renderPlayerCourse(v.id); renderNextBtn(v.id);
+    renderListen(v);
     $('#ytLink').href = ytLink(v);
     wantRate = rateFor(v); renderRateUI(v); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
@@ -665,6 +666,58 @@
     current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
     closeSheet('#vsheet');
     renderAll();
+  }
+  // ---------- Listen: the same show as a podcast, which keeps playing with the phone locked ----------
+  // Only for channels that publish their videos as a podcast too (matched by name, then episode title and date).
+  var twins = {};
+  function twinSource(v) {
+    var s = v.channelId && lib.source(v.channelId);
+    if (!s && v.author) s = lib.sources().filter(function (x) { return x.type === 'youtube' && x.name.toLowerCase() === v.author.toLowerCase(); })[0];
+    return s && s.type === 'youtube' ? s : null;
+  }
+  // A clip of a longer show (or a different cut) isn't its twin: lengths must be close (podcasts add a few minutes of ads)
+  function twinFits(v, ep) { var d = v.dur || 0; return !!ep && (!d || !ep.duration || Math.abs(d - ep.duration) <= Math.max(600, 0.25 * d)); }
+  function renderListen(v) {
+    var tw = twins[v.id];
+    $('#vListen').hidden = !(tw && tw.ep && twinFits(v, tw.ep)); layoutTwin();
+    var s = Native.inApp && twinSource(v);
+    if (!s || (tw && (tw.ep || Date.now() - tw.at < 10 * 60000))) return; // a miss is asked again after 10 minutes (podcasts often come out later)
+    var it = lib.items(s.id).filter(function (x) { return x.id === v.id; })[0];
+    var title = v.title || (it && it.title);
+    if (!title) return;
+    twins[v.id] = { ep: null, at: Date.now() };
+    lib.twinEpisode(s.id, { title: title, published: it ? it.published : 0 }).then(function (ep) {
+      twins[v.id] = { ep: ep, at: Date.now() };
+      if (current === v.id) { $('#vListen').hidden = !twinFits(videos[v.id], ep); layoutTwin(); }
+    });
+  }
+  // Two buttons a row; an odd last one takes the whole row
+  function layoutTwin() {
+    var vis = Array.prototype.filter.call($('#vTwin').children, function (b) { b.style.gridColumn = ''; return !b.hidden; });
+    if (vis.length > 1 && vis.length % 2) vis[vis.length - 1].style.gridColumn = '1 / -1';
+  }
+  function listen() {
+    var v = current && videos[current], ep = v && twins[v.id] && twins[v.id].ep;
+    if (!ep) return;
+    capture(true);
+    if (!twinFits(v, ep)) { $('#vListen').hidden = true; layoutTwin(); toast("The podcast's episode is a different length, so it isn't the same as this video.", 'warn'); return; }
+    var t = v.t || 0;
+    try { var pt = player.getCurrentTime(); if (armed && pt > 0) t = pt; } catch (e) {}
+    if (ep.duration && t > ep.duration - 30) t = Math.max(0, ep.duration - 60); // a shorter cut: start near its end, not past it
+    arec[ep.guid] = Object.assign({}, arec[ep.guid] || {}, { video: v.id, url: ep.url, title: ep.title, podcast: ep.podcast, image: ep.image || '', t: t, dur: ep.duration || 0, done: false, updated: Date.now() });
+    saveAudio();
+    closeVideo(true);
+    openAudio({ key: ep.guid, url: ep.url, title: ep.title, srcName: ep.podcast, image: ep.image, dur: ep.duration, src: '' });
+    setTimeout(function () { var tm = engine.state().timer; toast('Podcast version from ' + Core.fmt(t) + '. You can lock the phone. The two can be a minute apart, so nudge it if needed.' + (tm ? ' 45-minute sleep timer on.' : '')); }, 450);
+  }
+  // Listening moves the video's place along with it, never to the very end (so it is never ticked by the audio;
+  // a podcast cut differently could otherwise finish a video that isn't finished)
+  function syncTwin(r) {
+    var v = r && r.video && videos[r.video];
+    if (!v || v.done || r.done || !(r.t > 0)) return;
+    var t = v.dur > 0 ? Math.min(r.t, v.dur - 30) : r.t;
+    if (t <= (v.t || 0) + 1) return; // forward only: an older listen replayed later never rewinds the video
+    v.t = t; v.updated = Date.now(); saveVideos();
   }
   function keepAwake(on) {
     try {
@@ -973,7 +1026,7 @@
   }
   function renderAiUI() {
     var on = aiOn() && !!current;
-    $('#vAiBtn').hidden = !on; $('#vNotes').hidden = !on; $('#vTwin').classList.toggle('ai', on);
+    $('#vAiBtn').hidden = !on; $('#vNotes').hidden = !on; $('#vTwin').classList.toggle('ai', on); layoutTwin();
     if (!on) { $('#vAi').hidden = true; return; }
     var st = ai.status(current, 'summary');
     $('#vAiSt').textContent = aiShort(st, 'summary');
@@ -1088,7 +1141,7 @@
     engine = AudioEngine.create({
       el: $('#audio'),
       load: function (g) { return arec[g] || null; },
-      save: function (g, r) { arec[g] = Object.assign({}, arec[g] || {}, aMeta[g] || {}, r); saveAudio(); },
+      save: function (g, r) { arec[g] = Object.assign({}, arec[g] || {}, aMeta[g] || {}, r); syncTwin(arec[g]); saveAudio(); },
       onChange: function () { renderAudio(); renderSoon(); }
     });
     // A podcast starting ends the self-check's sound test (the engine then takes the lock-screen controls back)
@@ -1613,7 +1666,7 @@
   // In the player: "Next: 1123 ▶" beside Mark, inside a course
   function renderNextBtn(vid) {
     var w = courseOf(vid), n = w && nextAfter(w.course, w.i), b = $('#vNextBtn');
-    b.hidden = !n;
+    b.hidden = !n; layoutTwin();
     if (!n) return;
     b.setAttribute('data-id', w.course.id); b.setAttribute('data-v', n.x.id);
     b.innerHTML = '<span>Next: ' + esc(epLabel(n.x, n.i)) + '</span>' + I.play;
@@ -1701,6 +1754,7 @@
       case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
       case 'open-marks': push({ name: 'marks' }); break;
       case 'mark': doMark(); break;
+      case 'listen': listen(); break;
       case 'ai-sum':
         aiSumOpen = !aiSumOpen; renderAiUI();
         if (aiSumOpen && aiKey && current && ai.status(current, 'summary').state === 'none' && !aiAsk[current + 'summary']) aiStart('summary');
@@ -2066,7 +2120,7 @@
     catchUp(); // Shelf was closed by iOS while the video played in YouTube
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture, catchUp: catchUp,
-      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);

@@ -32,7 +32,7 @@ function plPage(pid, k) {
 }
 export const PODCASTS = {
   'https://feeds.megaphone.fm/finvshistory': { title: 'Fin vs History', eps: [['Ep. 212: The Shortest War in History', 3851, 6 * H], ['Ep. 211: The Great Emu War', 3420, 7 * D]] },
-  'https://feeds.example.com/ezra': { title: 'The Ezra Klein Show', eps: [['Why the Housing Market Is Stuck', 3501, 20 * H], ['The Case for Boredom', 3810, 4 * D]] },
+  'https://feeds.example.com/ezra': { title: 'The Ezra Klein Show', eps: [['Why the Housing Market Is Stuck', 840, 20 * H], ['The Case for Boredom', 3810, 4 * D]] },
   'https://feeds.example.com/foc': { title: 'Fall of Civilizations Podcast', eps: [['Rome: The Fall of the Western Empire', 13732, 30 * D], ['The Bronze Age Collapse', 12010, 60 * D]] }
 };
 const ITUNES = { 'The Ezra Klein Show': 'https://feeds.example.com/ezra', 'Fall of Civilizations': 'https://feeds.example.com/foc' };
@@ -202,7 +202,7 @@ export async function installFakes(ctx, opts = {}) {
   await ctx.route('https://itunes.apple.com/**', (r) => {
     const term = new URL(r.request().url()).searchParams.get('term');
     const feed = ITUNES[term];
-    r.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify({ results: feed ? [{ feedUrl: feed }] : [] }) });
+    r.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify({ results: feed ? [{ feedUrl: feed, collectionName: PODCASTS[feed].title }] : [] }) });
   });
   const podRoute = (r) => {
     const url = r.request().url(), p = PODCASTS[url];

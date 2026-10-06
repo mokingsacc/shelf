@@ -404,7 +404,6 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .pts li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;border-top:2px solid var(--pl-dim);padding:2px 0}
 .pts .tt{min-height:var(--tap);min-width:58px;padding:0 6px;border:2px solid var(--pl-dim);color:var(--pl-hi);font-weight:600;font-size:14px}
 .pts li>span{padding:10px 0;overflow-wrap:anywhere}
-.twin.ai #vNextBtn{grid-column:1/-1}
 .nts h3{margin:6px 0 0;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
 .nts ul{margin:0;padding:0 0 0 18px;font-size:15px;line-height:1.4}
 .nts li{margin:4px 0;overflow-wrap:anywhere}
@@ -546,7 +545,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="chips" id="vRate" role="group" aria-label="Speed"></div>
   <button type="button" class="lab tgl" id="vTmBtn" data-act="v-timer-toggle" aria-expanded="false" aria-controls="vSeg"><span>Sleep timer</span><span class="mono" id="vStops"></span></button>
   <div class="chips tm" id="vSeg" role="group" aria-label="Sleep timer" hidden></div>
-  <div class="twin" id="vTwin"><button type="button" class="act" id="vMark" data-act="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Mark</span></button><button type="button" class="act" id="vNotes" data-act="ai-notes" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4"/></svg><span>Notes</span></button><button type="button" class="act solid" id="vNextBtn" data-act="ep-play" hidden></button></div>
+  <div class="twin" id="vTwin"><button type="button" class="act" id="vMark" data-act="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>Mark</span></button><button type="button" class="act" id="vNotes" data-act="ai-notes" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h4"/></svg><span>Notes</span></button><button type="button" class="act" id="vListen" data-act="listen" aria-label="Listen to the podcast version, which keeps playing with the phone locked" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><path d="M4 15h3v5H4zM17 15h3v5h-3z"/></svg><span>Listen</span></button><button type="button" class="act solid" id="vNextBtn" data-act="ep-play" hidden></button></div>
   <div class="spacer"></div>
   <div class="ctl"><button type="button" data-act="v-back" aria-label="Back 15 seconds">−15</button><button type="button" id="vPlay" data-act="v-toggle" aria-label="Pause" class="on"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button type="button" data-act="v-fwd" aria-label="Forward 15 seconds">+15</button></div>
 </section>

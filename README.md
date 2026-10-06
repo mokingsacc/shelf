@@ -34,6 +34,8 @@ If Google refuses to sign in inside an app ("this browser or app may not be secu
 
 YouTube stops its embedded player (in any app) when the phone locks, Premium or not. **Play locked ↗** in the player opens the video in the YouTube app at the same second (via `youtube://`, so iOS can't hand it to Safari; the web page opens if no app answers in 1.5 s), where Premium keeps playing locked. Check YouTube app > Settings > Background & downloads > Background play is on. Back in Shelf, your place moves on by the time you were away (at that video's speed, never past the end), with an Undo. While a video plays in Shelf the screen stays on, so it doesn't auto-lock.
 
+**Listen** (in the player) appears for channels that publish the same show as a podcast (found by name in Apple's podcast search, once a week; the episode matched by title, date and length). It plays the episode in Shelf's own audio player from the video's spot, so it keeps going with the phone locked; listening moves the video's place forward (never to the end, never ticked).
+
 ## For Claude
 
 - `index.html` and `icon.png` are the web app (built). Source and tests are in `dev/`: `node dev/build.mjs`, `npm test` (node unit tests + Playwright e2e of the done test with a faked iPhone shell and internet in `dev/test/fakenet.mjs`). `node dev/test/preview.mjs <outdir>` saves phone screenshots.

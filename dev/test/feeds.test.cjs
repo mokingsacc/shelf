@@ -46,4 +46,24 @@ assert.strictEqual(F.channelFromHtml('<html>nothing</html>'), null);
 assert.ok(F.isConsentPage('<form action="https://consent.youtube.com/save">'));
 assert.ok(!F.isConsentPage(fx('channel.html')));
 assert.strictEqual(F.duration('45:10'), 2710); assert.strictEqual(F.duration(''), 0); assert.strictEqual(F.duration('abc'), 0);
+// Podcast twins: the channel's own podcast by name, then the episode by title words and date
+const it = (feedUrl, collectionName) => ({ feedUrl, collectionName });
+assert.strictEqual(F.podcastFor('The Ezra Klein Show', [it('https://x/other', 'Ezra Talks'), it('https://x/ezra', 'The Ezra Klein Show')]), 'https://x/ezra');
+assert.strictEqual(F.podcastFor('Breaking Points', [it('https://x/bp', 'Breaking Points with Krystal and Saagar')]), 'https://x/bp');
+assert.strictEqual(F.podcastFor('Dirty Medicine', [it('https://x/dm', 'Medicine Matters')]), '', 'a different show is not a twin');
+assert.strictEqual(F.podcastFor('Dirty Medicine', []), '');
+const T = Date.parse('2026-10-05T12:00:00Z'), eps = [
+  { guid: 'a', title: 'Why the Housing Market Is Stuck', published: T + 3600e3 },
+  { guid: 'b', title: 'The Case for Boredom', published: T - 4 * 864e5 },
+  { guid: 'c', title: 'Why the Housing Market Was Fine in 2019', published: T - 300 * 864e5 }];
+assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck | The Ezra Klein Show', published: T }, eps, 'The Ezra Klein Show').guid, 'a', 'channel name in the video title is ignored');
+assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck', published: T + 40 * 864e5 }, eps, 'The Ezra Klein Show'), null, 'same title but published weeks apart');
+assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck (feat. Jenny Schuetz)', published: T }, eps, 'The Ezra Klein Show').guid, 'a', 'a guest added to the video title still matches');
+assert.strictEqual(F.episodeFor({ title: 'Inflation Is Back and Nobody Noticed', published: T }, [{ guid: 'z', title: 'Inflation Explained', published: T }], 'x'), null, 'one shared word is not a match');
+assert.strictEqual(F.episodeFor({ title: 'Saagar on the Polling Mess', published: T }, eps, 'Breaking Points'), null, 'no episode: no button');
+assert.strictEqual(F.episodeFor({ title: 'The Case for Boredom', published: 0 }, eps, 'The Ezra Klein Show').guid, 'b', 'a pasted video (no date) needs a closer title');
+assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck', published: T }, [{ guid: 'n', title: 'Ep. 212: Why the Housing Market Is Stuck', published: T }], 'x').guid, 'n', 'episode numbers are ignored');
+assert.strictEqual(F.episodeFor({ title: 'Boredom', published: T }, eps, 'x'), null, 'one word is too little to go on');
+assert.strictEqual(F.podcastFor('Dirty Medicine', [it('https://x/m', 'Medicine')]), '', 'a podcast named with just one word of the channel is not its twin');
+assert.strictEqual(F.episodeFor({ title: 'Krystal: Trump Tariffs DISASTER', published: T }, [{ guid: 'full', title: '10/6/25: Trump Tariffs Crash Markets, Israel Strikes, Shutdown Week Two, Polling Mess', published: T }], 'Breaking Points'), null, 'a clip is not the full show');
 console.log('feeds: all tests passed');
