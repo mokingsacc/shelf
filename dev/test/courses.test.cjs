@@ -282,5 +282,15 @@ function setup(store, opts = {}) {
   assert.deepStrictEqual(Courses.historySpot(HP, 'hhhhhhhhhhh'), { pct: 40 }, 'the lockup red bar, not the next video\'s second');
   assert.deepStrictEqual(Courses.historyLatest(HP), { id: 'hhhhhhhhhhh', title: 'Renal', author: '', t: 240, dur: 600, pct: 40 });
 
+  // Mo's real history page (6 Oct): thumbnail with red bar and length first, hover buttons naming the video, title,
+  // then the id; the next item's numbers must not leak in
+  const real = (id, pct, len, extra) => ({ lockupViewModel: { contentImage: { thumbnailViewModel: { overlays: [{ thumbnailBottomOverlayViewModel: { progressBar: { thumbnailOverlayProgressBarViewModel: { startPercent: pct } }, badges: [{ thumbnailBadgeViewModel: { text: len } }] } }, { thumbnailHoverOverlayToggleActionsViewModel: { buttons: [{ toggleButtonViewModel: { defaultButtonViewModel: { buttonViewModel: { onTap: { innertubeCommand: { playlistEditEndpoint: { playlistId: 'WL', actions: [{ addedVideoId: id, action: 'ACTION_ADD_VIDEO' }] } } } } } } }, { toggleButtonViewModel: { defaultButtonViewModel: { buttonViewModel: { onTap: { innertubeCommand: { signalServiceEndpoint: { actions: [{ addToPlaylistCommand: { videoId: id, videoCommand: { commandMetadata: { webCommandMetadata: { url: '/watch?v=' + id + '&pp=0gcJ' } }, watchEndpoint: { videoId: id } } } }] } } } } } } }] } }] } }, metadata: { lockupMetadataViewModel: { title: { content: 'OpenAI CEO says' }, metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: 'NBC News' } }] }] } } } }, contentId: id, rendererContext: { commandContext: { onTap: { innertubeCommand: { watchEndpoint: Object.assign({ videoId: id }, extra) } } } } } });
+  const HR = hist([real('dizqYRTo6aI', 30, '12:00'), real('jjjjjjjjjjj', 80, '5:00', { startTimeSeconds: 240 })]);
+  assert.deepStrictEqual(Courses.historyLatest(HR), { id: 'dizqYRTo6aI', title: 'OpenAI CEO says', author: 'NBC News', t: 216, dur: 720, pct: 30 }, 'the red bar and length before the id');
+  assert.deepStrictEqual(Courses.historySpot(HR, 'dizqYRTo6aI'), { pct: 30 });
+  assert.deepStrictEqual(Courses.historySpot(HR, 'jjjjjjjjjjj'), { t: 240 });
+  const HR2 = hist([real('dizqYRTo6aI', 30, '12:00', { startTimeSeconds: 222 })]);
+  assert.strictEqual(Courses.historyLatest(HR2).t, 222, 'the exact second wins over the bar');
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

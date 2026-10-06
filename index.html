@@ -2064,41 +2064,50 @@ var Courses = (function () {
   // Where the account's watch history says a video stopped (after Play locked, the YouTube app saves the spot to
   // the history): the resume link's start second (startTimeSeconds or &t=…s), else the red bar's percent.
   // Returns { t } or { pct } or null when the video isn't in the page.
-  function historySpot(html, id) {
-    if (!html || !id || html.indexOf(id) < 0) return null;
+  // History items are lockupViewModel (newer) or videoRenderer (older) objects. A newer item lists its thumbnail first
+  // (the red bar and the length badge), then the buttons and title, then the video's id, so a video's data is the
+  // whole item around its id, not just what follows it.
+  var ITEM = /"(?:lockupViewModel|videoRenderer)":\{/g;
+  function itemAround(html, at) {
+    var s = Math.max(html.lastIndexOf('"lockupViewModel":{', at), html.lastIndexOf('"videoRenderer":{', at));
+    ITEM.lastIndex = at; var n = ITEM.exec(html);
+    return html.slice(s < 0 ? Math.max(0, at - 1500) : s, n ? n.index : Math.min(html.length, at + 20000));
+  }
+  function spotIn(item, id) {
     var esc = id.replace(/[^\w-]/g, ''), m;
     var link = new RegExp('watch\\?v=' + esc + '(?:\\\\u0026|&amp;|&)(?:[^"]*?(?:\\\\u0026|&amp;|&))?t=(\\d+)s?');
-    if ((m = html.match(link))) return { t: +m[1] };
-    // The video's own data: from its id (contentId comes first in the newer lockup items, videoId in the older ones)
-    // up to the next different video. The red bar is percentDurationWatched (old) or startPercent (lockups).
-    var re = new RegExp('"(?:videoId|contentId)":"' + esc + '"', 'g'), other = new RegExp('"(?:videoId|contentId)":"(?!' + esc + '")'), pct = null;
+    if ((m = item.match(link))) return { t: +m[1] };
+    if ((m = item.match(/"startTimeSeconds":(\d+)/))) return { t: +m[1] };
+    if ((m = item.match(/"(?:percentDurationWatched|startPercent)":(\d+(?:\.\d+)?)/))) return { pct: +m[1] };
+    return null;
+  }
+  // Where the account's watch history says a video stopped (after Play locked, the YouTube app saves the spot to
+  // the history): the resume link's start second (startTimeSeconds or &t=…s), else the red bar's percent.
+  // Returns { t } or { pct } or null when the video isn't in the page.
+  function historySpot(html, id) {
+    if (!html || !id || html.indexOf(id) < 0) return null;
+    var re = new RegExp('"(?:videoId|contentId)":"' + id.replace(/[^\w-]/g, '') + '"', 'g'), m, pct = null;
     while ((m = re.exec(html))) {
-      var rest = html.slice(m.index + m[0].length, m.index + 6000), next = rest.search(other);
-      if (next >= 0) rest = rest.slice(0, next);
-      var st = rest.match(/"startTimeSeconds":(\d+)/);
-      if (st) return { t: +st[1] };
-      var pc = rest.match(/"(?:percentDurationWatched|startPercent)":(\d+(?:\.\d+)?)/);
-      if (pc && pct == null) pct = +pc[1];
+      var sp = spotIn(itemAround(html, m.index), id);
+      if (sp && sp.t != null) return sp;
+      if (sp && pct == null) pct = sp.pct;
     }
     return pct == null ? null : { pct: pct };
   }
 
-
   // The newest video in the account's watch history page: { id, title, author, t, dur, pct } (t when YouTube saved a
-  // spot), or null. History items list the title before the video's id (lockupViewModel) or after (videoRenderer).
+  // spot), or null.
   function historyLatest(html) {
     var start = html ? html.indexOf('ytInitialData') : -1; if (start < 0) return null;
     var re = /"(?:videoId|contentId)":"([\w-]{11})"/g; re.lastIndex = start;
     var m = re.exec(html); if (!m) return null;
-    var id = m[1], from = m.index, to = Math.min(html.length, from + 6000), nx;
-    while ((nx = re.exec(html)) && nx.index < to) { if (nx[1] !== id) { to = nx.index; break; } }
-    var item = html.slice(Math.max(start, from - 50), to);
+    var id = m[1], item = itemAround(html, m.index);
     function str(rx) { var r = item.match(rx); if (!r) return ''; try { return JSON.parse('"' + r[1] + '"'); } catch (e) { return r[1]; } }
     var title = str(/"title":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"/);
     var author = str(/"metadataParts":\[\{"text":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"(?:longBylineText|shortBylineText|ownerText)":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/);
     var len = item.match(/"(?:simpleText|text|content)":"(\d{1,2}:\d{2}(?::\d{2})?)"/), dur = 0;
     if (len) len[1].split(':').forEach(function (x) { dur = dur * 60 + +x; });
-    var spot = historySpot(html.slice(Math.max(start, from - 50), to), id) || {}, t = spot.t != null ? spot.t : null;
+    var spot = spotIn(item, id) || {}, t = spot.t != null ? spot.t : null;
     if (t == null && spot.pct != null && dur) t = Math.round(spot.pct / 100 * dur);
     return { id: id, title: title, author: author, t: t, dur: dur, pct: spot.pct != null ? spot.pct : null };
   }
