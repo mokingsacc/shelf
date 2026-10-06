@@ -270,5 +270,12 @@ function setup(store, opts = {}) {
   assert.strictEqual(Courses.historySpot(H3, 'zzzzzzzzzzz'), null);
   assert.strictEqual(Courses.historySpot('', 'ccccccccccc'), null);
 
+  // The newest video in the history: id, title, channel, spot (lockup: title before the id; videoRenderer: after)
+  const HL = hist([{ lockupViewModel: { contentId: 'eeeeeeeeeee', metadata: { lockupMetadataViewModel: { title: { content: 'PLAGUE Leaks \u0026 "more"' }, metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: 'Breaking Points' } }] }] } } } }, contentImage: { thumbnailViewModel: { overlays: [{ thumbnailBottomOverlayViewModel: { badges: [{ thumbnailBadgeViewModel: { text: '15:23' } }] } }] } }, rendererContext: { commandContext: { onTap: { innertubeCommand: { watchEndpoint: { videoId: 'eeeeeeeeeee', startTimeSeconds: 893 } } } } } } }, lku('fffffffffff', { startTimeSeconds: 7 })]);
+  assert.deepStrictEqual(Courses.historyLatest(HL), { id: 'eeeeeeeeeee', title: 'PLAGUE Leaks & "more"', author: 'Breaking Points', t: 893, dur: 923, pct: null });
+  const HV = hist([{ videoRenderer: { videoId: 'ggggggggggg', title: { runs: [{ text: 'Cardio high yield' }] }, longBylineText: { runs: [{ text: 'Mehlman Medical' }] }, lengthText: { simpleText: '1:00:00' }, thumbnailOverlays: [{ thumbnailOverlayResumePlaybackRenderer: { percentDurationWatched: 50 } }] } }]);
+  assert.deepStrictEqual(Courses.historyLatest(HV), { id: 'ggggggggggg', title: 'Cardio high yield', author: 'Mehlman Medical', t: 1800, dur: 3600, pct: 50 });
+  assert.strictEqual(Courses.historyLatest('<html>signed out</html>'), null);
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

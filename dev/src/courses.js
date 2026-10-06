@@ -126,6 +126,25 @@ var Courses = (function () {
     return pct == null ? null : { pct: pct };
   }
 
+  // The newest video in the account's watch history page: { id, title, author, t, dur, pct } (t when YouTube saved a
+  // spot), or null. History items list the title before the video's id (lockupViewModel) or after (videoRenderer).
+  function historyLatest(html) {
+    var start = html ? html.indexOf('ytInitialData') : -1; if (start < 0) return null;
+    var re = /"(?:videoId|contentId)":"([\w-]{11})"/g; re.lastIndex = start;
+    var m = re.exec(html); if (!m) return null;
+    var id = m[1], from = m.index, to = Math.min(html.length, from + 6000), nx;
+    while ((nx = re.exec(html)) && nx.index < to) { if (nx[1] !== id) { to = nx.index; break; } }
+    var item = html.slice(Math.max(start, from - 50), to);
+    function str(rx) { var r = item.match(rx); if (!r) return ''; try { return JSON.parse('"' + r[1] + '"'); } catch (e) { return r[1]; } }
+    var title = str(/"title":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"/);
+    var author = str(/"metadataParts":\[\{"text":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"(?:longBylineText|shortBylineText|ownerText)":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/);
+    var len = item.match(/"(?:simpleText|text|content)":"(\d{1,2}:\d{2}(?::\d{2})?)"/), dur = 0;
+    if (len) len[1].split(':').forEach(function (x) { dur = dur * 60 + +x; });
+    var spot = historySpot(html.slice(Math.max(start, from - 50), to), id) || {}, t = spot.t != null ? spot.t : null;
+    if (t == null && spot.pct != null && dur) t = Math.round(spot.pct / 100 * dur);
+    return { id: id, title: title, author: author, t: t, dur: dur, pct: spot.pct != null ? spot.pct : null };
+  }
+
   function channelVideos(html, now) {
     var data = initialData(html), out = [];
     if (!data) return null;
@@ -502,6 +521,6 @@ var Courses = (function () {
     };
   }
   return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
-    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot };
+    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot, historyLatest: historyLatest };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;

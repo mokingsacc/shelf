@@ -43,8 +43,8 @@ for (const [w, h] of [[390, 844], [375, 667], [820, 1180], [1180, 820]]) for (co
   await p.locator('[data-act="close-video"]').click(); await p.waitForTimeout(400);
   await shot('home');
   await p.screenshot({ path: `${OUT}/v3-homefull-${tag}.png`, fullPage: true });
-  await p.locator('.band .hd .tg').first().click(); await shot('home-open');
-  await p.locator('.band .hd .tm').first().click(); await shot('section');
+  await p.locator('#bands .band .hd .tg').first().click(); await shot('home-open');
+  await p.locator('#bands .band .hd .tm').first().click(); await shot('section');
   await p.evaluate(() => document.querySelector('#page').scrollTo(0, 99999)); await shot('section-bottom');
   await p.locator('#page details.fold summary', { hasText: 'Channels' }).click(); await shot('section-channels');
   await p.locator('.chrow').first().click(); await shot('channel');

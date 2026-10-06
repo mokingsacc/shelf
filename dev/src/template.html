@@ -113,6 +113,12 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 
 /* Bands */
 .bands{display:flex;flex-direction:column}
+/* Pick up from: Continue, Up next and the last video in the YouTube app, folded under one heading */
+.band.pick{--bg:var(--paper);--fg:var(--ink);padding:0;border-bottom:3px solid var(--rule)}
+.band.pick .hd{padding:6px var(--g) 2px;width:auto}
+.band.pick .hd h2{font-size:22px}
+.band.pick:not(.open) .pickbody{display:none}
+.band.pick .pickbody>button:last-of-type:not([hidden]){border-bottom:0}
 .addcat{display:flex;justify-content:space-between;align-items:center;min-height:56px;margin:0;padding:0 var(--g);border-top:2px solid var(--hair);border-bottom:2px solid var(--hair);font:700 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);background:var(--paper);width:100%}
 .band{padding:12px var(--g) 14px;background:var(--bg);color:var(--fg)}
 .band.c1{--bg:var(--b1-bg);--fg:var(--b1-fg);--tb:var(--b1-tag-bg);--tf:var(--b1-tag-fg)}
@@ -534,6 +540,9 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <button type="button" class="stat" id="statusBtn" data-act="check" aria-label="Self-check"><i class="dot wait" id="statusDot"></i><span id="statusText" class="sr">Starting</span></button>
   </header>
   <p class="note" id="webNote" hidden></p>
+  <section class="band pick open" id="pick" aria-label="Pick up from" hidden>
+    <div class="hd"><button type="button" class="tg" data-act="toggle-band" data-id="_pickShut" aria-expanded="true"><h2>Pick up from</h2><span class="car" aria-hidden="true" id="pickCar"></span></button><span class="tm mono" id="pickN"></span></div>
+    <div class="pickbody">
   <button type="button" class="now" id="cont" data-act="resume" hidden>
     <span class="tx"><span class="k" id="contK">Continue</span><b id="contTitle"></b><span class="meta mono" id="contMeta"></span></span>
     <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
@@ -543,6 +552,12 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <span class="tx"><span class="k" id="nextK">Up next</span><b id="nextT"></b></span>
     <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
   </button>
+  <button type="button" class="next" id="ytLast" data-act="yt-last" hidden>
+    <span class="tx"><span class="k" id="ytLastK">Last in YouTube</span><b id="ytLastT"></b></span>
+    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
+  </button>
+    </div>
+  </section>
   <div class="bands" id="bands"></div>
 </main>
 

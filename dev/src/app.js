@@ -267,6 +267,24 @@
       $('#nextT').innerHTML = esc(epLabel(nx, npr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' <span class="mono">' + Core.fmt(nx.dur) + '</span>' : '');
       $('#next').setAttribute('aria-label', 'Play next in ' + nc.name + ': ' + epLabel(nx, npr.notch));
     }
+    // Last in YouTube: the newest video in the account's watch history, at the spot YouTube saved (not when it's
+    // the Continue video at about the same spot)
+    var ly = lastYT, lyDup = ly && top && top.key === ly.id && (ly.t == null || Math.abs(prog(top).t - ly.t) < 20);
+    var lyShow = !!ly && !lyDup && !(nx && nx.id === ly.id);
+    $('#ytLast').hidden = !lyShow;
+    if (lyShow) {
+      var lyDone = ly.pct != null && ly.pct >= 97;
+      $('#ytLastK').textContent = 'Last in YouTube' + (ly.author ? ' · ' + ly.author : '');
+      $('#ytLastT').innerHTML = esc(ly.title || 'YouTube video') + ' <span class="mono">' + (lyDone ? 'watched' : ly.t != null ? 'at ' + Core.fmt(ly.t) : '') + '</span>';
+      $('#ytLast').setAttribute('aria-label', 'Pick up from YouTube: ' + (ly.title || 'video') + (ly.t != null && !lyDone ? ' at ' + Core.fmt(ly.t) : ''));
+    }
+    // The three fold under "Pick up from" (open unless closed with its heading)
+    var pickN = [!!top, !!nx, lyShow].filter(Boolean).length, pickOpen = !isOpenBand('_pickShut');
+    $('#pick').hidden = !pickN;
+    $('#pick').classList.toggle('open', pickOpen);
+    $('#pick .tg').setAttribute('aria-expanded', String(pickOpen));
+    $('#pickCar').innerHTML = I.down;
+    $('#pickN').textContent = pickOpen ? '' : String(pickN);
     $('#summary').textContent = refreshing ? 'Checking for new uploads…' : '';
     var wn = $('#webNote');
     if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can pick up where you left off, or paste a YouTube link into Search.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can pick up where you left off, or press ⌘V to play a YouTube link.'; }
@@ -819,6 +837,7 @@
       applyLook();
       renderAll();
       catchUp();
+      refreshLastYT();
       // Locked while playing in Shelf: say how to keep it going next time
       if (lockPaused && lockPaused === current) toast('YouTube stops videos inside other apps when the phone locks. Play locked opens it in the YouTube app, where Premium keeps playing.', '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 10000);
       lockPaused = null;
@@ -830,6 +849,18 @@
   // starts right there. In the iPhone app Shelf then reads where YouTube really stopped from the account's watch
   // history (the YouTube app saves it there; Mo said yes to this on 6 Oct 2026) and corrects the place quietly.
   // Never past the end; an Undo puts it back, and the scrub bar fine-tunes it.
+  // The newest video in the YouTube app's watch history, for the "Pick up from" fold (kept between launches)
+  var LY_KEY = 'shelf.lastyt', lastYT = null, lastYTAt = 0;
+  try { lastYT = JSON.parse(rawGet(LY_KEY) || 'null'); } catch (e) {}
+  function noteHistory(page) {
+    var l = Courses.historyLatest(page); if (!l) return;
+    lastYT = l; lastYTAt = Date.now(); rawSet(LY_KEY, JSON.stringify(l), false); renderHome();
+  }
+  function refreshLastYT(force) {
+    if (!Native.device || (!force && Date.now() - lastYTAt < 30000)) return;
+    lastYTAt = Date.now();
+    Native.youtubeGet(HIST_URL).then(function (r) { if (r && r.signedIn && r.status === 200) noteHistory(r.data || ''); }, function () {});
+  }
   var catchSeq = 0, HAND_KEY = 'shelf.handoff', HIST_URL = 'https://www.youtube.com/feed/history', seekOnPlay = null, lockPaused = null, histNote = null;
   function catchUp() {
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
@@ -875,6 +906,7 @@
         if (!r) return note({ state: 'none' });
         if (!r.signedIn) { note({ state: 'signin' }); if (guess - h.t >= 5) say(false, 'signin'); return; }
         var page = r.data || '', ok = r.status === 200 && page.indexOf('ytInitialData') >= 0;
+        if (ok) noteHistory(page);
         var spot = ok ? Courses.historySpot(page, h.id) : null;
         // Until the YouTube app saves the new spot, the history still shows where Shelf handed over (or not this video yet)
         if ((!spot || (spot.t != null && Math.abs(spot.t - h.t) < 3)) && tries < 5) return setTimeout(function () { if (mine === catchSeq) look(); }, 2500);
@@ -1846,6 +1878,7 @@
       case 'edit-goal': $('#goalName').value = goalName(); $('#goalDate').min = todayISO(); $('#goalDate').value = goalISO(); $('#goalMsg').textContent = ''; if ($('#paceDlg').open) $('#paceDlg').close(); openDlg($('#goalDlg')); break;
       case 'goal-reset': delete prefs.goal; savePrefs(); applyGoal(); $('#goalDlg').close(); renderAll(); $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); toast('Goal back to Step 2 CK on 22 December.'); break;
       case 'pace-copy': copyText(paceText(), function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy for Claude'; }, 2500); toast('Copied. Paste it into Claude.'); }); break;
+      case 'yt-last': if (lastYT) openVideo({ id: lastYT.id, t: lastYT.pct != null && lastYT.pct >= 97 ? 0 : lastYT.t || 0, title: lastYT.title, author: lastYT.author }); break;
       case 'toggle-band': prefs.open = prefs.open || {}; if (prefs.open[id]) delete prefs.open[id]; else prefs.open[id] = 1; savePrefs(); renderHome(); var tg = document.querySelector('.band [data-act="toggle-band"][data-id="' + id + '"]'); if (tg) tg.focus({ preventScroll: true }); break;
       case 'edit-section': openSec(id); break;
       case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
@@ -2365,8 +2398,9 @@
     if (!canSave && !Native.inApp) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Tap the self-check for how to fix it.', 'warn'); }, 600);
     refreshAll(false);
     catchUp(); // Shelf was closed by iOS while the video played in YouTube
+    refreshLastYT(true);
     // Test hook
-    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture, catchUp: catchUp,
+    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT,
       get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
