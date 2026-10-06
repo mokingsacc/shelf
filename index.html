@@ -367,6 +367,8 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .x svg{width:22px;height:22px}
 .sh-top .lnk{display:inline-flex;align-items:center;gap:6px;min-height:var(--tap);padding:0 12px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--pl-dim);text-decoration:none;white-space:nowrap}
 .sh-top .lnk svg{width:14px;height:14px}
+.sh-top .lnks{display:flex;gap:8px;min-width:0}
+.sh-top .lnk[hidden]{display:none}
 .vid{position:relative;width:100%;aspect-ratio:16/9;background:#000;flex:none}
 .vid #player,.vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 /* Phone turned sideways: the video fills the screen (turn back for the rest of the player) */
@@ -560,7 +562,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <!-- Video player -->
 <section class="sheet" id="vsheet" role="dialog" aria-modal="true" aria-label="Video player" aria-hidden="true">
   <div class="grab" aria-hidden="true"></div>
-  <div class="sh-top"><button type="button" class="x" data-act="close-video" aria-label="Close player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><a class="lnk" id="ytLink" href="#" target="_blank" rel="noopener" aria-label="Play locked: open in the YouTube app at this spot, so it keeps playing with the phone locked">Play locked <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></div>
+  <div class="sh-top"><button type="button" class="x" data-act="close-video" aria-label="Close player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="lnks"><a class="lnk" id="ytOpen" href="#" target="_blank" rel="noopener" hidden aria-label="Open in the YouTube app at this spot, without locking the phone">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a><a class="lnk" id="ytLink" href="#" target="_blank" rel="noopener" aria-label="Play locked: open in the YouTube app at this spot, so it keeps playing with the phone locked">Play locked <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></span></div>
   <div class="vid"><div id="player"></div><div class="perr" id="perr" hidden></div></div>
   <div class="info"><div class="ch" id="vCh"></div><h2 id="vTitle"></h2></div>
   <button type="button" class="lab tgl ai" id="vAiBtn" data-act="ai-sum" aria-expanded="false" aria-controls="vAi" hidden><span>Summary</span><span class="mono" id="vAiSt"></span></button>
@@ -3444,7 +3446,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     $('#vCh').textContent = courseTag(v.id) || v.author || '';
     $('#vNext').hidden = true; clearTimeout(nextTimer); renderPlayerCourse(v.id); renderNextBtn(v.id);
     renderListen(v);
-    $('#ytLink').href = ytLink(v);
+    $('#ytLink').href = ytLink(v); syncYtOpen();
     wantRate = rateFor(v); renderRateUI(v); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
@@ -4749,7 +4751,7 @@ if (typeof module !== 'undefined') module.exports = AI;
       case 'mark': doMark(); break;
       case 'listen': listen(); break;
       case 'lock-setup': openLockDlg(); break;
-      case 'lock-toggle': prefs.autoLock = !prefs.autoLock; savePrefs(); renderLockDlg(); if (prefs.autoLock) toast('Auto-lock on. Try Play locked on any video.'); break;
+      case 'lock-toggle': prefs.autoLock = !prefs.autoLock; savePrefs(); renderLockDlg(); syncYtOpen(); if (prefs.autoLock) toast('Auto-lock on. Try Play locked on any video.'); break;
       case 'twin-pick': pickTwin(+b.getAttribute('data-i')); break;
       case 'ai-sum':
         aiSumOpen = !aiSumOpen; renderAiUI();
@@ -4846,28 +4848,33 @@ if (typeof module !== 'undefined') module.exports = AI;
   // youtube:// address, so iOS can't send it to Safari instead (Safari pauses on lock too); if no app opens
   // within 1.5 s, the web page opens. Back in Shelf, the place moves on by the time spent away (see catchUp).
   var appFallback = null;
-  function handTarget() {
+  function handTarget(noLock) {
     var v = current && videos[current]; if (!v) return null;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
     var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
     // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
-    var href = !Native.inApp ? web : prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
-    return { v: v, t: t, web: web, href: href, rate: wantRate || 1 };
+    var lock = !!prefs.autoLock && !noLock;
+    var href = !Native.inApp ? web : lock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
+    return { v: v, t: t, web: web, href: href, lock: lock, rate: wantRate || 1 };
   }
   function handOff(h) {
     catchSeq++; // a history check still running from the last return stops
     clearTimeout(appFallback);
-    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
+    if (Native.inApp && !h.lock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
   }
   function rateTxt(r) { return r + '×'; }
-  $('#ytLink').addEventListener('click', function (e) {
-    capture(true); var h = handTarget(); if (!h) { e.preventDefault(); return; }
-    this.href = h.href;
-    handOff(h);
+  ['#ytLink', '#ytOpen'].forEach(function (sel) {
+    $(sel).addEventListener('click', function (e) {
+      capture(true); var h = handTarget(sel === '#ytOpen'); if (!h) { e.preventDefault(); return; }
+      this.href = h.href;
+      handOff(h);
+    });
   });
+  // "YouTube ↗" (open without locking) sits beside Play locked only while auto-lock is on; otherwise they'd be the same
+  function syncYtOpen() { $('#ytOpen').hidden = !(Native.inApp && prefs.autoLock); }
   scrubKeys($('#vScrub'), 15, function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
   scrubKeys($('#nScrub'), 30, function (s) { engine.seekBy(s); });
   scrubDrag($('#vScrub'), 'v', function () { try { return player && current ? player.getDuration() : 0; } catch (e) { return 0; } }, function () { return wantRate; }, function (t) { try { player.seekTo(t, true); } catch (e) {} videoTick(); });

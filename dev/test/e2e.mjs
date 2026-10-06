@@ -247,6 +247,11 @@ ok(await shelf(p, () => window.__shelf.prefs.autoLock === true) && /Auto-lock is
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 const sc = await p.evaluate(() => { const a = document.querySelector('#ytLink'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
 ok(/^shortcuts:\/\/run-shortcut\?name=Shelf%20Play%20Locked&input=text&text=youtube%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D/.test(sc), 'auto-lock: Play locked runs the Shortcut with the YouTube app link');
+ok(await p.locator('#ytOpen').isVisible(), 'auto-lock on: a YouTube button sits beside Play locked');
+const yo = await p.evaluate(() => { const a = document.querySelector('#ytOpen'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
+ok(/^youtube:\/\/www\.youtube\.com\/watch\?v=/.test(yo) && await shelf(p, () => !!JSON.parse(localStorage.getItem('shelf.handoff'))), 'YouTube ↗ opens the YouTube app at the spot without the lock Shortcut, and still counts the time away');
+const bar = await p.evaluate(() => { const r = document.querySelector('.sh-top').getBoundingClientRect(); return [...document.querySelectorAll('.sh-top .x, .sh-top .lnk:not([hidden])')].every((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left - 1 && b.right <= r.right + 1 && b.height < 60; }); });
+ok(bar, 'the top bar fits on a phone with both buttons');
 await shelf(p, () => { window.__shelf.prefs.autoLock = false; localStorage.setItem('shelf.handoff', 'null'); });
 // Locking while it plays in Shelf (no hand-off): back in Shelf, a hint with a Play locked button
 await shelf(p, () => window.__fake.playVideo()); await p.waitForTimeout(300);

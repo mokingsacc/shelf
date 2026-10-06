@@ -367,6 +367,8 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .x svg{width:22px;height:22px}
 .sh-top .lnk{display:inline-flex;align-items:center;gap:6px;min-height:var(--tap);padding:0 12px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--pl-dim);text-decoration:none;white-space:nowrap}
 .sh-top .lnk svg{width:14px;height:14px}
+.sh-top .lnks{display:flex;gap:8px;min-width:0}
+.sh-top .lnk[hidden]{display:none}
 .vid{position:relative;width:100%;aspect-ratio:16/9;background:#000;flex:none}
 .vid #player,.vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 /* Phone turned sideways: the video fills the screen (turn back for the rest of the player) */
@@ -560,7 +562,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <!-- Video player -->
 <section class="sheet" id="vsheet" role="dialog" aria-modal="true" aria-label="Video player" aria-hidden="true">
   <div class="grab" aria-hidden="true"></div>
-  <div class="sh-top"><button type="button" class="x" data-act="close-video" aria-label="Close player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><a class="lnk" id="ytLink" href="#" target="_blank" rel="noopener" aria-label="Play locked: open in the YouTube app at this spot, so it keeps playing with the phone locked">Play locked <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></div>
+  <div class="sh-top"><button type="button" class="x" data-act="close-video" aria-label="Close player"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="lnks"><a class="lnk" id="ytOpen" href="#" target="_blank" rel="noopener" hidden aria-label="Open in the YouTube app at this spot, without locking the phone">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a><a class="lnk" id="ytLink" href="#" target="_blank" rel="noopener" aria-label="Play locked: open in the YouTube app at this spot, so it keeps playing with the phone locked">Play locked <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></span></div>
   <div class="vid"><div id="player"></div><div class="perr" id="perr" hidden></div></div>
   <div class="info"><div class="ch" id="vCh"></div><h2 id="vTitle"></h2></div>
   <button type="button" class="lab tgl ai" id="vAiBtn" data-act="ai-sum" aria-expanded="false" aria-controls="vAi" hidden><span>Summary</span><span class="mono" id="vAiSt"></span></button>

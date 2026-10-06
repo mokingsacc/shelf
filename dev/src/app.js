@@ -570,7 +570,7 @@
     $('#vCh').textContent = courseTag(v.id) || v.author || '';
     $('#vNext').hidden = true; clearTimeout(nextTimer); renderPlayerCourse(v.id); renderNextBtn(v.id);
     renderListen(v);
-    $('#ytLink').href = ytLink(v);
+    $('#ytLink').href = ytLink(v); syncYtOpen();
     wantRate = rateFor(v); renderRateUI(v); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
@@ -1875,7 +1875,7 @@
       case 'mark': doMark(); break;
       case 'listen': listen(); break;
       case 'lock-setup': openLockDlg(); break;
-      case 'lock-toggle': prefs.autoLock = !prefs.autoLock; savePrefs(); renderLockDlg(); if (prefs.autoLock) toast('Auto-lock on. Try Play locked on any video.'); break;
+      case 'lock-toggle': prefs.autoLock = !prefs.autoLock; savePrefs(); renderLockDlg(); syncYtOpen(); if (prefs.autoLock) toast('Auto-lock on. Try Play locked on any video.'); break;
       case 'twin-pick': pickTwin(+b.getAttribute('data-i')); break;
       case 'ai-sum':
         aiSumOpen = !aiSumOpen; renderAiUI();
@@ -1972,28 +1972,33 @@
   // youtube:// address, so iOS can't send it to Safari instead (Safari pauses on lock too); if no app opens
   // within 1.5 s, the web page opens. Back in Shelf, the place moves on by the time spent away (see catchUp).
   var appFallback = null;
-  function handTarget() {
+  function handTarget(noLock) {
     var v = current && videos[current]; if (!v) return null;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
     var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
     // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
-    var href = !Native.inApp ? web : prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
-    return { v: v, t: t, web: web, href: href, rate: wantRate || 1 };
+    var lock = !!prefs.autoLock && !noLock;
+    var href = !Native.inApp ? web : lock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
+    return { v: v, t: t, web: web, href: href, lock: lock, rate: wantRate || 1 };
   }
   function handOff(h) {
     catchSeq++; // a history check still running from the last return stops
     clearTimeout(appFallback);
-    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
+    if (Native.inApp && !h.lock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
   }
   function rateTxt(r) { return r + '×'; }
-  $('#ytLink').addEventListener('click', function (e) {
-    capture(true); var h = handTarget(); if (!h) { e.preventDefault(); return; }
-    this.href = h.href;
-    handOff(h);
+  ['#ytLink', '#ytOpen'].forEach(function (sel) {
+    $(sel).addEventListener('click', function (e) {
+      capture(true); var h = handTarget(sel === '#ytOpen'); if (!h) { e.preventDefault(); return; }
+      this.href = h.href;
+      handOff(h);
+    });
   });
+  // "YouTube ↗" (open without locking) sits beside Play locked only while auto-lock is on; otherwise they'd be the same
+  function syncYtOpen() { $('#ytOpen').hidden = !(Native.inApp && prefs.autoLock); }
   scrubKeys($('#vScrub'), 15, function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
   scrubKeys($('#nScrub'), 30, function (s) { engine.seekBy(s); });
   scrubDrag($('#vScrub'), 'v', function () { try { return player && current ? player.getDuration() : 0; } catch (e) { return 0; } }, function () { return wantRate; }, function (t) { try { player.seekTo(t, true); } catch (e) {} videoTick(); });
