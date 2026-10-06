@@ -713,6 +713,16 @@ ok(await shelf(p, () => JSON.parse(localStorage.getItem('shelf.lastyt')).id === 
 await p.locator('#pick .tg').click(); await p.waitForTimeout(150);
 ok(!(await p.locator('#ytLast').isVisible()) && /^\d$/.test(await p.locator('#pickN').textContent()) && await shelf(p, () => window.__shelf.prefs.open._pickShut === 1), 'R the heading folds it away (remembered), showing how many are inside: ' + await p.locator('#pickN').textContent());
 await p.locator('#pick .tg').click(); await p.waitForTimeout(150);
+for (const vid of ['dQw4w9WgXcQ', 'M7lc1UVf-VE']) {
+  await p.evaluate((v) => window.__shelf.handleText('https://youtu.be/' + v), vid); await p.waitForTimeout(1500);
+  await p.evaluate(() => window.__fake.advance(100)); await p.waitForTimeout(1200);
+  await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
+}
+const contBefore = await p.locator('#contTitle').textContent();
+await p.evaluate((h) => { window.__hist = { html: h.replace(/eeeeeeeeeee/g, 'M7lc1UVf-VE') }; window.__shelf.refreshLastYT(true); }, ytHist); await p.waitForTimeout(300);
+const three = await p.evaluate(() => ['#cont', '#next', '#ytLast'].map((q) => !document.querySelector(q).hidden));
+ok(three.every(Boolean) && (await p.locator('#contTitle').textContent()) !== contBefore && /PLAGUE/.test(await p.locator('#ytLastT').textContent()), 'R when the YouTube video is also the latest in Shelf, Continue shows the one before it: three cards (' + contBefore + ' -> ' + await p.locator('#contTitle').textContent() + ')');
+await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, ytHist); await p.waitForTimeout(300);
 await p.locator('#ytLast').click(); await p.waitForTimeout(1500);
 ok(await shelf(p, () => window.__lastId === 'eeeeeeeeeee' && Math.abs(window.__lastStart - 890) < 1), 'R tapping it plays that video from 14:53 in Shelf (3 s back, like every resume)');
 await ctx.close();

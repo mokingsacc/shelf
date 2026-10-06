@@ -113,18 +113,20 @@ var Courses = (function () {
     var esc = id.replace(/[^\w-]/g, ''), m;
     var link = new RegExp('watch\\?v=' + esc + '(?:\\\\u0026|&amp;|&)(?:[^"]*?(?:\\\\u0026|&amp;|&))?t=(\\d+)s?');
     if ((m = html.match(link))) return { t: +m[1] };
-    var re = new RegExp('"videoId":"' + esc + '"', 'g'), pct = null;
+    // The video's own data: from its id (contentId comes first in the newer lockup items, videoId in the older ones)
+    // up to the next different video. The red bar is percentDurationWatched (old) or startPercent (lockups).
+    var re = new RegExp('"(?:videoId|contentId)":"' + esc + '"', 'g'), other = new RegExp('"(?:videoId|contentId)":"(?!' + esc + '")'), pct = null;
     while ((m = re.exec(html))) {
-      // Only this video's own data: up to the next different video
-      var rest = html.slice(m.index + m[0].length, m.index + 1500), next = rest.search(new RegExp('"videoId":"(?!' + esc + '")'));
+      var rest = html.slice(m.index + m[0].length, m.index + 6000), next = rest.search(other);
       if (next >= 0) rest = rest.slice(0, next);
       var st = rest.match(/"startTimeSeconds":(\d+)/);
       if (st) return { t: +st[1] };
-      var pc = rest.match(/"percentDurationWatched":(\d+)/);
+      var pc = rest.match(/"(?:percentDurationWatched|startPercent)":(\d+(?:\.\d+)?)/);
       if (pc && pct == null) pct = +pc[1];
     }
     return pct == null ? null : { pct: pct };
   }
+
 
   // The newest video in the account's watch history page: { id, title, author, t, dur, pct } (t when YouTube saved a
   // spot), or null. History items list the title before the video's id (lockupViewModel) or after (videoRenderer).

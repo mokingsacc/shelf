@@ -277,5 +277,10 @@ function setup(store, opts = {}) {
   assert.deepStrictEqual(Courses.historyLatest(HV), { id: 'ggggggggggg', title: 'Cardio high yield', author: 'Mehlman Medical', t: 1800, dur: 3600, pct: 50 });
   assert.strictEqual(Courses.historyLatest('<html>signed out</html>'), null);
 
+  // Newer lockup items: the red bar (startPercent) sits before the video's id, with the length badge
+  const HP = hist([{ lockupViewModel: { contentId: 'hhhhhhhhhhh', contentImage: { thumbnailViewModel: { overlays: [{ thumbnailBottomOverlayViewModel: { progressBar: { thumbnailOverlayProgressBarViewModel: { startPercent: 40 } }, badges: [{ thumbnailBadgeViewModel: { text: '10:00' } }] } }] } }, metadata: { lockupMetadataViewModel: { title: { content: 'Renal' } } }, rendererContext: { commandContext: { onTap: { innertubeCommand: { watchEndpoint: { videoId: 'hhhhhhhhhhh' } } } } } } }, lku('iiiiiiiiiii', { startTimeSeconds: 99 })]);
+  assert.deepStrictEqual(Courses.historySpot(HP, 'hhhhhhhhhhh'), { pct: 40 }, 'the lockup red bar, not the next video\'s second');
+  assert.deepStrictEqual(Courses.historyLatest(HP), { id: 'hhhhhhhhhhh', title: 'Renal', author: '', t: 240, dur: 600, pct: 40 });
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

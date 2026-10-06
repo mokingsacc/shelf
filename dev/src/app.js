@@ -236,7 +236,9 @@
     fitAll($('#bands'));
     // Continue: the most recent unfinished thing anywhere. At night, the last podcast you fell asleep to (Bedtime).
     var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(started))
-      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); })
+      // The last video in the YouTube app has its own card below, so Continue is the latest thing besides it
+      .filter(function (e) { return !(lastYT && e.type === 'video' && e.key === lastYT.id); });
     var top = all[0], bed = night && all.filter(function (e) { return e.type === 'audio'; })[0];
     if (bed) top = bed;
     // The podcast bar at the bottom already is "continue" for the episode it holds
@@ -267,15 +269,14 @@
       $('#nextT').innerHTML = esc(epLabel(nx, npr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' <span class="mono">' + Core.fmt(nx.dur) + '</span>' : '');
       $('#next').setAttribute('aria-label', 'Play next in ' + nc.name + ': ' + epLabel(nx, npr.notch));
     }
-    // Last in YouTube: the newest video in the account's watch history, at the spot YouTube saved (not when it's
-    // the Continue video at about the same spot)
-    var ly = lastYT, lyDup = ly && top && top.key === ly.id && (ly.t == null || Math.abs(prog(top).t - ly.t) < 20);
-    var lyShow = !!ly && !lyDup && !(nx && nx.id === ly.id);
+    // Last in YouTube: the newest video in the account's watch history, at the spot YouTube saved (exact when the
+    // history has the second, else from its red bar, "about")
+    var ly = lastYT, lyShow = !!ly;
     $('#ytLast').hidden = !lyShow;
     if (lyShow) {
       var lyDone = ly.pct != null && ly.pct >= 97;
       $('#ytLastK').textContent = 'Last in YouTube' + (ly.author ? ' · ' + ly.author : '');
-      $('#ytLastT').innerHTML = esc(ly.title || 'YouTube video') + ' <span class="mono">' + (lyDone ? 'watched' : ly.t != null ? 'at ' + Core.fmt(ly.t) : '') + '</span>';
+      $('#ytLastT').innerHTML = esc(ly.title || 'YouTube video') + ' <span class="mono">' + (lyDone ? 'watched' : ly.t != null ? (ly.exact === false ? 'about ' : 'at ') + Core.fmt(ly.t) : '') + '</span>';
       $('#ytLast').setAttribute('aria-label', 'Pick up from YouTube: ' + (ly.title || 'video') + (ly.t != null && !lyDone ? ' at ' + Core.fmt(ly.t) : ''));
     }
     // The three fold under "Pick up from" (open unless closed with its heading)
@@ -854,12 +855,16 @@
   try { lastYT = JSON.parse(rawGet(LY_KEY) || 'null'); } catch (e) {}
   function noteHistory(page) {
     var l = Courses.historyLatest(page); if (!l) return;
+    l.exact = !!Courses.historySpot(page, l.id) && Courses.historySpot(page, l.id).t != null;
     lastYT = l; lastYTAt = Date.now(); rawSet(LY_KEY, JSON.stringify(l), false); renderHome();
   }
+  var lyAgain = null;
   function refreshLastYT(force) {
     if (!Native.device || (!force && Date.now() - lastYTAt < 30000)) return;
     lastYTAt = Date.now();
     Native.youtubeGet(HIST_URL).then(function (r) { if (r && r.signedIn && r.status === 200) noteHistory(r.data || ''); }, function () {});
+    // The YouTube app saves its spot a little after you leave it, so look once more shortly after
+    clearTimeout(lyAgain); lyAgain = setTimeout(function () { if (document.visibilityState === 'visible') Native.youtubeGet(HIST_URL).then(function (r) { if (r && r.signedIn && r.status === 200) noteHistory(r.data || ''); }, function () {}); }, 8000);
   }
   var catchSeq = 0, HAND_KEY = 'shelf.handoff', HIST_URL = 'https://www.youtube.com/feed/history', seekOnPlay = null, lockPaused = null, histNote = null;
   function catchUp() {
@@ -2217,6 +2222,7 @@
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       out.push({ ok: 1, text: prefs.autoLock ? 'Play locked locks the phone by itself (Shortcut "' + LOCK_SHORTCUT + '")' : 'Play locked: the phone can lock by itself with a one-time Shortcut', fix: 'lock' });
+      if (Native.device && lastYT) out.push({ ok: 1, text: 'Last in YouTube: ' + (lastYT.title || lastYT.id) + (lastYT.t == null ? ', no saved spot in your history yet' : lastYT.exact ? ' at ' + Core.fmt(lastYT.t) + ' (YouTube\'s saved second)' : ' about ' + Core.fmt(lastYT.t) + ' (from its ' + lastYT.pct + '% red bar' + (lastYT.dur ? ' of ' + Core.fmt(lastYT.dur) : '') + ')') });
       // The last return from YouTube: did the watch history give the exact spot? (in plain words, for a screenshot)
       if (histNote) {
         var hn = histNote, hw = ' (' + new Date(hn.at).toTimeString().slice(0, 5) + ')';
