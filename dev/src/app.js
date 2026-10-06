@@ -826,7 +826,7 @@
 
   // Back from the YouTube app: move the place on by the time away (at this video's speed), never past the end.
   // An Undo puts it back, and the scrub bar fine-tunes it.
-  var HAND_KEY = 'shelf.handoff', seekOnPlay = null, lockPaused = null;
+  var HAND_KEY = 'shelf.handoff', HAND_LAG = 22, seekOnPlay = null, lockPaused = null;
   function catchUp() {
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
     if (!h) return;
@@ -834,7 +834,9 @@
     var v = videos[h.id], away = (Date.now() - h.at) / 1000;
     // Only when Shelf really went to YouTube (armed as it left), not after a night away or a cancelled tap
     if (!h.armed || !v || v.done || away < 15 || away > 8 * 3600 || Math.abs((v.t || 0) - h.t) > 30) return;
-    var to = h.t + away * (h.rate || 1);
+    // Opening YouTube and getting it playing takes a little while, so land 22 s earlier (a second or two
+    // repeated beats a gap)
+    var to = h.t + away * (h.rate || 1) - HAND_LAG;
     if (v.dur > 0) to = Math.min(to, Math.max(h.t, v.dur - 30)); // short of the end, so it isn't counted as watched
     if (to - h.t < 5) return;
     function put(t) {
@@ -844,7 +846,7 @@
       renderAll();
     }
     put(to);
-    toast('Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube.', '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
+    toast('Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube' + ((h.rate || 1) !== 1 ? ' at ' + rateTxt(h.rate) : '') + '.', '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
     // Once: the phone can lock itself after Play locked
     if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
   }
@@ -1932,18 +1934,43 @@
   // the phone locked (YouTube stops its embedded player in the background). In the iPhone app it uses the
   // youtube:// address, so iOS can't send it to Safari instead (Safari pauses on lock too); if no app opens
   // within 1.5 s, the web page opens. Back in Shelf, the place moves on by the time spent away (see catchUp).
-  var appFallback = null;
-  $('#ytLink').addEventListener('click', function () {
-    capture(true); var v = current && videos[current]; if (!v) return;
+  // YouTube's links can't set its speed, so whenever this video's speed differs from the one YouTube was last set to,
+  // a sheet says to set YouTube to the same speed (it usually keeps it); the catch-up counts the time away at that speed.
+  var appFallback = null, pendingHand = null;
+  function handTarget() {
+    var v = current && videos[current]; if (!v) return null;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
     var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
     // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
-    this.href = !Native.inApp ? web : prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
+    var href = !Native.inApp ? web : prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
+    return { v: v, t: t, web: web, href: href, rate: wantRate || 1 };
+  }
+  function handOff(h) {
     clearTimeout(appFallback);
-    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(web, '_blank'); }, 1500);
+    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
-    rawSet(HAND_KEY, JSON.stringify({ id: v.id, t: t, at: Date.now(), rate: wantRate || 1 }), false);
+    rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
+  }
+  function rateTxt(r) { return r + '×'; }
+  $('#ytLink').addEventListener('click', function (e) {
+    capture(true); var h = handTarget(); if (!h) { e.preventDefault(); return; }
+    this.href = h.href;
+    if ((prefs.ytRate || 1) !== h.rate) {
+      e.preventDefault(); pendingHand = h;
+      Array.prototype.forEach.call(document.querySelectorAll('.rateNow'), function (el) { el.textContent = rateTxt(h.rate); });
+      $('#rateGo').href = h.href;
+      try { player.pauseVideo(); } catch (e2) {}
+      openDlg($('#rateDlg'));
+      return;
+    }
+    handOff(h);
+  });
+  $('#rateGo').addEventListener('click', function () {
+    var h = pendingHand; pendingHand = null; $('#rateDlg').close();
+    if (!h) return;
+    prefs.ytRate = h.rate; savePrefs();
+    handOff(h);
   });
   scrubKeys($('#vScrub'), 15, function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
   scrubKeys($('#nScrub'), 30, function (s) { engine.seekBy(s); });

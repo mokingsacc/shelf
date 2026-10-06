@@ -754,6 +754,19 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="db" id="twinBody"></div>
 </dialog>
 
+<dialog id="rateDlg" aria-labelledby="rateH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="rateH">Same speed in YouTube</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db">
+    <p>You watch this at <b class="rateNow">1.5×</b>. YouTube can't be told the speed by a link, so set it once there:</p>
+    <ol class="steps">
+      <li>Tap the video, then <b>⚙</b> &gt; <b>Playback speed</b> &gt; <b class="rateNow">1.5×</b>.</li>
+      <li>YouTube usually keeps it for the next videos. Shelf asks again only if your speed here changes.</li>
+    </ol>
+    <p class="cnote">Back in Shelf, your place moves on at <span class="rateNow">1.5×</span> for the time away, landing 22 seconds early so you never miss a bit.</p>
+    <a class="primary" id="rateGo" href="#" target="_blank" rel="noopener">Open YouTube</a>
+  </div>
+</dialog>
 <dialog id="lockDlg" aria-labelledby="lockH">
   <div class="grab" aria-hidden="true"></div>
   <div class="dh"><h2 id="lockH">Lock automatically</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
