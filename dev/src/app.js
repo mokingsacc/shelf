@@ -1115,6 +1115,20 @@
     if (aiOn() && aiKey && isMed(m.vid)) return '<div class="mcard"><button type="button" class="cbtn" data-act="mark-draft" data-id="' + esc(m.id) + '">Draft a card</button></div>';
     return '';
   }
+  // What YouTube's history page sends Shelf for the newest video (that one item only), to paste to Claude when the
+  // "Last in YouTube" time looks wrong
+  function ytReport(b) {
+    b.textContent = 'Reading your YouTube history…';
+    Native.youtubeGet(HIST_URL).then(function (r) {
+      var page = (r && r.data) || '', st = page.indexOf('ytInitialData'), m = st >= 0 && /"(?:videoId|contentId)":"([\w-]{11})"/.exec(page.slice(st));
+      var at = m ? st + m.index : -1, l = Courses.historyLatest(page);
+      var txt = 'Shelf YouTube report ' + new Date().toISOString() + '\nstatus ' + (r && r.status) + ' · signed in ' + (r && r.signedIn) + ' · logged in page ' + /"LOGGED_IN":true/.test(page) + ' · ' + page.length + ' chars' +
+        '\nfound: ' + JSON.stringify(l) +
+        '\nmarkers: startTimeSeconds ' + (page.match(/"startTimeSeconds"/g) || []).length + ', startPercent ' + (page.match(/"startPercent"/g) || []).length + ', percentDurationWatched ' + (page.match(/"percentDurationWatched"/g) || []).length + ', &t= ' + (page.match(/(?:\\u0026|&)t=\d+s/g) || []).length +
+        '\n\nnewest item:\n' + (at >= 0 ? page.slice(Math.max(0, at - 1500), at + 6000) : '(none)');
+      copyText(txt, function () { b.textContent = 'Copied. Paste it to Claude'; toast('Copied. Paste it in the chat with Claude.'); });
+    }, function (e) { b.textContent = 'Copy YouTube report for Claude'; toast("Couldn't read YouTube: " + (e && e.message || e), 'warn'); });
+  }
   function copyText(text, done) {
     var fail = function () { toast("Couldn't copy. Try again.", 'warn'); };
     try { navigator.clipboard.writeText(text).then(done, function () { Native.call('Clipboard', 'write', { string: text }).then(done, fail); }); }
@@ -1984,6 +1998,7 @@
       case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
       case 'key-remove': delete prefs.apiKey; savePrefs(); $('#keyInput').value = ''; $('#keyMsg').textContent = 'Removed. Search reads YouTube\'s results page.'; $('#keyMsg').className = 'msgline ok'; break;
       case 'send': copyShelf(b); break;
+      case 'yt-report': ytReport(b); break;
       case 'yt-sign': signInYT(b); break;
       case 'yt-settings': Native.openSettings().catch(function () { toast("Open the iPhone's Settings app, scroll down to Shelf, and turn on Allow Cross-Website Tracking.", 'warn'); }); break;
       case 'phone-retry': if (navigator.onLine === false) { toast("You're offline. Reconnect, then tap Try again.", 'warn'); break; } b.textContent = 'Reopening…'; capture(true); if (engine) engine.capture(true); setTimeout(function () { location.reload(); }, 300); break; // a fresh start reads the phone's copy again and merges it
@@ -2289,6 +2304,7 @@
     var ya = Native.ytAccount.state, signIn = Native.inApp && ya !== 'old', acts = '';
     if (Native.inApp) acts += '<button type="button" class="ghost" id="toneBtn" data-act="tone">' + (Native.tonePlaying ? 'Stop the sound test' : 'Sound test') + '</button>';
     acts += '<button type="button" class="ghost" id="sendBtn" data-act="send">Copy shelf link</button>';
+    if (Native.device) acts += '<button type="button" class="ghost" data-act="yt-report">Copy YouTube report for Claude</button>';
     if (signIn && ya === 'in') acts += '<button type="button" class="ghost" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : 'Sign out of YouTube') + '</button>';
     $('#checkActs').innerHTML = acts;
     $('#trackBtn').hidden = !signIn; $('#aiKeyBtn').hidden = !Native.inApp;

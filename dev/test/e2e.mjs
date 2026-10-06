@@ -723,6 +723,10 @@ await p.evaluate((h) => { window.__hist = { html: h.replace(/eeeeeeeeeee/g, 'M7l
 const three = await p.evaluate(() => ['#cont', '#next', '#ytLast'].map((q) => !document.querySelector(q).hidden));
 ok(three.every(Boolean) && (await p.locator('#contTitle').textContent()) !== contBefore && /PLAGUE/.test(await p.locator('#ytLastT').textContent()), 'R when the YouTube video is also the latest in Shelf, Continue shows the one before it: three cards (' + contBefore + ' -> ' + await p.locator('#contTitle').textContent() + ')');
 await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, ytHist); await p.waitForTimeout(300);
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150); await p.locator('#checkMore summary').click();
+await p.locator('[data-act="yt-report"]').click(); await p.waitForTimeout(500);
+ok(/Copied/.test(await p.locator('#toast').textContent()), 'R the self-check copies a YouTube report for Claude: ' + await p.locator('#toast').textContent());
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 await p.locator('#ytLast').click(); await p.waitForTimeout(1500);
 ok(await shelf(p, () => window.__lastId === 'eeeeeeeeeee' && Math.abs(window.__lastStart - 890) < 1), 'R tapping it plays that video from 14:53 in Shelf (3 s back, like every resume)');
 await ctx.close();
