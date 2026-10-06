@@ -48,3 +48,26 @@ assert.strictEqual(C.ago(N - 3 * 3600e3, N), 'today'); assert.strictEqual(C.ago(
 assert.strictEqual(C.ago(N - 3 * 86400e3, N), '3 days ago'); assert.strictEqual(C.ago(N - 9 * 86400e3, N), 'last week'); assert.strictEqual(C.ago(0, N), '');
 const nt = C.decodeShelf(C.encodeShelf(shelfById, 900, false)); assert.strictEqual(nt.dQw4w9WgXcQ.title, ''); assert.strictEqual(nt.dQw4w9WgXcQ.t, 61);
 console.log('core: all tests passed');
+
+// Sun times and the day/night look (London; checked against published tables, to within 2 minutes)
+{
+  process.env.TZ = 'Europe/London';
+  const at = (s) => new Date(s).getTime(), near = (a, b, msg) => assert.ok(Math.abs(a - b) <= 120e3, msg + ': ' + new Date(a).toISOString());
+  const s = C.sunTimes(at('2026-10-06T12:00:00+01:00'), 51.5074, -0.1278);
+  near(s.rise, at('2026-10-06T07:08:00+01:00'), 'London sunrise 6 Oct'); near(s.set, at('2026-10-06T18:28:00+01:00'), 'London sunset 6 Oct');
+  const w = C.sunTimes(at('2026-12-22T12:00:00Z'), 51.5074, -0.1278);
+  near(w.rise, at('2026-12-22T08:04:00Z'), 'London sunrise 22 Dec'); near(w.set, at('2026-12-22T15:53:00Z'), 'London sunset 22 Dec');
+  assert.strictEqual(C.sunTimes(at('2026-06-21T12:00:00Z'), 78.2, 15.6).polar, 'day', 'midnight sun');
+  assert.strictEqual(C.sunTimes(at('2026-12-21T12:00:00Z'), 78.2, 15.6).polar, 'night', 'polar night');
+  // Light from an hour after sunrise to an hour before sunset
+  const L = (t) => C.sunLook(at(t), 51.5074, -0.1278);
+  assert.ok(!L('2026-10-06T07:50:00+01:00').light, 'dark before 08:08');
+  assert.ok(L('2026-10-06T08:20:00+01:00').light, 'light after 08:08');
+  assert.ok(L('2026-10-06T17:20:00+01:00').light, 'light before 17:28');
+  assert.ok(!L('2026-10-06T17:40:00+01:00').light, 'dark after 17:28');
+  near(L('2026-10-06T12:00:00+01:00').next, at('2026-10-06T17:28:00+01:00'), 'next change: dusk');
+  near(L('2026-10-06T22:00:00+01:00').next, at('2026-10-07T08:10:00+01:00'), 'next change: tomorrow morning');
+  near(L('2026-10-06T03:00:00+01:00').next, at('2026-10-06T08:08:00+01:00'), 'next change: this morning');
+  const P = C.sunLook(at('2026-12-21T12:00:00Z'), 78.2, 15.6); assert.ok(!P.light && P.next > at('2026-12-21T12:00:00Z'), 'polar night stays dark');
+}
+console.log('sun: all tests passed');

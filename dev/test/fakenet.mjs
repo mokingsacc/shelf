@@ -238,6 +238,12 @@ export async function installFakes(ctx, opts = {}) {
     else out = '{}';
     r.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: out }] }, finishReason: 'STOP' }] }) });
   });
+  // Open-Meteo's place search (the town box in the Day or night sheet)
+  await ctx.route('https://geocoding-api.open-meteo.com/**', (r) => {
+    const q = (new URL(r.request().url()).searchParams.get('name') || '').toLowerCase();
+    const towns = { leeds: [{ name: 'Leeds', latitude: 39.47, longitude: -86.6, country_code: 'US', admin1: 'Alabama' }, { name: 'Leeds', latitude: 53.79648, longitude: -1.54785, country_code: 'GB', admin1: 'England' }] };
+    r.fulfill({ contentType: 'application/json', headers: cors, body: JSON.stringify(towns[q] ? { results: towns[q] } : { generationtime_ms: 0.1 }) });
+  });
   await ctx.route('https://www.googleapis.com/**', (r) => r.fulfill({ status: 403, headers: cors, contentType: 'application/json', body: JSON.stringify({ error: { errors: [{ reason: 'quotaExceeded' }] } }) }));
   // opts.fontsDir: a folder with fonts.css + map.txt (downloaded once) so screenshots use the real faces
   let fontMap = null;

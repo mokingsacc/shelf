@@ -108,7 +108,9 @@
     dots: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>',
     mark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 3h12v18l-6-4-6 4z"/></svg>',
-    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>',
+    moon: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>'
   };
 
   // Day or night: after 21:30 (and until 05:00) Sleep comes first and Continue becomes Bedtime
@@ -792,6 +794,7 @@
       lockPaused = wasPlaying && !handing && (Native.inApp || isPhone) ? current : null;
     } else {
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
+      applyLook();
       renderAll();
       catchUp();
       // Locked while playing in Shelf: say how to keep it going next time
@@ -1465,7 +1468,7 @@
       '<div class="week" role="img" aria-label="Episodes ticked each day, last 7 days: ' + td.week.join(', ') + '">' + td.week.map(function (n) { return '<i class="' + (n ? '' : 'z') + '" style="height:' + (n ? Math.max(15, Math.round(n / max * 100)) : 8) + '%"></i>'; }).join('') + '</div>' +
       '</div></div>';
   }
-  // The goal the pace counts down to: Step 2 CK on 30 Nov unless Mo changes it (prefs.goal)
+  // The goal the pace counts down to: Step 2 CK on 22 Dec unless Mo changes it (prefs.goal)
   function goalName() { return (prefs.goal && prefs.goal.name) || 'Step 2 CK'; }
   function applyGoal() { var g = prefs.goal, d = g && g.date && /^\d{4}-\d\d-\d\d$/.test(g.date) ? new Date(+g.date.slice(0, 4), +g.date.slice(5, 7) - 1, +g.date.slice(8, 10)) : null; Courses.setExam(d); }
   function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
@@ -1779,7 +1782,7 @@
         break;
       case 'open-pace': $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); break;
       case 'edit-goal': $('#goalName').value = goalName(); $('#goalDate').min = todayISO(); $('#goalDate').value = goalISO(); $('#goalMsg').textContent = ''; if ($('#paceDlg').open) $('#paceDlg').close(); openDlg($('#goalDlg')); break;
-      case 'goal-reset': delete prefs.goal; savePrefs(); applyGoal(); $('#goalDlg').close(); renderAll(); $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); toast('Goal back to Step 2 CK on 30 November.'); break;
+      case 'goal-reset': delete prefs.goal; savePrefs(); applyGoal(); $('#goalDlg').close(); renderAll(); $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); toast('Goal back to Step 2 CK on 22 December.'); break;
       case 'pace-copy': copyText(paceText(), function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy for Claude'; }, 2500); toast('Copied. Paste it into Claude.'); }); break;
       case 'toggle-band': prefs.open = prefs.open || {}; if (prefs.open[id]) delete prefs.open[id]; else prefs.open[id] = 1; savePrefs(); renderHome(); var tg = document.querySelector('.band [data-act="toggle-band"][data-id="' + id + '"]'); if (tg) tg.focus({ preventScroll: true }); break;
       case 'edit-section': openSec(id); break;
@@ -1871,6 +1874,9 @@
       case 'a-fwd': engine.seekBy(engine.FWD); break;
       case 'a-rate': var ast = engine.state(), nr = RATES[(RATES.indexOf(ast.rate) + 1) % RATES.length]; engine.setRate(nr); if (ast.episode) { prefs.rates = prefs.rates || {}; prefs.rates[podKey(ast.episode.guid)] = nr; savePrefs(); } break;
       case 'check': openCheck(); break;
+      case 'look': $('#lookMsg').textContent = ''; fillLook(); openDlg($('#lookDlg')); break;
+      case 'look-set': prefs.look = id; savePrefs(); applyLook(); fillLook(); break;
+      case 'look-here': lookHere(); break;
       case 'dismiss': var d = b.closest('dialog'); if (d) d.close(); break;
       case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
       case 'key-remove': delete prefs.apiKey; savePrefs(); $('#keyInput').value = ''; $('#keyMsg').textContent = 'Removed. Search reads YouTube\'s results page.'; $('#keyMsg').className = 'msgline ok'; break;
@@ -1959,6 +1965,86 @@
   });
   function openDlg(d) { if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute('open', ''); }
 
+  // ---------- Day or night look ----------
+  // Auto (the default): light from an hour after sunrise, dark from an hour before sunset, by the sun where Mo is
+  // (the town he typed, or his location, otherwise London). Light and Dark stay put. In the app, when Shelf's look
+  // differs from the iPhone's own, the strip under the clock takes the iPhone's colours so the time stays readable.
+  var LONDON = { name: 'London', lat: 51.5074, lon: -0.1278 }, lookTimer = null;
+  var sysDark = (function () { try { return matchMedia('(prefers-color-scheme: dark)'); } catch (e) { return null; } })();
+  // Tests set window.__hour (today at that hour) and window.__look
+  function nowMs() { if (typeof window.__hour !== 'number') return Date.now(); var d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() + window.__hour * 36e5; }
+  function lookPlace() { var l = prefs.loc; return l && isFinite(l.lat) && isFinite(l.lon) && l.name ? l : LONDON; }
+  function lookMode() { var m = typeof window.__look === 'string' ? window.__look : prefs.look; return m === 'light' || m === 'dark' ? m : 'auto'; }
+  function lookState() {
+    var pl = lookPlace(), t = nowMs(), sun = Core.sunLook(t, pl.lat, pl.lon), mode = lookMode();
+    return { mode: mode, light: mode === 'auto' ? sun.light : mode === 'light', sun: sun, place: pl, t: t };
+  }
+  function applyLook() {
+    if (!prefs) return;
+    var st = lookState(), theme = st.light ? 'light' : 'dark', root = document.documentElement, phoneDark = !!(sysDark && sysDark.matches);
+    if (root.getAttribute('data-theme') !== theme) root.setAttribute('data-theme', theme);
+    try { localStorage.setItem('shelf.look', theme); } catch (e) {}
+    root.classList.toggle('sb-dark', Native.inApp && phoneDark && theme === 'light');
+    root.classList.toggle('sb-light', Native.inApp && !phoneDark && theme === 'dark');
+    Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function (m) { m.setAttribute('content', theme === 'light' ? '#FFFFFF' : '#0A0A0E'); });
+    var b = $('#lookBtn');
+    if (b.getAttribute('data-g') !== theme) { b.innerHTML = theme === 'light' ? I.sun : I.moon; b.setAttribute('data-g', theme); }
+    b.setAttribute('aria-label', 'Look: ' + theme + (st.mode === 'auto' ? ', by the sun' : '') + '. Change it.');
+    // Wake up for the next change (and at least every half hour, as timers sleep while the phone does)
+    clearTimeout(lookTimer);
+    if (st.mode === 'auto') lookTimer = setTimeout(applyLook, Math.max(1000, Math.min(st.sun.next - st.t + 1000, 30 * 60000)));
+    if ($('#lookDlg').open) fillLook();
+  }
+  function sameDay(a, b) { return new Date(a).toDateString() === new Date(b).toDateString(); }
+  function fillLook() {
+    var st = lookState(), s = st.sun;
+    Array.prototype.forEach.call(document.querySelectorAll('#lookPicks button'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-id') === st.mode)); });
+    var when, at = function (t) { return esc(clockText(t)); };
+    if (st.mode !== 'auto') when = (st.light ? 'Light' : 'Dark') + ' all the time.';
+    else if (s.to <= s.from && !st.light) when = 'Dark all day today: the sun is up for under two hours.';
+    else if (st.light) when = 'Light until ' + at(s.next) + ', then dark.';
+    else when = 'Dark until ' + at(s.next) + (sameDay(s.next, st.t) ? '' : ' tomorrow') + ', then light.';
+    $('#lookWhen').innerHTML = when;
+    $('#lookRule').textContent = 'Auto is light from an hour after sunrise to an hour before sunset' + (s.to > s.from ? ': ' + clockText(s.from) + ' to ' + clockText(s.to) + ' today.' : '.');
+    $('#lookWhere').textContent = 'Sun times for ' + st.place.name;
+  }
+  function setPlace(pl) { prefs.loc = pl; savePrefs(); applyLook(); fillLook(); }
+  // A town typed in the sheet: Open-Meteo's free place search (no key), British places first
+  $('#lookForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var q = $('#lookTown').value.trim(), msg = $('#lookMsg');
+    if (!q) { msg.textContent = 'Type your town first.'; msg.className = 'msgline err'; return; }
+    msg.textContent = 'Looking it up…'; msg.className = 'msgline';
+    get('https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name=' + encodeURIComponent(q)).then(function (r) {
+      var list = []; try { list = JSON.parse(r.text).results || []; } catch (er) {}
+      var hit = list.filter(function (x) { return x.country_code === 'GB'; })[0] || list[0];
+      if (!r.ok) { msg.textContent = "Couldn't look it up: the place search said " + r.status + '. Try again later.'; msg.className = 'msgline err'; return; }
+      if (!hit || !isFinite(hit.latitude) || !isFinite(hit.longitude)) { msg.textContent = 'No town called "' + q + '" found. Try the nearest bigger town.'; msg.className = 'msgline err'; return; }
+      setPlace({ name: String(hit.name).slice(0, 40), lat: Math.round(hit.latitude * 100) / 100, lon: Math.round(hit.longitude * 100) / 100 });
+      msg.textContent = 'Using ' + hit.name + (hit.admin1 ? ', ' + hit.admin1 : '') + '.'; msg.className = 'msgline ok';
+      $('#lookTown').value = '';
+    }, function (er) { msg.textContent = (er && er.message) || "Couldn't look it up. Check your internet."; msg.className = 'msgline err'; });
+  });
+  function lookHere() {
+    var msg = $('#lookMsg');
+    var no = function (why) { msg.textContent = why + ' Type your town instead.'; msg.className = 'msgline err'; };
+    if (!navigator.geolocation) return no("This phone won't share its location with Shelf.");
+    msg.textContent = 'Asking where you are…'; msg.className = 'msgline';
+    try {
+      navigator.geolocation.getCurrentPosition(function (p) {
+        setPlace({ name: 'your location', lat: Math.round(p.coords.latitude * 100) / 100, lon: Math.round(p.coords.longitude * 100) / 100 });
+        msg.textContent = 'Using your location.'; msg.className = 'msgline ok';
+      }, function (er) {
+        no(er && er.code === 1 ? (Native.inApp ? "The Shelf app isn't allowed to use location." : 'Location is turned off for this page.') : "Couldn't get your location.");
+      }, { timeout: 10000, maximumAge: 864e5 });
+    } catch (er) { no("Couldn't get your location."); }
+  }
+  if (sysDark && sysDark.addEventListener) sysDark.addEventListener('change', function () { applyLook(); });
+  function lookCheck() {
+    var st = lookState(), pl = st.place === LONDON && !prefs.loc ? "London's sun times (set your town with the sun button)" : st.place.name + "'s sun times";
+    return { ok: 1, text: st.mode === 'auto' ? 'Look: ' + (st.light ? 'light' : 'dark') + ' by the sun, using ' + pl : 'Look: ' + st.mode + ' all the time (tap the sun button for Auto)' };
+  }
+
   // ---------- Toast ----------
   var toastTimer = null;
   function toast(msg, kind, action, ms) {
@@ -2004,6 +2090,7 @@
     }
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     out.push(aiCheck());
+    out.push(lookCheck());
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       out.push({ ok: 1, text: prefs.autoLock ? 'Play locked locks the phone by itself (Shortcut "' + LOCK_SHORTCUT + '")' : 'Play locked: the phone can lock by itself with a one-time Shortcut', fix: 'lock' });
@@ -2141,7 +2228,10 @@
   // Only entries shaped like records (a null or stray value in a phone copy is dropped, not merged)
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
-    videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {}); applyGoal();
+    videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one
+    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; savePrefs(); }
+    applyGoal(); applyLook();
     lib = Library.create({
       load: rawGet,
       save: function (k, v) { rawSet(k, v, k === Library.KEY); }, // the feed cache stays in the web view; the library itself is mirrored to the phone
@@ -2170,14 +2260,14 @@
     updateDot();
     if (Native.inApp) Native.checkYT().then(updateDot); // the corner turns green as soon as the sign-in is known
     setInterval(updateDot, 5000);
-    setInterval(function () { if (!stack.length && document.visibilityState === 'visible') keepTyping(renderHome); }, 60000);
+    setInterval(function () { if (document.visibilityState === 'visible') applyLook(); if (!stack.length && document.visibilityState === 'visible') keepTyping(renderHome); }, 60000);
     window.addEventListener('online', function () { updateDot(); if (ai) ai.retryHeld(); }); window.addEventListener('offline', updateDot);
     if (!canSave && !Native.inApp) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Tap the self-check for how to fix it.', 'warn'); }, 600);
     refreshAll(false);
     catchUp(); // Shelf was closed by iOS while the video played in YouTube
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture, catchUp: catchUp,
-      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);

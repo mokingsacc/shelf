@@ -435,13 +435,13 @@ const ex = await p.locator('#paceBody').textContent();
 ok(ex.includes(String(days)) && /Today 2/.test(ex) && /PAEDS|Paeds/.test(ex) && /26 left/.test(ex), 'C Pace sheet: ' + days + ' days, today 2, Paeds 26 left (' + ex.replace(/\s+/g, ' ').slice(0, 90) + ')');
 await p.locator('#paceCopy').click(); await p.waitForTimeout(300);
 const plan = (await shelf(p, () => window.__clip)) || await p.evaluate(() => navigator.clipboard.readText().catch(() => ''));
-ok(/Goal: Step 2 CK on 30 November 2026, \d+ days from today/.test(plan) && /Paeds( \([^)]*\))?: 104 of 130 watched, 26 left/.test(plan) && /how many videos a day/.test(plan), 'C Copy for Claude gives a plan question: ' + JSON.stringify(plan.split('\n').slice(1, 4)));
+ok(/Goal: Step 2 CK on 22 December 2026, \d+ days from today/.test(plan) && /Paeds( \([^)]*\))?: 104 of 130 watched, 26 left/.test(plan) && /how many videos a day/.test(plan), 'C Copy for Claude gives a plan question: ' + JSON.stringify(plan.split('\n').slice(1, 4)));
 await p.keyboard.press('Escape');
 // Edit the goal from the Pace sheet: name and date, then back to Step 2 CK
 await p.locator('[data-act="open-pace"]').click(); await p.waitForTimeout(150);
-ok(/Goal\s*Step 2 CK · 30 Nov/.test(await p.locator('#paceBody .goal').textContent()), 'G the Pace sheet starts with the goal: ' + await p.locator('#paceBody .goal').textContent());
+ok(/Goal\s*Step 2 CK · 22 Dec/.test(await p.locator('#paceBody .goal').textContent()), 'G the Pace sheet starts with the goal: ' + await p.locator('#paceBody .goal').textContent());
 await p.locator('#paceBody .goal').click(); await p.waitForTimeout(150);
-ok(await p.locator('#goalDlg[open]').count() === 1 && await p.inputValue('#goalName') === 'Step 2 CK' && await p.inputValue('#goalDate') === '2026-11-30', 'G Edit opens the goal form filled in');
+ok(await p.locator('#goalDlg[open]').count() === 1 && await p.inputValue('#goalName') === 'Step 2 CK' && await p.inputValue('#goalDate') === '2026-12-22', 'G Edit opens the goal form filled in');
 await p.fill('#goalName', ''); await p.locator('#goalForm button[type="submit"]').click(); await p.waitForTimeout(100);
 ok(/Give it a name/.test(await p.locator('#goalMsg').textContent()) && await p.locator('#goalDlg[open]').count() === 1, 'G an empty name says what to do');
 const gd = await p.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 20); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
@@ -578,6 +578,44 @@ await shelf(p, () => { window.__shelf.prefs.rate = 1.25; });
 await playFrom('Entertainment', 'Breaking Points', 'Shutdown'); await p.waitForTimeout(2600);
 ok(await shelf(p, () => window.__fake.getPlaybackRate()) === 1.25, 'speed: a speed saved by the old version still applies');
 await p.locator('[data-act="close-video"]').first().click();
+await ctx.close();
+
+console.log('\n== D Day or night (light from an hour after sunrise, dark from an hour before sunset)');
+// The iPhone itself is in dark mode; it's 1 pm in London, when the sun is up all year
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13 }, ctxOpts: { colorScheme: 'dark' } }));
+await settle(p);
+const bg = () => p.evaluate(() => getComputedStyle(document.body).backgroundColor);
+ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'light' && await bg() === 'rgb(255, 255, 255)', 'D 1 pm: Shelf is light even with the iPhone in dark mode (' + await bg() + ')');
+ok(await p.evaluate(() => document.documentElement.classList.contains('sb-dark')), 'D the strip under the clock stays dark, so the iPhone\'s white clock stays readable');
+ok(await p.locator('#lookBtn svg circle').count() === 1, 'D the top shows a sun');
+await p.locator('#lookBtn').click(); await p.waitForTimeout(150);
+const when = await p.locator('#lookWhen').textContent();
+ok(await p.locator('#lookDlg[open]').count() === 1 && /^Light until \d{1,2}:\d\d pm, then dark\.$/.test(when) && /Sun times for London/.test(await p.locator('#lookWhere').textContent()), 'D the sun sheet says when it turns dark: ' + when);
+ok(await p.locator('#lookPicks [data-id="auto"][aria-pressed="true"]').count() === 1, 'D Auto is picked');
+await p.locator('#lookPicks [data-id="dark"]').click(); await p.waitForTimeout(100);
+ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dark' && await bg() === 'rgb(10, 10, 14)' && /^Dark all the time/.test(await p.locator('#lookWhen').textContent()), 'D Dark switches at once');
+await p.reload(); await settle(p);
+ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dark' && await shelf(p, () => window.__shelf.prefs.look) === 'dark', 'D Dark is remembered');
+await p.locator('#lookBtn').click(); await p.locator('#lookPicks [data-id="auto"]').click(); await p.waitForTimeout(100);
+ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'light', 'D Auto goes back to the sun (light at 1 pm)');
+// Typing a town: British places first (there is a Leeds in Alabama too)
+await p.locator('#lookDlg details summary').click(); await p.fill('#lookTown', 'Leeds'); await p.locator('#lookForm button[type="submit"]').click(); await p.waitForTimeout(400);
+const loc = await shelf(p, () => window.__shelf.prefs.loc);
+ok(loc && loc.name === 'Leeds' && Math.abs(loc.lat - 53.8) < 0.01 && Math.abs(loc.lon + 1.55) < 0.01 && /Using Leeds, England/.test(await p.locator('#lookMsg').textContent()) && /Sun times for Leeds/.test(await p.locator('#lookWhere').textContent()), 'D typing Leeds uses Leeds in England: ' + JSON.stringify(loc));
+await p.fill('#lookTown', 'Nowhereville'); await p.locator('#lookForm button[type="submit"]').click(); await p.waitForTimeout(300);
+ok(/No town called "Nowhereville"/.test(await p.locator('#lookMsg').textContent()) && (await shelf(p, () => window.__shelf.prefs.loc.name)) === 'Leeds', 'D an unknown town says so and keeps Leeds');
+await p.keyboard.press('Escape');
+// Evening comes: it turns dark by itself, without reopening
+await p.evaluate(() => { window.__hour = 22; window.__shelf.applyLook(); }); await p.waitForTimeout(100);
+ok(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dark' && await p.locator('#lookBtn svg circle').count() === 0 && !(await p.evaluate(() => document.documentElement.classList.contains('sb-dark'))), 'D at 10 pm it is dark by itself, with a moon');
+await p.locator('#lookBtn').click(); await p.waitForTimeout(100);
+ok(/^Dark until \d{1,2}:\d\d am tomorrow, then light\.$/.test(await p.locator('#lookWhen').textContent()), 'D at night it says when it turns light: ' + await p.locator('#lookWhen').textContent());
+await p.keyboard.press('Escape');
+ok((await shelf(p, () => window.__shelf.checks().map((c) => c.text).join('|'))).includes('Look: dark by the sun, using Leeds\'s sun times'), 'D the self-check names the look and the town');
+// A goal saved with the old 30 Nov date moves to 22 Dec
+await p.evaluate(() => { const k = 'resume.prefs.v1', v = JSON.parse(localStorage.getItem(k) || '{}'); v.goal = { name: 'Step 2 CK', date: '2026-11-30' }; localStorage.setItem(k, JSON.stringify(v)); });
+await p.reload(); await settle(p);
+ok(await shelf(p, () => window.__shelf.prefs.goal.date) === '2026-12-22' && await shelf(p, () => window.__shelf.courses.daysLeft()) === Math.round((new Date(2026, 11, 22) - new Date(new Date().toDateString())) / 864e5), 'D an old Step 2 CK goal on 30 Nov becomes 22 Dec');
 await ctx.close();
 
 console.log('\n== Night (23:12)');

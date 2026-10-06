@@ -117,14 +117,14 @@ function setup(store, opts = {}) {
   c.restore(peds, undo);
   assert.strictEqual(c.progress(peds).done, 91, 'undo puts it back');
   assert.deepStrictEqual(c.findNumber(peds, 1203), [102]);
-  // Exam clock and pace (the fake clock is 4 Oct 2026, 16:30 UTC; the exam 30 Nov)
+  // Exam clock and pace (the fake clock is 4 Oct 2026, 16:30 UTC; the exam 22 Dec)
   {
     const r = setup({}, {}); await r.c.seed(); await r.c.loadAll(true);
     const cc = r.c, a = cc.items(peds);
-    assert.strictEqual(cc.daysLeft(), 57, '57 days to Step 2 CK on 4 Oct');
+    assert.strictEqual(cc.daysLeft(), 79, '79 days to Step 2 CK (22 Dec) on 4 Oct');
     let pc = cc.pace(peds);
     assert.strictEqual(pc.left, 39); assert.strictEqual(pc.rate7, 0); assert.strictEqual(pc.finishBy, 0, 'no finish date without ticks this week');
-    assert.strictEqual(Courses.perDay(pc.perDay), '1 a day');
+    assert.strictEqual(Courses.perDay(pc.perDay), '1 every 2 days', '39 left over 79 days');
     // Ticked one each on three days: rate 3/7, today counts one, Set place doesn't count
     cc.tick(peds, a[91].id, true); r.tick(-864e5); cc.tick(peds, a[92].id, true); r.tick(-864e5); cc.tick(peds, a[93].id, true); r.tick(2 * 864e5);
     cc.tickUpTo(peds, 110);
@@ -140,7 +140,7 @@ function setup(store, opts = {}) {
     // Unticking takes it off the tally
     cc.tick(peds, a[91].id, false); assert.strictEqual(cc.today().n, 0);
     // Exam day and after: no divide by zero
-    r.tick(60 * 864e5); assert.strictEqual(cc.daysLeft(), 0); assert.strictEqual(cc.pace(peds).perDay, 0); assert.strictEqual(cc.today().perDay, 0); assert.ok(cc.examPast());
+    r.tick(80 * 864e5); assert.strictEqual(cc.daysLeft(), 0); assert.strictEqual(cc.pace(peds).perDay, 0); assert.strictEqual(cc.today().perDay, 0); assert.ok(cc.examPast());
     assert.strictEqual(Courses.perDay(269 / 57), '4.8 a day'); assert.strictEqual(Courses.perDay(0.3), '1 every 3 days'); assert.strictEqual(Courses.perDay(0), '');
   }
 

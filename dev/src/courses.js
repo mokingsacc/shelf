@@ -180,8 +180,8 @@ var Courses = (function () {
     var cut = t.slice(0, 17).replace(/\s+\S*$/, ''); // whole words only
     return cut || t.slice(0, 16);
   }
-  // The goal date: Step 2 CK, 30 Nov 2026 (local midnight) unless Mo sets another one
-  var EXAM_DEFAULT = new Date(2026, 10, 30), EXAM = EXAM_DEFAULT;
+  // The goal date: Step 2 CK, 22 Dec 2026 (local midnight) unless Mo sets another one
+  var EXAM_DEFAULT = new Date(2026, 11, 22), EXAM = EXAM_DEFAULT;
   function setExam(d) { EXAM = d instanceof Date && !isNaN(d) ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : EXAM_DEFAULT; }
   function exam() { return EXAM; }
   // "1 a day", "2.6 a day", "1 every 3 days": rounded up so the plan never falls short

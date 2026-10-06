@@ -26,7 +26,7 @@ for (const [w, h] of [[390, 844], [375, 667], [820, 1180], [1180, 820]]) for (co
   const tag = `${w}-${scheme}`;
   const ctx = await b.newContext({ viewport: { width: w, height: h }, colorScheme: scheme, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await installFakes(ctx, { fresh: true, fontsDir: FONTS });
-  await ctx.addInitScript('window.__hour = 14.13;');
+  await ctx.addInitScript('window.__hour = 14.13;' + (scheme === 'dark' ? ' window.__look = "dark";' : ''));
   await ctx.addInitScript(CAP({ 'gemini.key': 'AIzaPREVIEWKEY000000000000000000' }, ''));
   const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
   await p.goto('http://localhost:8767/'); await p.waitForTimeout(2500);
@@ -60,6 +60,7 @@ for (const [w, h] of [[390, 844], [375, 667], [820, 1180], [1180, 820]]) for (co
   await p.locator('#nSeg button[data-m="45"]').click(); await shot('night');
   await p.locator('[data-act="close-night"]').click(); await shot('home-mini');
   await p.locator('#todayBtn').click(); await p.locator('[data-act="paste-url"]').first().click(); await shot('url'); await p.keyboard.press('Escape');
+  await p.locator('#lookBtn').click(); await p.locator('#lookDlg details summary').click(); await shot('look'); await p.keyboard.press('Escape');
   await p.locator('#statusBtn').click(); await shot('check');
   await p.keyboard.press('Escape');
   

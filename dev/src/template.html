@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='22' fill='%23ffe41a'/%3E%3Crect y='22' width='64' height='21' fill='%231a35d6'/%3E%3Crect y='43' width='64' height='21' fill='%230c0c10'/%3E%3C/svg%3E">
 <title>Shelf</title>
+<script>/* the last look Shelf chose (day or night), before anything draws */try{var lk=localStorage.getItem('shelf.look');if(lk==='light'||lk==='dark')document.documentElement.setAttribute('data-theme',lk)}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Azeret+Mono:wght@400;600&display=swap">
@@ -65,13 +66,23 @@ svg{display:block;flex:none}
 .k{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- Home: masthead ---------- */
-.mast{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 10px) var(--g) 10px;border-bottom:3px solid var(--rule)}
+.mast{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 10px) var(--g) 10px;border-bottom:3px solid var(--rule)}
 .mast .d{font-size:42px;line-height:.85;font-weight:900;font-stretch:125%;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
 .mast .m{min-width:0;min-height:var(--tap);display:flex;flex-direction:column;justify-content:center;font-size:12px;line-height:1.3;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
 .mast .m>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mast .m .mono{font-size:11px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--grey)}
 .stat{display:flex;align-items:center;justify-content:center;gap:7px;min-height:var(--tap);min-width:var(--tap);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--rule);white-space:nowrap}
 .stat.bad{padding:0 10px}
+/* Day/night look: the sun or moon beside the self-check */
+.lookb{display:flex;align-items:center;justify-content:center;min-height:var(--tap);min-width:var(--tap);border:2px solid var(--rule)}
+.lookb svg{width:22px;height:22px}
+.lookwhen{font-size:20px!important;line-height:1.2!important;font-weight:800;letter-spacing:-.01em}
+.lookform{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.lookform .primary{min-height:50px;padding:0 16px;width:auto}
+details.fold.lookplace>summary{padding:0;border-top:2px solid var(--hair)}
+/* In the app, when Shelf's look differs from the iPhone's, the strip under the clock takes the iPhone's colours so the time and battery stay readable */
+html.sb-dark::before,html.sb-light::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);z-index:2000;pointer-events:none}
+html.sb-dark::before{background:#0c0c10} html.sb-light::before{background:#f2f2f5}
 .dot{display:block;width:12px;height:12px;background:var(--grey);flex:none}
 .dot.good{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.wait{background:var(--wait)}
 .note{margin:0;padding:12px var(--g);font-size:13px;border-bottom:2px solid var(--hair);background:var(--soft)}
@@ -509,6 +520,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <header class="mast">
     <div class="d" id="dayNum" aria-hidden="true">--</div>
     <button type="button" class="m" data-act="refresh" aria-label="Check for new uploads"><span><span id="dayName"></span></span><span id="monthName"></span><span class="mono" id="summary">Loading…</span></button>
+    <button type="button" class="lookb" id="lookBtn" data-act="look" aria-label="Day or night look"></button>
     <button type="button" class="stat" id="statusBtn" data-act="check" aria-label="Self-check"><i class="dot wait" id="statusDot"></i><span id="statusText" class="sr">Starting</span></button>
   </header>
   <p class="note" id="webNote" hidden></p>
@@ -679,6 +691,24 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   </form>
 </dialog>
 
+<dialog id="lookDlg" aria-labelledby="lookH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="lookH">Day or night</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db">
+    <p class="lookwhen" id="lookWhen" role="status"></p>
+    <div class="picks" id="lookPicks" role="group" aria-label="Look"><button type="button" data-act="look-set" data-id="auto" aria-pressed="true">Auto</button><button type="button" data-act="look-set" data-id="light" aria-pressed="false">Light</button><button type="button" data-act="look-set" data-id="dark" aria-pressed="false">Dark</button></div>
+    <p class="small" id="lookRule">Auto: light from an hour after sunrise, dark from an hour before sunset.</p>
+    <details class="fold lookplace"><summary><span id="lookWhere">Sun times for London</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+      <form class="db" id="lookForm" novalidate style="padding:10px 0 0">
+        <label for="lookTown">Your town</label>
+        <div class="lookform"><input class="field" id="lookTown" type="text" autocomplete="address-level2" enterkeyhint="go" placeholder="e.g. Leeds"><button type="submit" class="primary">Use</button></div>
+        <div class="msgline" id="lookMsg" role="status"></div>
+        <button type="button" class="ghost" data-act="look-here">Use my location</button>
+      </form>
+    </details>
+  </div>
+</dialog>
+
 <dialog id="goalDlg" aria-labelledby="goalH">
   <div class="grab" aria-hidden="true"></div>
   <div class="dh"><h2 id="goalH">Goal</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
@@ -690,7 +720,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <input class="field mono" id="goalDate" type="date">
     <div class="msgline" id="goalMsg" role="status"></div>
     <button type="submit" class="primary">Save goal</button>
-    <button type="button" class="ghost" data-act="goal-reset">Back to Step 2 CK, 30 Nov</button>
+    <button type="button" class="ghost" data-act="goal-reset">Back to Step 2 CK, 22 Dec</button>
   </form>
 </dialog>
 

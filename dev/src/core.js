@@ -156,7 +156,45 @@ var Core = (function () {
     return out;
   }
 
-  return { parseTime: parseTime, parseLink: parseLink, findLinks: findLinks, fmt: fmt, left: left, pct: pct,
+  // ---------- Sun (for the day/night look) ----------
+  // Sunrise and sunset for the calendar day of `t` (ms) at lat/lon (degrees, east positive), to about a minute.
+  // The sunrise equation (Wikipedia / NOAA). Returns { rise, set } in ms, or { polar: 'day' | 'night' }.
+  var RAD = Math.PI / 180;
+  function sunTimes(t, lat, lon) {
+    var d = new Date(t), noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).getTime();
+    var n = Math.round(noon / 864e5 + 2440587.5 - 2451545.0 + 0.0008);
+    var J = n - lon / 360;
+    var M = (357.5291 + 0.98560028 * J) % 360, Mr = M * RAD;
+    var C = 1.9148 * Math.sin(Mr) + 0.02 * Math.sin(2 * Mr) + 0.0003 * Math.sin(3 * Mr);
+    var L = ((M + C + 180 + 102.9372) % 360) * RAD;
+    var transit = 2451545.0 + J + 0.0053 * Math.sin(Mr) - 0.0069 * Math.sin(2 * L);
+    var sd = Math.sin(L) * Math.sin(23.4397 * RAD), cd = Math.cos(Math.asin(sd));
+    var cw = (Math.sin(-0.833 * RAD) - Math.sin(lat * RAD) * sd) / (Math.cos(lat * RAD) * cd);
+    if (cw <= -1) return { polar: 'day' };
+    if (cw >= 1) return { polar: 'night' };
+    var w = Math.acos(cw) / RAD / 360, ms = function (j) { return Math.round((j - 2440587.5) * 864e5); };
+    return { rise: ms(transit - w), set: ms(transit + w) };
+  }
+  // Light from an hour after sunrise until an hour before sunset; dark the rest of the time.
+  // Returns { light, from, to, next } (from/to: today's light window in ms; next: when the look changes next)
+  function sunLook(t, lat, lon) {
+    var HOUR = 36e5;
+    function win(day) {
+      var s = sunTimes(day, lat, lon), d = new Date(day);
+      if (s.polar) { // no sunrise or sunset today: plain clock hours (light 08:00 to 18:00 under the midnight sun, none in the polar night)
+        var at = function (h) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h).getTime(); };
+        return s.polar === 'day' ? { from: at(8), to: at(18) } : { from: at(12), to: at(12) };
+      }
+      return { from: s.rise + HOUR, to: s.set - HOUR };
+    }
+    var w = win(t), light = w.to > w.from && t >= w.from && t < w.to, next;
+    if (t < w.from && w.to > w.from) next = w.from;
+    else if (light) next = w.to;
+    else { var tm = new Date(t); next = win(new Date(tm.getFullYear(), tm.getMonth(), tm.getDate() + 1, 12).getTime()).from; }
+    return { light: light, from: w.from, to: w.to, next: next };
+  }
+
+  return { sunTimes: sunTimes, sunLook: sunLook, parseTime: parseTime, parseLink: parseLink, findLinks: findLinks, fmt: fmt, left: left, pct: pct,
     isDone: isDone, resumeAt: resumeAt, ago: ago, sorted: sorted, merge: merge, encodeShelf: encodeShelf, decodeShelf: decodeShelf };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
