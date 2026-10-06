@@ -157,7 +157,7 @@ export async function installFakes(ctx, opts = {}) {
       if (!ch || down) return r.fulfill({ status: down ? 500 : 404, headers: cors, body: '' });
       return r.fulfill({ contentType: 'application/atom+xml', headers: cors, body: ytFeed(ch, now, first(ch.id)) });
     }
-    if (u.pathname === '/@MehlmanMedical/playlists') {
+    if (u.pathname === '/@MehlmanMedical/playlists' || /^\/channel\/UC[\w-]{22}\/playlists$/.test(u.pathname)) {
       const data = { contents: Object.keys(PLAYLISTS).map((id) => ({ lockupViewModel: { contentId: id, contentType: 'LOCKUP_CONTENT_TYPE_PLAYLIST', metadata: { lockupMetadataViewModel: { title: { content: PLAYLISTS[id].title } } }, overlay: { text: PLAYLISTS[id].nums.length + ' videos' } } })) };
       return r.fulfill({ contentType: 'text/html', headers: cors, body: '<html><script>var ytInitialData = ' + JSON.stringify(data) + ';</script></html>' });
     }

@@ -323,7 +323,7 @@
     unwind(function () { push(view); }); return true;
   }
   function renderTabs() {
-    var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && (v.name === 'search' || v.name === 'subch') ? 'searchBtn' : 'todayBtn';
+    var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && (v.name === 'search' || ((v.name === 'subch' || v.name === 'plist') && stack[0].name === 'search')) ? 'searchBtn' : 'todayBtn';
     ['todayBtn', 'coursesBtn', 'searchBtn'].forEach(function (id) { var b = document.getElementById(id); if (id === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   }
   function itemHTML(e, scope, opts) {
@@ -355,7 +355,7 @@
     if (!v) return 'Today';
     if (v.name === 'section') { var s = lib.section(v.id); return s ? s.name : 'Back'; }
     if (v.name === 'channel') { var c = lib.source(v.id); return c ? c.name : 'Back'; }
-    if (v.name === 'subch') return v.title || 'Back';
+    if (v.name === 'subch' || v.name === 'plist') return v.title || 'Back';
     return { courses: 'Courses', search: 'Search', marks: 'Marks', pasted: 'Pasted' }[v.name] || 'Back';
   }
   function ib(act, id, icon, label, on) { return '<button type="button" class="ib' + (on ? ' on' : '') + '" data-act="' + act + '"' + (id != null ? ' data-id="' + esc(id) + '"' : '') + ' aria-label="' + esc(label) + '">' + icon + '</button>'; }
@@ -432,7 +432,7 @@
         ib('refresh-channel', s.id, I.refresh, 'Check for new uploads') + ib('channel-menu', s.id, I.dots, 'Section, Shorts or remove'));
       if (!list.length) html += '<p class="pnote">' + (st2 && !st2.ok ? 'Nothing loaded. Tap ↻ to try again.' : 'Loading…') + '</p>';
       else html += listHTML(list, 'p', function (e) { return { fresh: chanNew[e.key] }; }, s.type === 'podcast' ? 'Episodes' : 'Videos');
-      if (s.type === 'youtube') html += '<p class="pnote">YouTube lists only the latest 15 uploads here. For older ones, use Search.</p>';
+      if (s.type === 'youtube') html += '<button type="button" class="more" data-act="chan-playlists" data-id="' + esc(s.id) + '" data-t="' + esc(s.name) + '"><span>Playlists</span><span class="mono">all of ' + esc(s.name) + '\'s ›</span></button><p class="pnote">YouTube lists only the latest 15 uploads here. For older ones, use Search.</p>';
     } else if (v.name === 'pasted') {
       var vids = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section; })
         .sort(function (a, b) { return (isDoneE(a) - isDoneE(b)) || (b.updated || 0) - (a.updated || 0); });
@@ -456,11 +456,28 @@
         }
       });
     } else if (v.name === 'subch') {
-      var sl = v.list || [];
-      html += topHTML('c2', v.title, '<b>YouTube</b>' + (sl.length ? ' · latest ' + sl.length : ''), '',
-        '<button type="button" class="btn addch" data-act="add-channel" data-in="' + esc(v.id) + '">+ Add to your shelf</button>');
+      var sl = v.list || [], onShelf = !!lib.source(v.id), pl = v.tab === 'playlists';
+      html += topHTML('c2', v.title, '<b>YouTube</b>' + (pl ? (v.pls ? ' · ' + v.pls.length + ' playlists' : '') : sl.length ? ' · latest ' + sl.length : ''), '',
+        '<div class="picks subtabs" role="group" aria-label="Show">' + ['videos', 'playlists'].map(function (t) { return '<button type="button" data-act="subch-tab" data-id="' + t + '" aria-pressed="' + ((t === 'playlists') === pl) + '">' + (t === 'videos' ? 'Videos' : 'Playlists') + '</button>'; }).join('') + '</div>' +
+        (onShelf ? '' : '<button type="button" class="btn addch" data-act="add-channel" data-in="' + esc(v.id) + '">+ Add to your shelf</button>'));
+      if (!pl) {
+        if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
+        if (sl.length) html += listHTML(sl.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.id, srcName: v.title, published: x.published, dur: x.dur, thumb: x.thumb }; }), 'p', null, 'Videos');
+      } else {
+        if (v.plMsg) html += '<p class="pnote' + (v.plErr ? ' err' : '') + '">' + esc(v.plMsg) + '</p>';
+        var plRow = function (p) {
+          var c = cs && cs.get(p.id);
+          return '<button type="button" class="chrow plrow" data-act="open-plist" data-id="' + esc(p.id) + '" data-t="' + esc(p.title) + '"><span class="av mono">' + (p.count || '·') + '</span><span class="tx"><b>' + esc(p.title) + '</b><small>' + (p.count ? p.count + ' videos' : 'Playlist') + (c ? ' · in Courses' : '') + '</small></span><span class="chev">' + I.chev + '</span></button>';
+        };
+        var pls = v.pls || [];
+        html += pls.slice(0, 10).map(plRow).join('') + fold('More playlists', pls.slice(10).map(plRow).join(''), Math.max(0, pls.length - 10));
+      }
+    } else if (v.name === 'plist') {
+      var pv = v.list || [], have3 = cs && cs.get(v.id);
+      html += topHTML('c2', v.title, '<b>Playlist</b>' + (pv.length ? ' · ' + pv.length + ' videos' : '') + (v.chTitle ? ' · ' + esc(v.chTitle) : ''), '',
+        cs ? (have3 ? '<button type="button" class="btn addch" data-act="pl-open-course" data-id="' + esc(have3.section || 'med') + '">In Courses ›</button>' : '<button type="button" class="btn addch" data-act="pl-course" data-id="' + esc(v.id) + '">+ Track as a course</button>') : '');
       if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
-      if (sl.length) html += listHTML(sl.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.id, srcName: v.title, published: x.published, dur: x.dur, thumb: x.thumb }; }), 'p', null, 'Videos');
+      if (pv.length) html += listHTML(pv.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.chId || '', srcName: v.chTitle || '', dur: x.dur || 0, thumb: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg' }; }), 'p', null, 'Videos');
     } else if (v.name === 'marks') {
       html += marksPage();
     }
@@ -546,15 +563,38 @@
     }
     return h + '</details>';
   }
-  function openSub(id, title) {
-    if (lib.source(id)) return openChannel(id);
-    var v = { name: 'subch', id: id, title: title, list: null, msg: 'Loading the latest videos…' };
+  function openSub(id, title, tab) {
+    if (lib.source(id) && !tab) return openChannel(id);
+    var v = { name: 'subch', id: id, title: title, list: null, msg: 'Loading the latest videos…', tab: tab || 'videos' };
     push(v);
+    if (tab === 'playlists') { loadPls(v); renderPage(); }
     fetchText('https://www.youtube.com/channel/' + id + '/videos', { Cookie: 'SOCS=CAI; CONSENT=YES+1' }).then(function (html) {
       var l = Courses.channelVideos(html, Date.now());
       v.list = l || []; v.msg = l && l.length ? '' : "Couldn't read this channel's videos. Try again in a minute."; v.err = !!v.msg;
       if (stack[stack.length - 1] === v) renderPage();
     }, function (e) { v.msg = (e && e.message) || "Couldn't load it."; v.err = true; if (stack[stack.length - 1] === v) renderPage(); });
+  }
+
+  // A channel's playlists (its Playlists page), and one playlist's videos, without adding anything
+  function loadPls(v) {
+    if (v.pls || v.plBusy) return;
+    if (!cs || !feedsOn) { v.plMsg = 'Playlists load in the Shelf app on your iPhone.'; return; }
+    v.plBusy = true; v.plMsg = 'Loading playlists…'; v.plErr = false;
+    cs.channelPlaylists('channel/' + v.id).then(function (l) {
+      v.plBusy = false; v.pls = l || []; v.plMsg = v.pls.length ? '' : v.title + ' has no public playlists.';
+      if (stack[stack.length - 1] === v) renderPage();
+    }, function (e) { v.plBusy = false; v.plMsg = (e && e.message) || "Couldn't load the playlists."; v.plErr = true; if (stack[stack.length - 1] === v) renderPage(); });
+  }
+  function openPlist(pid, title) {
+    var from = stack[stack.length - 1] || {};
+    var v = { name: 'plist', id: pid, title: title, chId: from.id || '', chTitle: from.title || '', list: null, msg: 'Loading the videos…' };
+    push(v);
+    if (!cs || !feedsOn) { v.msg = 'Playlists load in the Shelf app on your iPhone.'; renderPage(); return; }
+    cs.peek(pid).then(function (r) {
+      var seen = {}; v.list = (r.items || []).filter(function (x) { if (seen[x.id]) return false; seen[x.id] = 1; return true; });
+      v.msg = v.list.length ? (r.partial ? 'YouTube sent only the first ' + v.list.length + ' videos.' : '') : 'This playlist has no videos Shelf can play.'; v.err = !v.list.length;
+      if (stack[stack.length - 1] === v) renderPage();
+    }, function (e) { v.msg = (e && e.message) || "Couldn't load the playlist."; v.err = true; if (stack[stack.length - 1] === v) renderPage(); });
   }
 
   // ---------- Feeds ----------
@@ -1942,6 +1982,11 @@
       case 'open-channel': openChannel(id); break;
       case 'sub-open': openSub(id, b.getAttribute('data-t') || ''); break;
       case 'subs-retry': loadSubs(true); break;
+      case 'subch-tab': var sv = stack[stack.length - 1]; if (sv && sv.name === 'subch') { sv.tab = id; if (id === 'playlists') loadPls(sv); renderPage(); } break;
+      case 'chan-playlists': openSub(id, b.getAttribute('data-t') || '', 'playlists'); break;
+      case 'open-plist': openPlist(id, b.getAttribute('data-t') || ''); break;
+      case 'pl-course': var plv = stack[stack.length - 1]; openCourseAdd('https://www.youtube.com/playlist?list=' + id, 'med'); if (plv && plv.title) { $('#courseName').value = Courses.shortName(plv.title); $('#courseName').setAttribute('data-auto', '1'); } break;
+      case 'pl-open-course': openCourses(id); break;
       case 'open-pasted': push({ name: 'pasted' }); break;
       case 'back': back(); break;
       case 'home': goHome(); break;
