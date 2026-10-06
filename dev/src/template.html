@@ -53,7 +53,9 @@ try{var lk=JSON.parse(localStorage.getItem('shelf.look')||'null'),R=document.doc
   --tabhi:#f2de3c;
   color-scheme:dark}
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;background:var(--paper)}
+html{-webkit-text-size-adjust:100%;background:var(--paper);touch-action:manipulation}
+/* No double-tap zoom anywhere, so quick taps on −15/+15 all skip (scrolling and pinch still work) */
+button,a,[role=button]{touch-action:manipulation}
 body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.3 var(--font);-webkit-font-smoothing:antialiased;
   padding-bottom:calc(var(--tabs) + env(safe-area-inset-bottom,0px));overflow-x:hidden}
 body.mini-on{padding-bottom:calc(var(--tabs) + 58px + env(safe-area-inset-bottom,0px))}

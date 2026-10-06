@@ -663,6 +663,11 @@ await p.evaluate(() => window.__fake.advance(200)); await p.waitForTimeout(1300)
 const vis = (v) => p.evaluate((v) => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; }, v);
 const tapLocked = () => p.evaluate(() => { const a = document.querySelector('#ytLink'); let stopped = false; a.addEventListener('click', (e) => { stopped = e.defaultPrevented; e.preventDefault(); }, { once: true }); a.click(); return a.href; });
 await p.locator('#vRate [data-r="1.5"]').click(); await p.waitForTimeout(150);
+ok(await p.evaluate(() => getComputedStyle(document.documentElement).touchAction === 'manipulation' && getComputedStyle(document.querySelector('[data-act="v-fwd"]')).touchAction === 'manipulation'), 'Q no double-tap zoom, so quick taps on +15 all skip');
+const f0 = await shelf(p, () => window.__fake.getCurrentTime());
+await p.locator('[data-act="v-fwd"]').dblclick(); await p.waitForTimeout(150);
+const f1 = await shelf(p, () => window.__fake.getCurrentTime());
+ok(f1 - f0 > 28 && f1 - f0 < 34, 'Q a quick double tap on +15 skips 30 s (' + Math.round(f1 - f0) + ')');
 const yh = await tapLocked(); await p.waitForTimeout(150);
 let hand2 = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
 ok(/^youtube:\/\//.test(yh) && await p.locator('dialog[open]').count() === 0 && hand2 && hand2.rate === 1.5, 'Q at 1.5× Play locked goes straight to YouTube, no sheet');
