@@ -1,5 +1,4 @@
 import UIKit
-import AVFoundation
 import CoreLocation
 import WebKit
 import Capacitor
@@ -10,9 +9,6 @@ import Capacitor
 // - dim: Sleep dim, the screen at its lowest while a video's sleep timer runs; the brightness comes back after
 // - statusBar: the clock and battery in dark or light, to match Shelf's day or night look
 // - locate: where the phone is, once, for sunrise and sunset (asks the first time)
-// - stopOthersAfter: Shelf's sleep timer for the YouTube app after Play locked. Shelf stays awake in the background
-//   with silent sound that mixes with YouTube's; when the time is up it takes the sound over, which pauses YouTube
-//   the way a phone call does
 // - youtubeGet: a youtube.com page read as the signed-in account (the sign-in from Sign in to YouTube), so Shelf
 //   can see in the watch history where the YouTube app stopped a video after Play locked
 @objc(ShelfDevicePlugin)
@@ -24,8 +20,7 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
         CAPPluginMethod(name: "dim", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "statusBar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "locate", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "youtubeGet", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "stopOthersAfter", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "youtubeGet", returnType: CAPPluginReturnPromise)
     ]
 
     private var awake = false
@@ -154,76 +149,6 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
                 }.resume()
             }
         }
-    }
-
-    // ---- Sleep timer for the YouTube app ----
-    private var silence: AVAudioPlayer?
-    private var sleepTimer: Timer?
-
-    @objc func stopOthersAfter(_ call: CAPPluginCall) {
-        let minutes = call.getDouble("minutes") ?? 0
-        DispatchQueue.main.async {
-            self.cancelSleep()
-            guard minutes > 0 else { return call.resolve(["on": false]) }
-            do {
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-                try session.setActive(true)
-                let p = try AVAudioPlayer(data: ShelfDevicePlugin.silentWav())
-                p.numberOfLoops = -1
-                p.volume = 0
-                p.play()
-                self.silence = p
-            } catch {
-                return call.reject("Shelf couldn't stay awake for the timer: " + error.localizedDescription)
-            }
-            self.sleepTimer = Timer.scheduledTimer(withTimeInterval: minutes * 60, repeats: false) { [weak self] _ in self?.timeUp() }
-            call.resolve(["on": true])
-        }
-    }
-
-    // Time's up: Shelf's own (silent) sound, not mixed, interrupts YouTube; then Shelf lets go without telling it to resume
-    private func timeUp() {
-        sleepTimer = nil
-        silence?.stop()
-        silence = nil
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .default, options: [])
-            try session.setActive(true)
-            let p = try AVAudioPlayer(data: ShelfDevicePlugin.silentWav())
-            p.volume = 0
-            p.play()
-            silence = p
-        } catch {}
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.silence?.stop()
-            self.silence = nil
-            try? session.setActive(false)
-        }
-    }
-
-    private func cancelSleep() {
-        guard sleepTimer != nil || silence != nil else { return }
-        sleepTimer?.invalidate()
-        sleepTimer = nil
-        silence?.stop()
-        silence = nil
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [])
-    }
-
-    // One second of silence as a WAV (16-bit mono, 8 kHz)
-    static func silentWav() -> Data {
-        let rate: UInt32 = 8000, bytes: UInt32 = rate * 2
-        var d = Data()
-        func put32(_ v: UInt32) { var x = v.littleEndian; d.append(Data(bytes: &x, count: 4)) }
-        func put16(_ v: UInt16) { var x = v.littleEndian; d.append(Data(bytes: &x, count: 2)) }
-        d.append("RIFF".data(using: .ascii)!); put32(36 + bytes); d.append("WAVE".data(using: .ascii)!)
-        d.append("fmt ".data(using: .ascii)!); put32(16); put16(1); put16(1); put32(rate); put32(rate * 2); put16(2); put16(16)
-        d.append("data".data(using: .ascii)!); put32(bytes)
-        d.append(Data(count: Int(bytes)))
-        return d
     }
 
     private func finish(_ each: (CAPPluginCall) -> Void) {

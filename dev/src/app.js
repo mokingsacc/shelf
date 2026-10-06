@@ -630,7 +630,7 @@
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (player.getPlaybackRate && player.getPlaybackRate() !== wantRate) { try { player.setPlaybackRate(wantRate); } catch (er) {} }
       capture(); keepAwake(true);
-      // No captions unless turned on in the player (YouTube's account setting can switch them on in embeds)
+      // No captions in Shelf's player (YouTube's account setting can switch them on in embeds)
       if (capsOff !== current) { capsOff = current; try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (er) {} }
       var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake || Native.device ? 'screen stays on' : 'saving your spot');
     } else {
@@ -818,7 +818,6 @@
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
       applyLook();
       renderAll();
-      Native.stopOthersAfter(0); // back in Shelf: its own timer takes over again
       catchUp();
       // Locked while playing in Shelf: say how to keep it going next time
       if (lockPaused && lockPaused === current) toast('YouTube stops videos inside other apps when the phone locks. Play locked opens it in the YouTube app, where Premium keeps playing.', '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 10000);
@@ -831,7 +830,7 @@
   // the account's watch history (the YouTube app saves it there when it stops; Mo said yes to this on 6 Oct 2026),
   // trying a few times while the history catches up. Without it, the time away at this video's speed is the guess.
   // Never past the end; an Undo puts it back, and the scrub bar fine-tunes it.
-  var HAND_KEY = 'shelf.handoff', HIST_URL = 'https://www.youtube.com/feed/history', seekOnPlay = null, lockPaused = null;
+  var catchSeq = 0, HAND_KEY = 'shelf.handoff', HIST_URL = 'https://www.youtube.com/feed/history', seekOnPlay = null, lockPaused = null;
   function catchUp() {
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
     if (!h) return;
@@ -839,7 +838,7 @@
     var v = videos[h.id], away = (Date.now() - h.at) / 1000, rate = h.rate || 1;
     // Only when Shelf really went to YouTube (armed as it left), not after a night away or a cancelled tap
     if (!h.armed || !v || v.done || away < 15 || away > 8 * 3600 || Math.abs((v.t || 0) - h.t) > 30) return;
-    var guess = h.t + away * rate;
+    var guess = h.t + away * rate, mine = ++catchSeq;
     function clamp(t) { return v.dur > 0 ? Math.min(t, Math.max(h.t, v.dur - 30)) : t; } // short of the end, so it isn't counted as watched
     function put(t) {
       v.t = t; v.updated = Date.now(); saveVideos();
@@ -848,6 +847,7 @@
       renderAll();
     }
     function done(t, why) {
+      if (mine !== catchSeq) return; // another Play locked since: that one's return decides
       var exact = t != null, to = clamp(exact ? t : guess);
       if (Math.abs(to - h.t) < 5) { if (exact) toast('YouTube stopped about where Shelf did, at ' + Core.fmt(h.t) + '.'); return; }
       put(to);
@@ -866,9 +866,10 @@
       Native.youtubeGet(HIST_URL).then(function (r) {
         if (!r) return done(null, '');
         if (!r.signedIn) return done(null, 'signin');
-        var spot = r.status === 200 ? Courses.historySpot(r.data, h.id) : null;
+        if (r.status !== 200 || (r.data || '').indexOf('ytInitialData') < 0) return done(null, ''); // a consent or error page
+        var spot = Courses.historySpot(r.data, h.id);
         // Until the YouTube app saves the new spot, the history still shows where Shelf handed over
-        if ((!spot || (spot.t != null && Math.abs(spot.t - h.t) < 3)) && tries < 3) return setTimeout(look, 4000);
+        if ((!spot || (spot.t != null && Math.abs(spot.t - h.t) < 3)) && tries < 3) return setTimeout(function () { if (mine === catchSeq) look(); }, 4000);
         if (spot && spot.t != null) return done(spot.t);
         // Only the red bar under the video: keep the guess inside its 1% of the video
         if (spot && spot.pct != null && v.dur > 0) return done(Math.min(Math.max(guess, spot.pct / 100 * v.dur), (spot.pct + 1) / 100 * v.dur));
@@ -1960,8 +1961,9 @@
   // the phone locked (YouTube stops its embedded player in the background). In the iPhone app it uses the
   // youtube:// address, so iOS can't send it to Safari instead (Safari pauses on lock too); if no app opens
   // within 1.5 s, the web page opens. Back in Shelf, the place moves on by the time spent away (see catchUp).
-  // YouTube's links can't set its speed, so whenever this video's speed differs from the one YouTube was last set to,
-  // a sheet says to set YouTube to the same speed (it usually keeps it); the catch-up counts the time away at that speed.
+  // YouTube's links can't set its speed or sleep timer, so when this video's speed differs from the one YouTube was
+  // last set to, or a sleep timer runs here, a sheet says what to set in YouTube first (the catch-up's guess counts
+  // the time away at that speed). Apps can't pause another app's sound from the background, so YouTube's own timer it is.
   var appFallback = null, pendingHand = null;
   function handTarget() {
     var v = current && videos[current]; if (!v) return null;
@@ -1973,21 +1975,28 @@
     return { v: v, t: t, web: web, href: href, rate: wantRate || 1 };
   }
   function handOff(h) {
+    catchSeq++; // a history check still running from the last return stops
     clearTimeout(appFallback);
     if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
-    // A sleep timer running here carries over: the iPhone app pauses YouTube when it's up (or at the video's end)
-    var left = vTimer ? (vTimer.mode === 'end' ? (h.v.dur > 0 ? (h.v.dur - h.t) / h.rate * 1000 : null) : SleepTimer.remaining(vTimer)) : null;
-    if (left > 0) Native.stopOthersAfter(left / 60000);
   }
   function rateTxt(r) { return r + '×'; }
+  // Minutes left on this video's sleep timer (to the end of the video for "End"), or 0
+  function sleepLeft(h) {
+    if (!vTimer) return 0;
+    var ms = vTimer.mode === 'end' ? (h.v.dur > 0 ? (h.v.dur - h.t) / h.rate * 1000 : 0) : SleepTimer.remaining(vTimer);
+    return Math.max(1, Math.round(ms / 60000));
+  }
   $('#ytLink').addEventListener('click', function (e) {
     capture(true); var h = handTarget(); if (!h) { e.preventDefault(); return; }
     this.href = h.href;
-    if ((prefs.ytRate || 1) !== h.rate) {
+    var speed = (prefs.ytRate || 1) !== h.rate, mins = sleepLeft(h);
+    if (speed || mins) {
       e.preventDefault(); pendingHand = h;
       Array.prototype.forEach.call(document.querySelectorAll('.rateNow'), function (el) { el.textContent = rateTxt(h.rate); });
+      $('#sleepNow').textContent = mins + (mins === 1 ? ' minute' : ' minutes');
+      $('#rateStep').hidden = !speed; $('#sleepStep').hidden = !mins;
       $('#rateGo').href = h.href;
       try { player.pauseVideo(); } catch (e2) {}
       openDlg($('#rateDlg'));
@@ -2248,7 +2257,7 @@
     $('#trackBtn').hidden = !signIn; $('#aiKeyBtn').hidden = !Native.inApp;
     $('#checkAllSum').textContent = 'Show all ' + c.length + ' checks';
     $('#checkList').innerHTML = c.map(function (x) {
-      return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + (x.fix === 'ai-key' && x.ok === 1 && !aiKey ? '<br>' + fixBtn(x.fix) : '') + '</span></li>';
+      return '<li class="' + (x.ok === 1 ? 'ok' : x.ok === 2 ? 'wait' : 'bad') + '"><span class="ic" aria-hidden="true">' + (x.ok === 1 ? '✓' : x.ok === 2 ? '…' : '!') + '</span><span>' + esc(x.text) + ((x.fix === 'ai-key' && x.ok === 1 && !aiKey) || (x.fix === 'lock' && x.ok === 1) ? '<br>' + fixBtn(x.fix) : '') + '</span></li>';
     }).join('');
   }
   var signingIn = false;

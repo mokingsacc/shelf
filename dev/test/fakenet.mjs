@@ -138,8 +138,7 @@ export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: 
     if (${!!shell.device}) window.Capacitor.Plugins.ShelfDevice = { keepAwake: async (o) => { window.__devCalls.push('keepAwake:' + o.on); return o; }, dim: async (o) => { window.__devCalls.push('dim:' + o.on); return o; },
       statusBar: async (o) => { window.__devCalls.push('statusBar:' + o.style); return o; }, locate: async () => { window.__devCalls.push('locate'); return { lat: 53.4808, lon: -2.2426 }; },
       // Watch history: window.__hist = { signedIn, html } (or a list, one per call)
-      youtubeGet: async (o) => { window.__devCalls.push('youtubeGet:' + o.url); const h = Array.isArray(window.__hist) ? (window.__hist.length > 1 ? window.__hist.shift() : window.__hist[0]) : window.__hist; return h ? { status: 200, data: h.html || '', signedIn: h.signedIn !== false } : { status: 200, data: '', signedIn: false }; },
-      stopOthersAfter: async (o) => { window.__devCalls.push('stopOthersAfter:' + Math.round(o.minutes)); return { on: o.minutes > 0 }; } };
+      youtubeGet: async (o) => { window.__devCalls.push('youtubeGet:' + o.url); const h = Array.isArray(window.__hist) ? (window.__hist.length > 1 ? window.__hist.shift() : window.__hist[0]) : window.__hist; return h ? { status: 200, data: h.html || '', signedIn: h.signedIn !== false } : { status: 200, data: '', signedIn: false }; } };
   })();`; };
 
 // opts.fresh: hide the newest item on the first fetch of each feed, so a later refresh shows "new"

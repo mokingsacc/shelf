@@ -186,6 +186,12 @@ await p.locator('#checkMore summary').click();
 ok(await p.locator('#toneBtn').isVisible(), '8 lock-screen sound test is offered in the app');
 ok(txt.includes('Signed in to YouTube') && (await p.locator('#ytBtn').textContent()) === 'Sign out of YouTube', '8 says it is signed in to YouTube, with a way out');
 ok(!(await p.locator('#retryBtn').isVisible()), '8 no Try again when phone storage is fine');
+await p.locator('#checkAllSum').click(); await p.waitForTimeout(100);
+const lockRow = p.locator('#checkList li', { hasText: 'Play locked' }).locator('[data-act="lock-setup"]');
+ok(await lockRow.isVisible(), '8 the Play locked row has an Auto-lock button to tap');
+await lockRow.click(); await p.waitForTimeout(200);
+ok(await p.locator('#lockDlg[open]').count() === 1, '8 tapping it opens the auto-lock setup');
+await p.locator('#lockDlg [data-act="dismiss"]').click(); await p.waitForTimeout(150);
 await p.screenshot({ path: SHOTS + '/e2e-check.png' });
 await p.keyboard.press('Escape');
 ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'phone: no sideways scroll');
@@ -233,7 +239,7 @@ await p.evaluate((h) => { localStorage.setItem('shelf.handoff', JSON.stringify(O
 await p.evaluate((h) => { localStorage.setItem('shelf.handoff', JSON.stringify(Object.assign({}, h, { at: Date.now() - 10 * 3600e3, armed: true }))); window.__shelf.catchUp(); }, hand);
 ok(Math.abs(await shelf(p, () => window.__shelf.videos[window.__shelf.current].t) - hand.t) < 2, 'a second return, a cancelled tap, or a night away does nothing');
 // Auto-lock: set up once from the dialog; Play locked then runs the "Shelf Play Locked" Shortcut with the YouTube link
-await shelf(p, () => { const b = document.createElement('button'); b.setAttribute('data-act', 'lock-setup'); document.body.appendChild(b); b.click(); b.remove(); });
+await shelf(p, () => { const b = document.createElement('button'); b.setAttribute('data-act', 'lock-setup'); document.body.appendChild(b); b.click(); b.remove(); }); // (the real button is checked in section 8)
 await p.waitForTimeout(200);
 ok(await p.locator('#lockDlg[open]').count() === 1 && /Lock Screen/.test(await p.locator('#lockDlg').textContent()), 'auto-lock: the setup sheet explains the 3-step Shortcut');
 await p.locator('#lockToggle').click(); await p.waitForTimeout(150);
@@ -660,15 +666,18 @@ await p.locator('#vTmBtn').click(); await p.locator('#vSeg [data-m="30"]').click
 // 1.5× here: a sheet asks to set YouTube to 1.5× first, once
 await p.locator('#vRate [data-r="1.5"]').click(); await p.waitForTimeout(150);
 await tapLocked(); await p.waitForTimeout(200);
-ok(await p.locator('#rateDlg[open]').count() === 1 && /1\.5×/.test(await p.locator('#rateDlg').textContent()) && await shelf(p, () => localStorage.getItem('shelf.handoff')) !== 'x', 'Q at 1.5× Play locked first says to set YouTube to 1.5×');
+ok(await p.locator('#rateDlg[open]').count() === 1 && /1\.5×/.test(await p.locator('#rateStep').textContent()) && await p.locator('#rateStep').isVisible(), 'Q at 1.5× Play locked first says to set YouTube to 1.5×');
+ok(await p.locator('#sleepStep').isVisible() && /(29|30) minutes/.test(await p.locator('#sleepNow').textContent()), 'Q and to set YouTube\'s sleep timer to the time left: ' + await p.locator('#sleepNow').textContent());
 ok(/^youtube:\/\//.test(await p.getAttribute('#rateGo', 'href')), 'Q its button opens the YouTube app');
 await p.evaluate(() => { window.__devCalls.length = 0; const a = document.querySelector('#rateGo'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); });
 await p.waitForTimeout(200);
 let hand2 = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
 ok(hand2 && hand2.rate === 1.5 && await shelf(p, () => window.__shelf.prefs.ytRate) === 1.5 && await p.locator('#rateDlg[open]').count() === 0, 'Q Open YouTube hands over at 1.5× and remembers YouTube is on 1.5×');
-ok((await devCalls()).includes('stopOthersAfter:30'), 'Q the 30-minute sleep timer goes with it (the phone pauses YouTube when it\'s up): ' + (await devCalls()).join(' '));
 await tapLocked(); await p.waitForTimeout(150);
-ok(await p.locator('#rateDlg[open]').count() === 0, 'Q the second time at the same speed, no sheet');
+ok(await p.locator('#rateDlg[open]').count() === 1 && !(await p.locator('#rateStep').isVisible()) && await p.locator('#sleepStep').isVisible(), 'Q the second time at the same speed, only the sleep timer step');
+await p.locator('#rateDlg [data-act="dismiss"]').click(); await p.locator('#vTmBtn').click().catch(() => {}); await p.locator('#vSeg [data-m="30"]').click(); await p.waitForTimeout(150);
+await tapLocked(); await p.waitForTimeout(150);
+ok(await p.locator('#rateDlg[open]').count() === 0, 'Q same speed and no timer: straight to YouTube');
 // Away 3 min; the history first still shows the old spot, then where YouTube stopped
 const hist = (id, t) => '<script>var ytInitialData = {"x":[{"lockupViewModel":{"contentId":"aaaaaaaaaaa","watchEndpoint":{"videoId":"aaaaaaaaaaa","startTimeSeconds":5}}},{"lockupViewModel":{"contentId":"' + id + '","watchEndpoint":{"videoId":"' + id + '","startTimeSeconds":' + t + '}}}]};</script>';
 hand2 = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
@@ -676,7 +685,6 @@ await p.evaluate(([a, b]) => { window.__hist = [{ html: a }, { html: b }]; windo
 await vis('hidden');
 await shelf(p, () => { const h = JSON.parse(localStorage.getItem('shelf.handoff')); h.at -= 180e3; localStorage.setItem('shelf.handoff', JSON.stringify(h)); });
 await vis('visible'); await p.waitForTimeout(300);
-ok((await devCalls()).includes('stopOthersAfter:0'), 'Q back in Shelf, the YouTube timer is called off');
 ok(/Checking where YouTube stopped/.test(await p.locator('#toast').textContent()), 'Q it checks the watch history first');
 await p.waitForTimeout(4600);
 let exact = await shelf(p, () => ({ t: window.__shelf.videos[window.__shelf.current].t, toast: document.querySelector('#toast').textContent }));
