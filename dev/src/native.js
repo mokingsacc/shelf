@@ -158,6 +158,10 @@ var Native = (function () {
   function keepAwake(on) { return dev('keepAwake', { on: !!on }); }
   function dim(on) { return dev('dim', { on: !!on }); }
   function statusBar(style) { return dev('statusBar', { style: style }); }
+  // A youtube.com page read as the signed-in account (null when this copy of the app can't)
+  function youtubeGet(url) { return device ? call('ShelfDevice', 'youtubeGet', { url: url }) : Promise.resolve(null); }
+  // Sleep timer for the YouTube app after Play locked: pause it after this many minutes (0 cancels)
+  function stopOthersAfter(minutes) { return dev('stopOthersAfter', { minutes: Math.max(0, minutes || 0) }); }
   function locate() { return device ? call('ShelfDevice', 'locate') : Promise.reject(new Error('This copy of the Shelf app has no location yet.')); }
 
   if (inApp) {
@@ -171,5 +175,5 @@ var Native = (function () {
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
     get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,
-    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate };
+    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate, youtubeGet: youtubeGet, stopOthersAfter: stopOthersAfter };
 })();

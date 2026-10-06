@@ -256,5 +256,19 @@ function setup(store, opts = {}) {
   assert.ok(cv[1].published < cv[0].published, 'same "1 day ago" still keeps page order');
   assert.strictEqual(Courses.channelVideos('<html>no data</html>', T0), null);
 
+  // Watch history after Play locked: the resume second, from the link or the endpoint, else the bar's percent
+  const hist = (items) => '<script>var ytInitialData = ' + JSON.stringify({ contents: items }) + ';</script>';
+  const lku = (id, extra) => ({ lockupViewModel: Object.assign({ contentId: id, rendererContext: { commandContext: { onTap: { innertubeCommand: { watchEndpoint: Object.assign({ videoId: id }, extra) } } } } }) });
+  const H1 = hist([lku('aaaaaaaaaaa', { startTimeSeconds: 1234 }), lku('dQw4w9WgXcQ', { startTimeSeconds: 456 })]);
+  assert.deepStrictEqual(Courses.historySpot(H1, 'dQw4w9WgXcQ'), { t: 456 }, 'its own start second, not the video before it');
+  assert.deepStrictEqual(Courses.historySpot(H1, 'aaaaaaaaaaa'), { t: 1234 });
+  const H2 = hist([{ videoRenderer: { videoId: 'bbbbbbbbbbb', navigationEndpoint: { commandMetadata: { webCommandMetadata: { url: '/watch?v=bbbbbbbbbbb&t=789s' } } } } }]);
+  assert.deepStrictEqual(Courses.historySpot(H2, 'bbbbbbbbbbb'), { t: 789 }, 'the resume link (&t=…s, JSON escapes it as \\u0026)');
+  assert.ok(H2.includes('\\u0026') || H2.includes('&t='), 'fixture carries the link');
+  const H3 = hist([{ videoRenderer: { videoId: 'ccccccccccc', thumbnailOverlays: [{ thumbnailOverlayResumePlaybackRenderer: { percentDurationWatched: 42 } }] } }, lku('ddddddddddd', { startTimeSeconds: 9 })]);
+  assert.deepStrictEqual(Courses.historySpot(H3, 'ccccccccccc'), { pct: 42 }, 'only the red bar: its percent, not the next video\'s second');
+  assert.strictEqual(Courses.historySpot(H3, 'zzzzzzzzzzz'), null);
+  assert.strictEqual(Courses.historySpot('', 'ccccccccccc'), null);
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

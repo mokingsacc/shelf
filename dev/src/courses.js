@@ -105,6 +105,27 @@ var Courses = (function () {
   }
   // Uploads on a channel's Videos tab (newest first): the backup when YouTube's feed fails.
   // Times are rough ("3 days ago"), so each one is kept just under the one above it.
+  // Where the account's watch history says a video stopped (after Play locked, the YouTube app saves the spot to
+  // the history): the resume link's start second (startTimeSeconds or &t=…s), else the red bar's percent.
+  // Returns { t } or { pct } or null when the video isn't in the page.
+  function historySpot(html, id) {
+    if (!html || !id || html.indexOf(id) < 0) return null;
+    var esc = id.replace(/[^\w-]/g, ''), m;
+    var link = new RegExp('watch\\?v=' + esc + '(?:\\\\u0026|&amp;|&)(?:[^"]*?(?:\\\\u0026|&amp;|&))?t=(\\d+)s?');
+    if ((m = html.match(link))) return { t: +m[1] };
+    var re = new RegExp('"videoId":"' + esc + '"', 'g'), pct = null;
+    while ((m = re.exec(html))) {
+      // Only this video's own data: up to the next different video
+      var rest = html.slice(m.index + m[0].length, m.index + 1500), next = rest.search(new RegExp('"videoId":"(?!' + esc + '")'));
+      if (next >= 0) rest = rest.slice(0, next);
+      var st = rest.match(/"startTimeSeconds":(\d+)/);
+      if (st) return { t: +st[1] };
+      var pc = rest.match(/"percentDurationWatched":(\d+)/);
+      if (pc && pct == null) pct = +pc[1];
+    }
+    return pct == null ? null : { pct: pct };
+  }
+
   function channelVideos(html, now) {
     var data = initialData(html), out = [];
     if (!data) return null;
@@ -481,6 +502,6 @@ var Courses = (function () {
     };
   }
   return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
-    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours };
+    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;

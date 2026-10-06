@@ -495,11 +495,11 @@
 
   // ---------- Video player ----------
   var player = null, playerReady = false, ytLoaded = false, ytFailed = false, current = null, pending = null, tick = null, lastErr = '';
-  var wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null, startOnce = null, keepSpot = null;
+  var capsOff = null, wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null, startOnce = null, keepSpot = null;
   var armed = false, sawPlaying = false, loadStart = 0, startTimer = null, lastCaptureAt = 0, vTimer = null, vTimerMsg = '', wake = null, uiTick = null;
   window.onYouTubeIframeAPIReady = function () {
     ytLoaded = true; updateDot();
-    var vars = { rel: 0, playsinline: 1, modestbranding: 1, autoplay: 1 };
+    var vars = { rel: 0, playsinline: 1, modestbranding: 1, autoplay: 1, cc_load_policy: 0 };
     if (/^https?:$/.test(location.protocol)) vars.origin = location.origin;
     player = new YT.Player('player', {
       width: '100%', height: '100%', playerVars: vars,
@@ -630,6 +630,8 @@
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (player.getPlaybackRate && player.getPlaybackRate() !== wantRate) { try { player.setPlaybackRate(wantRate); } catch (er) {} }
       capture(); keepAwake(true);
+      // No captions unless turned on in the player (YouTube's account setting can switch them on in embeds)
+      if (capsOff !== current) { capsOff = current; try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (er) {} }
       var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake || Native.device ? 'screen stays on' : 'saving your spot');
     } else {
       clearInterval(tick); keepAwake(false);
@@ -816,6 +818,7 @@
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
       applyLook();
       renderAll();
+      Native.stopOthersAfter(0); // back in Shelf: its own timer takes over again
       catchUp();
       // Locked while playing in Shelf: say how to keep it going next time
       if (lockPaused && lockPaused === current) toast('YouTube stops videos inside other apps when the phone locks. Play locked opens it in the YouTube app, where Premium keeps playing.', '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 10000);
@@ -824,31 +827,54 @@
   });
   window.addEventListener('pagehide', function () { capture(true); if (engine) engine.capture(true); });
 
-  // Back from the YouTube app: move the place on by the time away (at this video's speed), never past the end.
-  // An Undo puts it back, and the scrub bar fine-tunes it.
-  var HAND_KEY = 'shelf.handoff', HAND_LAG = 22, seekOnPlay = null, lockPaused = null;
+  // Back from the YouTube app: move the place to where YouTube stopped. In the iPhone app Shelf reads that from
+  // the account's watch history (the YouTube app saves it there when it stops; Mo said yes to this on 6 Oct 2026),
+  // trying a few times while the history catches up. Without it, the time away at this video's speed is the guess.
+  // Never past the end; an Undo puts it back, and the scrub bar fine-tunes it.
+  var HAND_KEY = 'shelf.handoff', HIST_URL = 'https://www.youtube.com/feed/history', seekOnPlay = null, lockPaused = null;
   function catchUp() {
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
     if (!h) return;
     rawSet(HAND_KEY, 'null', false);
-    var v = videos[h.id], away = (Date.now() - h.at) / 1000;
+    var v = videos[h.id], away = (Date.now() - h.at) / 1000, rate = h.rate || 1;
     // Only when Shelf really went to YouTube (armed as it left), not after a night away or a cancelled tap
     if (!h.armed || !v || v.done || away < 15 || away > 8 * 3600 || Math.abs((v.t || 0) - h.t) > 30) return;
-    // Opening YouTube and getting it playing takes a little while, so land 22 s earlier (a second or two
-    // repeated beats a gap)
-    var to = h.t + away * (h.rate || 1) - HAND_LAG;
-    if (v.dur > 0) to = Math.min(to, Math.max(h.t, v.dur - 30)); // short of the end, so it isn't counted as watched
-    if (to - h.t < 5) return;
+    var guess = h.t + away * rate;
+    function clamp(t) { return v.dur > 0 ? Math.min(t, Math.max(h.t, v.dur - 30)) : t; } // short of the end, so it isn't counted as watched
     function put(t) {
       v.t = t; v.updated = Date.now(); saveVideos();
       if (current === v.id && playerReady) { try { player.seekTo(t, true); keepSpot = null; } catch (e) {} videoTick(); }
       seekOnPlay = { id: v.id, t: t };
       renderAll();
     }
-    put(to);
-    toast('Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube' + ((h.rate || 1) !== 1 ? ' at ' + rateTxt(h.rate) : '') + '.', '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
-    // Once: the phone can lock itself after Play locked
-    if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
+    function done(t, why) {
+      var exact = t != null, to = clamp(exact ? t : guess);
+      if (Math.abs(to - h.t) < 5) { if (exact) toast('YouTube stopped about where Shelf did, at ' + Core.fmt(h.t) + '.'); return; }
+      put(to);
+      var msg = exact ? 'Moved your place to ' + Core.fmt(to) + ', where YouTube stopped.'
+        : 'Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube' + (rate !== 1 ? ' at ' + rateTxt(rate) : '') + '.' +
+          (why === 'signin' ? ' Sign in to YouTube in the self-check for the exact spot.' : why === 'history' ? ' Turn on YouTube watch history for the exact spot.' : '');
+      toast(msg, '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
+      // Once: the phone can lock itself after Play locked
+      if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
+    }
+    if (!Native.device) return done(null, '');
+    toast('Checking where YouTube stopped…');
+    var tries = 0;
+    (function look() {
+      tries++;
+      Native.youtubeGet(HIST_URL).then(function (r) {
+        if (!r) return done(null, '');
+        if (!r.signedIn) return done(null, 'signin');
+        var spot = r.status === 200 ? Courses.historySpot(r.data, h.id) : null;
+        // Until the YouTube app saves the new spot, the history still shows where Shelf handed over
+        if ((!spot || (spot.t != null && Math.abs(spot.t - h.t) < 3)) && tries < 3) return setTimeout(look, 4000);
+        if (spot && spot.t != null) return done(spot.t);
+        // Only the red bar under the video: keep the guess inside its 1% of the video
+        if (spot && spot.pct != null && v.dur > 0) return done(Math.min(Math.max(guess, spot.pct / 100 * v.dur), (spot.pct + 1) / 100 * v.dur));
+        done(null, 'history');
+      }, function () { done(null, ''); });
+    })();
   }
 
   // ---------- Auto-lock after Play locked (an iPhone Shortcut, made once) ----------
@@ -1951,6 +1977,9 @@
     if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
+    // A sleep timer running here carries over: the iPhone app pauses YouTube when it's up (or at the video's end)
+    var left = vTimer ? (vTimer.mode === 'end' ? (h.v.dur > 0 ? (h.v.dur - h.t) / h.rate * 1000 : null) : SleepTimer.remaining(vTimer)) : null;
+    if (left > 0) Native.stopOthersAfter(left / 60000);
   }
   function rateTxt(r) { return r + '×'; }
   $('#ytLink').addEventListener('click', function (e) {

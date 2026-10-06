@@ -649,6 +649,49 @@ const here = await shelf(p, () => window.__shelf.prefs.loc);
 ok(here && here.name === 'your location' && here.lat === 53.48 && /Sun times for your location/.test(await p.locator('#lookWhere').textContent()), 'N Use my location asks the phone: ' + JSON.stringify(here));
 await ctx.close();
 
+console.log('\n== Q Play locked: where YouTube stopped, speed, sleep timer');
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true } }));
+await settle(p);
+await shelf(p, () => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(1500);
+await p.evaluate(() => window.__fake.advance(200)); await p.waitForTimeout(1300);
+const vis = (v) => p.evaluate((v) => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; }, v);
+const tapLocked = () => p.evaluate(() => { const a = document.querySelector('#ytLink'); let stopped = false; a.addEventListener('click', (e) => { stopped = e.defaultPrevented; e.preventDefault(); }, { once: true }); a.click(); return a.href; });
+await p.locator('#vTmBtn').click(); await p.locator('#vSeg [data-m="30"]').click(); await p.waitForTimeout(200);
+// 1.5× here: a sheet asks to set YouTube to 1.5× first, once
+await p.locator('#vRate [data-r="1.5"]').click(); await p.waitForTimeout(150);
+await tapLocked(); await p.waitForTimeout(200);
+ok(await p.locator('#rateDlg[open]').count() === 1 && /1\.5×/.test(await p.locator('#rateDlg').textContent()) && await shelf(p, () => localStorage.getItem('shelf.handoff')) !== 'x', 'Q at 1.5× Play locked first says to set YouTube to 1.5×');
+ok(/^youtube:\/\//.test(await p.getAttribute('#rateGo', 'href')), 'Q its button opens the YouTube app');
+await p.evaluate(() => { window.__devCalls.length = 0; const a = document.querySelector('#rateGo'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); });
+await p.waitForTimeout(200);
+let hand2 = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
+ok(hand2 && hand2.rate === 1.5 && await shelf(p, () => window.__shelf.prefs.ytRate) === 1.5 && await p.locator('#rateDlg[open]').count() === 0, 'Q Open YouTube hands over at 1.5× and remembers YouTube is on 1.5×');
+ok((await devCalls()).includes('stopOthersAfter:30'), 'Q the 30-minute sleep timer goes with it (the phone pauses YouTube when it\'s up): ' + (await devCalls()).join(' '));
+await tapLocked(); await p.waitForTimeout(150);
+ok(await p.locator('#rateDlg[open]').count() === 0, 'Q the second time at the same speed, no sheet');
+// Away 3 min; the history first still shows the old spot, then where YouTube stopped
+const hist = (id, t) => '<script>var ytInitialData = {"x":[{"lockupViewModel":{"contentId":"aaaaaaaaaaa","watchEndpoint":{"videoId":"aaaaaaaaaaa","startTimeSeconds":5}}},{"lockupViewModel":{"contentId":"' + id + '","watchEndpoint":{"videoId":"' + id + '","startTimeSeconds":' + t + '}}}]};</script>';
+hand2 = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
+await p.evaluate(([a, b]) => { window.__hist = [{ html: a }, { html: b }]; window.__devCalls.length = 0; }, [hist('dQw4w9WgXcQ', Math.floor(hand2.t)), hist('dQw4w9WgXcQ', Math.floor(hand2.t) + 137)]);
+await vis('hidden');
+await shelf(p, () => { const h = JSON.parse(localStorage.getItem('shelf.handoff')); h.at -= 180e3; localStorage.setItem('shelf.handoff', JSON.stringify(h)); });
+await vis('visible'); await p.waitForTimeout(300);
+ok((await devCalls()).includes('stopOthersAfter:0'), 'Q back in Shelf, the YouTube timer is called off');
+ok(/Checking where YouTube stopped/.test(await p.locator('#toast').textContent()), 'Q it checks the watch history first');
+await p.waitForTimeout(4600);
+let exact = await shelf(p, () => ({ t: window.__shelf.videos[window.__shelf.current].t, toast: document.querySelector('#toast').textContent }));
+ok(exact.t === Math.floor(hand2.t) + 137 && /where YouTube stopped/.test(exact.toast), 'Q one-for-one: the place is where YouTube stopped (' + Math.round(hand2.t) + ' -> ' + exact.t + ', a guess would say ' + Math.round(hand2.t + 270) + '): ' + exact.toast);
+ok((await devCalls()).filter((c) => c.startsWith('youtubeGet:https://www.youtube.com/feed/history')).length === 2, 'Q it asked the history again while YouTube hadn\'t saved the spot yet');
+await p.locator('#toast button', { hasText: 'Undo' }).click(); await p.waitForTimeout(150);
+// Not signed in: the guess at 1.5×, and a hint how to get the exact spot
+await p.evaluate(() => { window.__hist = { signedIn: false }; });
+hand2 = await shelf(p, () => window.__shelf.videos[window.__shelf.current].t);
+await p.evaluate((t) => { localStorage.setItem('shelf.handoff', JSON.stringify({ id: 'dQw4w9WgXcQ', t: t, at: Date.now() - 120e3, rate: 1.5, armed: true })); window.__shelf.catchUp(); }, hand2);
+await p.waitForTimeout(300);
+const guess = await shelf(p, () => ({ t: window.__shelf.videos[window.__shelf.current].t, toast: document.querySelector('#toast').textContent }));
+ok(Math.abs(guess.t - (hand2 + 180)) < 3 && /at 1\.5×/.test(guess.toast) && /Sign in to YouTube/.test(guess.toast), 'Q not signed in: 2 min at 1.5× = 3 min on, and says how to get it exact: ' + guess.toast);
+await ctx.close();
+
 console.log('\n== P Polish: a broken duplicate channel');
 ({ ctx, p } = await appPage({ fakes: { fresh: false } }));
 await settle(p);

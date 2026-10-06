@@ -754,6 +754,19 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="db" id="twinBody"></div>
 </dialog>
 
+<dialog id="rateDlg" aria-labelledby="rateH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="rateH">Same speed in YouTube</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db">
+    <p>You watch this at <b class="rateNow">1.5×</b>. YouTube can't be told the speed by a link, so set it once there:</p>
+    <ol class="steps">
+      <li>Tap the video, then <b>⚙</b> &gt; <b>Playback speed</b> &gt; <b class="rateNow">1.5×</b>.</li>
+      <li>YouTube usually keeps it for the next videos. Shelf asks again only if your speed here changes.</li>
+    </ol>
+    <p class="cnote">Back in Shelf, your place goes to where YouTube stopped. If Shelf can't see that, it counts the time away at <span class="rateNow">1.5×</span>, so matching speeds keeps it right.</p>
+    <a class="primary" id="rateGo" href="#" target="_blank" rel="noopener">Open YouTube</a>
+  </div>
+</dialog>
 <dialog id="lockDlg" aria-labelledby="lockH">
   <div class="grab" aria-hidden="true"></div>
   <div class="dh"><h2 id="lockH">Lock automatically</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
@@ -1146,6 +1159,10 @@ var Native = (function () {
   function keepAwake(on) { return dev('keepAwake', { on: !!on }); }
   function dim(on) { return dev('dim', { on: !!on }); }
   function statusBar(style) { return dev('statusBar', { style: style }); }
+  // A youtube.com page read as the signed-in account (null when this copy of the app can't)
+  function youtubeGet(url) { return device ? call('ShelfDevice', 'youtubeGet', { url: url }) : Promise.resolve(null); }
+  // Sleep timer for the YouTube app after Play locked: pause it after this many minutes (0 cancels)
+  function stopOthersAfter(minutes) { return dev('stopOthersAfter', { minutes: Math.max(0, minutes || 0) }); }
   function locate() { return device ? call('ShelfDevice', 'locate') : Promise.reject(new Error('This copy of the Shelf app has no location yet.')); }
 
   if (inApp) {
@@ -1159,7 +1176,7 @@ var Native = (function () {
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
     get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,
-    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate };
+    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate, youtubeGet: youtubeGet, stopOthersAfter: stopOthersAfter };
 })();
 </script>
 <script>// Feeds: YouTube channel Atom feeds, podcast RSS, channel pages. Pure parsing (no DOM), tested in test/feeds.test.cjs.
@@ -2040,6 +2057,27 @@ var Courses = (function () {
   }
   // Uploads on a channel's Videos tab (newest first): the backup when YouTube's feed fails.
   // Times are rough ("3 days ago"), so each one is kept just under the one above it.
+  // Where the account's watch history says a video stopped (after Play locked, the YouTube app saves the spot to
+  // the history): the resume link's start second (startTimeSeconds or &t=…s), else the red bar's percent.
+  // Returns { t } or { pct } or null when the video isn't in the page.
+  function historySpot(html, id) {
+    if (!html || !id || html.indexOf(id) < 0) return null;
+    var esc = id.replace(/[^\w-]/g, ''), m;
+    var link = new RegExp('watch\\?v=' + esc + '(?:\\\\u0026|&amp;|&)(?:[^"]*?(?:\\\\u0026|&amp;|&))?t=(\\d+)s?');
+    if ((m = html.match(link))) return { t: +m[1] };
+    var re = new RegExp('"videoId":"' + esc + '"', 'g'), pct = null;
+    while ((m = re.exec(html))) {
+      // Only this video's own data: up to the next different video
+      var rest = html.slice(m.index + m[0].length, m.index + 1500), next = rest.search(new RegExp('"videoId":"(?!' + esc + '")'));
+      if (next >= 0) rest = rest.slice(0, next);
+      var st = rest.match(/"startTimeSeconds":(\d+)/);
+      if (st) return { t: +st[1] };
+      var pc = rest.match(/"percentDurationWatched":(\d+)/);
+      if (pc && pct == null) pct = +pc[1];
+    }
+    return pct == null ? null : { pct: pct };
+  }
+
   function channelVideos(html, now) {
     var data = initialData(html), out = [];
     if (!data) return null;
@@ -2416,7 +2454,7 @@ var Courses = (function () {
     };
   }
   return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
-    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours };
+    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;
 </script>
@@ -3344,11 +3382,11 @@ if (typeof module !== 'undefined') module.exports = AI;
 
   // ---------- Video player ----------
   var player = null, playerReady = false, ytLoaded = false, ytFailed = false, current = null, pending = null, tick = null, lastErr = '';
-  var wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null, startOnce = null, keepSpot = null;
+  var capsOff = null, wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null, startOnce = null, keepSpot = null;
   var armed = false, sawPlaying = false, loadStart = 0, startTimer = null, lastCaptureAt = 0, vTimer = null, vTimerMsg = '', wake = null, uiTick = null;
   window.onYouTubeIframeAPIReady = function () {
     ytLoaded = true; updateDot();
-    var vars = { rel: 0, playsinline: 1, modestbranding: 1, autoplay: 1 };
+    var vars = { rel: 0, playsinline: 1, modestbranding: 1, autoplay: 1, cc_load_policy: 0 };
     if (/^https?:$/.test(location.protocol)) vars.origin = location.origin;
     player = new YT.Player('player', {
       width: '100%', height: '100%', playerVars: vars,
@@ -3479,6 +3517,8 @@ if (typeof module !== 'undefined') module.exports = AI;
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (player.getPlaybackRate && player.getPlaybackRate() !== wantRate) { try { player.setPlaybackRate(wantRate); } catch (er) {} }
       capture(); keepAwake(true);
+      // No captions unless turned on in the player (YouTube's account setting can switch them on in embeds)
+      if (capsOff !== current) { capsOff = current; try { player.unloadModule('captions'); player.unloadModule('cc'); } catch (er) {} }
       var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake || Native.device ? 'screen stays on' : 'saving your spot');
     } else {
       clearInterval(tick); keepAwake(false);
@@ -3665,6 +3705,7 @@ if (typeof module !== 'undefined') module.exports = AI;
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
       applyLook();
       renderAll();
+      Native.stopOthersAfter(0); // back in Shelf: its own timer takes over again
       catchUp();
       // Locked while playing in Shelf: say how to keep it going next time
       if (lockPaused && lockPaused === current) toast('YouTube stops videos inside other apps when the phone locks. Play locked opens it in the YouTube app, where Premium keeps playing.', '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 10000);
@@ -3673,29 +3714,54 @@ if (typeof module !== 'undefined') module.exports = AI;
   });
   window.addEventListener('pagehide', function () { capture(true); if (engine) engine.capture(true); });
 
-  // Back from the YouTube app: move the place on by the time away (at this video's speed), never past the end.
-  // An Undo puts it back, and the scrub bar fine-tunes it.
-  var HAND_KEY = 'shelf.handoff', seekOnPlay = null, lockPaused = null;
+  // Back from the YouTube app: move the place to where YouTube stopped. In the iPhone app Shelf reads that from
+  // the account's watch history (the YouTube app saves it there when it stops; Mo said yes to this on 6 Oct 2026),
+  // trying a few times while the history catches up. Without it, the time away at this video's speed is the guess.
+  // Never past the end; an Undo puts it back, and the scrub bar fine-tunes it.
+  var HAND_KEY = 'shelf.handoff', HIST_URL = 'https://www.youtube.com/feed/history', seekOnPlay = null, lockPaused = null;
   function catchUp() {
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
     if (!h) return;
     rawSet(HAND_KEY, 'null', false);
-    var v = videos[h.id], away = (Date.now() - h.at) / 1000;
+    var v = videos[h.id], away = (Date.now() - h.at) / 1000, rate = h.rate || 1;
     // Only when Shelf really went to YouTube (armed as it left), not after a night away or a cancelled tap
     if (!h.armed || !v || v.done || away < 15 || away > 8 * 3600 || Math.abs((v.t || 0) - h.t) > 30) return;
-    var to = h.t + away * (h.rate || 1);
-    if (v.dur > 0) to = Math.min(to, Math.max(h.t, v.dur - 30)); // short of the end, so it isn't counted as watched
-    if (to - h.t < 5) return;
+    var guess = h.t + away * rate;
+    function clamp(t) { return v.dur > 0 ? Math.min(t, Math.max(h.t, v.dur - 30)) : t; } // short of the end, so it isn't counted as watched
     function put(t) {
       v.t = t; v.updated = Date.now(); saveVideos();
       if (current === v.id && playerReady) { try { player.seekTo(t, true); keepSpot = null; } catch (e) {} videoTick(); }
       seekOnPlay = { id: v.id, t: t };
       renderAll();
     }
-    put(to);
-    toast('Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube.', '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
-    // Once: the phone can lock itself after Play locked
-    if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
+    function done(t, why) {
+      var exact = t != null, to = clamp(exact ? t : guess);
+      if (Math.abs(to - h.t) < 5) { if (exact) toast('YouTube stopped about where Shelf did, at ' + Core.fmt(h.t) + '.'); return; }
+      put(to);
+      var msg = exact ? 'Moved your place to ' + Core.fmt(to) + ', where YouTube stopped.'
+        : 'Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube' + (rate !== 1 ? ' at ' + rateTxt(rate) : '') + '.' +
+          (why === 'signin' ? ' Sign in to YouTube in the self-check for the exact spot.' : why === 'history' ? ' Turn on YouTube watch history for the exact spot.' : '');
+      toast(msg, '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
+      // Once: the phone can lock itself after Play locked
+      if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
+    }
+    if (!Native.device) return done(null, '');
+    toast('Checking where YouTube stopped…');
+    var tries = 0;
+    (function look() {
+      tries++;
+      Native.youtubeGet(HIST_URL).then(function (r) {
+        if (!r) return done(null, '');
+        if (!r.signedIn) return done(null, 'signin');
+        var spot = r.status === 200 ? Courses.historySpot(r.data, h.id) : null;
+        // Until the YouTube app saves the new spot, the history still shows where Shelf handed over
+        if ((!spot || (spot.t != null && Math.abs(spot.t - h.t) < 3)) && tries < 3) return setTimeout(look, 4000);
+        if (spot && spot.t != null) return done(spot.t);
+        // Only the red bar under the video: keep the guess inside its 1% of the video
+        if (spot && spot.pct != null && v.dur > 0) return done(Math.min(Math.max(guess, spot.pct / 100 * v.dur), (spot.pct + 1) / 100 * v.dur));
+        done(null, 'history');
+      }, function () { done(null, ''); });
+    })();
   }
 
   // ---------- Auto-lock after Play locked (an iPhone Shortcut, made once) ----------
@@ -4781,18 +4847,46 @@ if (typeof module !== 'undefined') module.exports = AI;
   // the phone locked (YouTube stops its embedded player in the background). In the iPhone app it uses the
   // youtube:// address, so iOS can't send it to Safari instead (Safari pauses on lock too); if no app opens
   // within 1.5 s, the web page opens. Back in Shelf, the place moves on by the time spent away (see catchUp).
-  var appFallback = null;
-  $('#ytLink').addEventListener('click', function () {
-    capture(true); var v = current && videos[current]; if (!v) return;
+  // YouTube's links can't set its speed, so whenever this video's speed differs from the one YouTube was last set to,
+  // a sheet says to set YouTube to the same speed (it usually keeps it); the catch-up counts the time away at that speed.
+  var appFallback = null, pendingHand = null;
+  function handTarget() {
+    var v = current && videos[current]; if (!v) return null;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
     var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
     // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
-    this.href = !Native.inApp ? web : prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
+    var href = !Native.inApp ? web : prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
+    return { v: v, t: t, web: web, href: href, rate: wantRate || 1 };
+  }
+  function handOff(h) {
     clearTimeout(appFallback);
-    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(web, '_blank'); }, 1500);
+    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
-    rawSet(HAND_KEY, JSON.stringify({ id: v.id, t: t, at: Date.now(), rate: wantRate || 1 }), false);
+    rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
+    // A sleep timer running here carries over: the iPhone app pauses YouTube when it's up (or at the video's end)
+    var left = vTimer ? (vTimer.mode === 'end' ? (h.v.dur > 0 ? (h.v.dur - h.t) / h.rate * 1000 : null) : SleepTimer.remaining(vTimer)) : null;
+    if (left > 0) Native.stopOthersAfter(left / 60000);
+  }
+  function rateTxt(r) { return r + '×'; }
+  $('#ytLink').addEventListener('click', function (e) {
+    capture(true); var h = handTarget(); if (!h) { e.preventDefault(); return; }
+    this.href = h.href;
+    if ((prefs.ytRate || 1) !== h.rate) {
+      e.preventDefault(); pendingHand = h;
+      Array.prototype.forEach.call(document.querySelectorAll('.rateNow'), function (el) { el.textContent = rateTxt(h.rate); });
+      $('#rateGo').href = h.href;
+      try { player.pauseVideo(); } catch (e2) {}
+      openDlg($('#rateDlg'));
+      return;
+    }
+    handOff(h);
+  });
+  $('#rateGo').addEventListener('click', function () {
+    var h = pendingHand; pendingHand = null; $('#rateDlg').close();
+    if (!h) return;
+    prefs.ytRate = h.rate; savePrefs();
+    handOff(h);
   });
   scrubKeys($('#vScrub'), 15, function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
   scrubKeys($('#nScrub'), 30, function (s) { engine.seekBy(s); });
