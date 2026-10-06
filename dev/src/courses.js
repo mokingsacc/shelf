@@ -97,6 +97,38 @@ var Courses = (function () {
     });
     return out;
   }
+  // "3 days ago", "Streamed 2 weeks ago" -> a rough time (null for upcoming or unreadable)
+  var UNIT = { second: 1e3, minute: 6e4, hour: 36e5, day: 864e5, week: 6048e5, month: 2592e6, year: 31536e6 };
+  function agoTime(text, now) {
+    var m = String(text || '').match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);
+    return m ? now - parseInt(m[1], 10) * UNIT[m[2].toLowerCase()] : null;
+  }
+  // Uploads on a channel's Videos tab (newest first): the backup when YouTube's feed fails.
+  // Times are rough ("3 days ago"), so each one is kept just under the one above it.
+  function channelVideos(html, now) {
+    var data = initialData(html), out = [];
+    if (!data) return null;
+    function push(id, title, when, dur) {
+      if (!/^[A-Za-z0-9_-]{11}$/.test(id) || when == null || GONE.test(title) || out.some(function (x) { return x.id === id; })) return;
+      out.push({ id: id, title: title, published: when, dur: dur || 0, thumb: 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg', description: '', author: '' });
+    }
+    walk(data, function (k, v) {
+      if (k === 'videoRenderer' && v && v.videoId) {
+        push(v.videoId, txt(v.title), v.upcomingEventData ? null : agoTime(txt(v.publishedTimeText), now), duration(txt(v.lengthText)));
+        return false;
+      }
+      if (k === 'lockupViewModel' && v && v.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO' && v.contentId) {
+        var md = v.metadata && v.metadata.lockupMetadataViewModel, when = null, ld = 0;
+        walk(md && md.metadata, function (k2, v2) { if (when == null && typeof v2 === 'string') when = agoTime(v2, now); });
+        walk(v.contentImage, function (k2, v2) { if (!ld && typeof v2 === 'string' && /^\d{1,2}(:\d\d){1,2}$/.test(v2)) ld = duration(v2); });
+        push(v.contentId, txt(md && md.title), when, ld);
+        return false;
+      }
+    });
+    for (var i = 1; i < out.length; i++) if (out[i].published >= out[i - 1].published) out[i].published = out[i - 1].published - 1000;
+    return out;
+  }
+  function duration(t) { return /^\d{1,2}(:\d\d){1,2}$/.test(t || '') ? t.split(':').reduce(function (a, p) { return a * 60 + (+p); }, 0) : 0; }
   // Playlists on a channel's Playlists page
   function readPlaylists(data) {
     var out = [], seen = {}, token = '';
@@ -449,6 +481,6 @@ var Courses = (function () {
     };
   }
   return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
-    initialData: initialData, readVideos: readVideos, readPlaylists: readPlaylists, fmtHours: fmtHours };
+    initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;

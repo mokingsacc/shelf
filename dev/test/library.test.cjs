@@ -3,6 +3,7 @@ const assert = require('assert');
 const fs = require('fs');
 global.Core = require('../src/core.js');
 global.Feeds = require('../src/feeds.js');
+global.Courses = require('../src/courses.js');
 const Library = require('../src/library.js');
 const fx = (n) => fs.readFileSync(__dirname + '/fixtures/' + n, 'utf8');
 
@@ -69,6 +70,27 @@ const page = fx('channel.html');
   assert.strictEqual(c3.ok, false);
   assert.strictEqual(lib3.status(ch.id).error, 'offline');
 
+  // Feed broken (404) for a channel: the Videos tab is read instead, and known videos keep their times
+  const vr = (id, title, ago, len) => ({ videoRenderer: { videoId: id, title: { runs: [{ text: title }] }, publishedTimeText: { simpleText: ago }, lengthText: { simpleText: len } } });
+  const tab = '<html><meta property="og:title" content="Dirty Medicine - YouTube"><meta itemprop="identifier" content="' + ch.id + '"><script>var ytInitialData = ' + JSON.stringify({ contents: [
+    vr('aaaaaaaaaa9', 'Brand new', '2 hours ago', '12:01'), vr('aaaaaaaaaa3', 'Hyponatremia', '3 hours ago', '9:00'),
+    { videoRenderer: { videoId: 'aaaaaaaaaa8', title: { runs: [{ text: 'Live soon' }] }, upcomingEventData: { startTime: '1' } } }] }) + ';</script></html>';
+  lib2.saveCache();
+  const pageCalls = [];
+  const lib5 = Library.create({ load: (k) => r.store[k] ?? null, save() {}, now: () => Date.parse('2026-10-04T14:00:00Z'),
+    fetchText: (u, h) => { pageCalls.push(u); return /\/videos$/.test(u) ? Promise.resolve(tab) : Promise.reject(new Error('Not found (it may have moved or been deleted).')); } });
+
+  const vt5 = await lib5.refresh(ch.id, true);
+  assert.strictEqual(vt5.ok, true, 'the Videos tab rescues it');
+  assert.ok(pageCalls.some((u) => u === 'https://www.youtube.com/channel/' + ch.id + '/videos'));
+  assert.deepStrictEqual(vt5.items.map((x) => x.id), ['aaaaaaaaaa9', 'aaaaaaaaaa3'], 'upcoming skipped, newest first');
+  assert.strictEqual(vt5.items[0].published, Date.parse('2026-10-04T12:00:00Z'), '"2 hours ago"');
+  assert.strictEqual(vt5.items[1].published, Date.parse('2026-10-04T11:00:00Z'), 'known video keeps its feed time');
+  assert.strictEqual(vt5.items[0].dur, 721);
+  // Both broken: the feed's error is the one shown
+  const libv6 = Library.create({ load: (k) => r.store[k] ?? null, save() {}, now: () => 0, fetchText: () => Promise.reject(new Error('The server said 500.')) });
+  assert.strictEqual((await libv6.refresh(ch.id, true)).error, 'The server said 500.');
+
   // Cache survives a relaunch
   lib2.saveCache();
   const lib4 = Library.create({ load: (k) => r.store[k] ?? null, save() {}, now: () => 0, fetchText: () => Promise.reject(new Error('offline')) });
@@ -104,8 +126,8 @@ const page = fx('channel.html');
 
   // Channel by name in a video section -> YouTube's channel search page
   r = setup([[/results\?/, '..."channelRenderer":{"channelId":"UCcccccccccccccccccccccc","title"...'], [/UULF/, ytFeed]]);
-  const c5 = await r.lib.add('Breaking Points', 'ent');
-  assert.strictEqual(c5.id, 'UCcccccccccccccccccccccc');
+  const cv5 = await r.lib.add('Breaking Points', 'ent');
+  assert.strictEqual(cv5.id, 'UCcccccccccccccccccccccc');
   r = setup([[/results\?/, '<html>no results</html>']]);
   await assert.rejects(r.lib.add('zzzz', 'ent'), /Paste a link/);
 

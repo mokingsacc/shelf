@@ -243,5 +243,18 @@ function setup(store, opts = {}) {
   assert.strictEqual(api.c.progress(ca.id).total, 12);
   assert.ok(api.calls.some((x) => /googleapis/.test(x.url)) && api.calls.some((x) => /playlist\?list=/.test(x.url)), 'tries the key, falls back to the page');
 
+  // A channel's Videos tab (the backup when the feed fails): old and new page shapes
+  const T0 = Date.parse('2026-10-06T07:00:00Z');
+  assert.strictEqual(Courses.agoTime('Streamed 2 weeks ago', T0), T0 - 14 * 864e5);
+  assert.strictEqual(Courses.agoTime('1 year ago', T0), T0 - 31536e6);
+  assert.strictEqual(Courses.agoTime('Scheduled for 7/10/2026', T0), null);
+  const lock = (id, title, ago, len) => ({ lockupViewModel: { contentId: id, contentType: 'LOCKUP_CONTENT_TYPE_VIDEO', contentImage: { thumbnailViewModel: { overlays: [{ thumbnailBadgeViewModel: { text: len } }] } },
+    metadata: { lockupMetadataViewModel: { title: { content: title }, metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: '12K views' } }, { text: { content: ago } }] }] } } } } } });
+  const cv = Courses.channelVideos('<script>var ytInitialData = ' + JSON.stringify({ tabs: [lock('bbbbbbbbbb1', 'A', '1 day ago', '1:02:03'), lock('bbbbbbbbbb2', 'B', '1 day ago', '5:00'), lock('bbbbbbbbbb3', '[Private video]', '2 days ago', '1:00'), lock('bbbbbbbbbb4', 'D', '3 weeks ago', '7:00')] }) + ';</script>', T0);
+  assert.deepStrictEqual(cv.map((x) => x.id), ['bbbbbbbbbb1', 'bbbbbbbbbb2', 'bbbbbbbbbb4']);
+  assert.strictEqual(cv[0].dur, 3723);
+  assert.ok(cv[1].published < cv[0].published, 'same "1 day ago" still keeps page order');
+  assert.strictEqual(Courses.channelVideos('<html>no data</html>', T0), null);
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

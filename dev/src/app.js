@@ -615,6 +615,7 @@
     $('#vPlay').classList.toggle('on', playing);
     if (playing) {
       sawPlaying = true; clearTimeout(startTimer);
+      if (seekOnPlay) { var sp = seekOnPlay; seekOnPlay = null; try { if (sp.id === current && Math.abs(player.getCurrentTime() - sp.t) > 30) player.seekTo(sp.t, true); } catch (er) {} }
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (player.getPlaybackRate && player.getPlaybackRate() !== wantRate) { try { player.setPlaybackRate(wantRate); } catch (er) {} }
       capture(); keepAwake(true);
@@ -688,6 +689,7 @@
   }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') {
+      try { var h = JSON.parse(rawGet(HAND_KEY) || 'null'); if (h && !h.armed && Date.now() - h.at < 5000) { h.armed = true; h.at = Date.now(); rawSet(HAND_KEY, JSON.stringify(h), false); } } catch (e) {}
       capture(true);
       if (engine) engine.capture(true);
       // YouTube doesn't allow its videos to keep playing in the background, so pause when Shelf is hidden
@@ -695,9 +697,33 @@
     } else {
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
       renderAll();
+      catchUp();
     }
   });
   window.addEventListener('pagehide', function () { capture(true); if (engine) engine.capture(true); });
+
+  // Back from the YouTube app: move the place on by the time away (at this video's speed), never past the end.
+  // An Undo puts it back, and the scrub bar fine-tunes it.
+  var HAND_KEY = 'shelf.handoff', seekOnPlay = null;
+  function catchUp() {
+    var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
+    if (!h) return;
+    rawSet(HAND_KEY, 'null', false);
+    var v = videos[h.id], away = (Date.now() - h.at) / 1000;
+    // Only when Shelf really went to YouTube (armed as it left), not after a night away or a cancelled tap
+    if (!h.armed || !v || v.done || away < 15 || away > 8 * 3600 || Math.abs((v.t || 0) - h.t) > 30) return;
+    var to = h.t + away * (h.rate || 1);
+    if (v.dur > 0) to = Math.min(to, Math.max(h.t, v.dur - 30)); // short of the end, so it isn't counted as watched
+    if (to - h.t < 5) return;
+    function put(t) {
+      v.t = t; v.updated = Date.now(); saveVideos();
+      if (current === v.id && playerReady) { try { player.seekTo(t, true); keepSpot = null; } catch (e) {} videoTick(); }
+      seekOnPlay = { id: v.id, t: t };
+      renderAll();
+    }
+    put(to);
+    toast('Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube.', '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
+  }
 
   // ---------- Sleep timer UI (shared by both players) ----------
   var SEGS = [15, 30, 45, 60, 'end'];
@@ -1755,8 +1781,17 @@
     });
   }
   function scrubAria(el, t, d) { el.setAttribute('aria-valuemin', '0'); el.setAttribute('aria-valuemax', String(Math.round(d || 0))); el.setAttribute('aria-valuenow', String(Math.round(t || 0))); el.setAttribute('aria-valuetext', Core.fmt(t || 0) + (d ? ' of ' + Core.fmt(d) : '')); }
-  // YouTube ↗ opens at the spot playing now, not where the video was when the player opened
-  $('#ytLink').addEventListener('click', function () { capture(true); var v = current && videos[current]; if (v) this.href = ytLink(v); });
+  // Lock screen ↗ opens the video in the YouTube app at the spot playing now, where Premium keeps playing with
+  // the phone locked (YouTube stops its embedded player in the background). Back in Shelf, the place moves on by
+  // the time spent away (see catchUp).
+  $('#ytLink').addEventListener('click', function () {
+    capture(true); var v = current && videos[current]; if (!v) return;
+    var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
+    try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
+    this.href = ytLink({ id: v.id, t: t, done: v.done });
+    try { player.pauseVideo(); } catch (e) {}
+    rawSet(HAND_KEY, JSON.stringify({ id: v.id, t: t, at: Date.now(), rate: wantRate || 1 }), false);
+  });
   scrubKeys($('#vScrub'), 15, function (s) { try { player.seekTo(Math.max(0, player.getCurrentTime() + s), true); videoTick(); } catch (e) {} });
   scrubKeys($('#nScrub'), 30, function (s) { engine.seekBy(s); });
   scrubDrag($('#vScrub'), 'v', function () { try { return player && current ? player.getDuration() : 0; } catch (e) { return 0; } }, function () { return wantRate; }, function (t) { try { player.seekTo(t, true); } catch (e) {} videoTick(); });
@@ -1805,12 +1840,12 @@
 
   // ---------- Toast ----------
   var toastTimer = null;
-  function toast(msg, kind, action) {
+  function toast(msg, kind, action, ms) {
     var t = $('#toast');
     t.className = 'toast show' + (kind ? ' ' + kind : '');
     t.innerHTML = '<span>' + esc(msg) + '</span>' + (action ? '<button type="button">' + esc(action.label) + '</button>' : '');
     if (action) t.querySelector('button').onclick = function () { action.fn(); t.className = 'toast'; };
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, action ? 6000 : 4000);
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, ms || (action ? 6000 : 4000));
   }
 
   // ---------- Self-check ----------
@@ -1851,7 +1886,7 @@
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       var ya = Native.ytAccount.state;
-      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. With "Allow Cross-Website Tracking" on for Shelf (iPhone Settings for Shelf, below), the player uses your Premium. If ads still show, YouTube ↗ opens the video in the YouTube app.' }
+      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. With "Allow Cross-Website Tracking" on for Shelf (iPhone Settings for Shelf, below), the player uses your Premium. If ads still show, Lock screen ↗ in the player opens the video in the YouTube app.' }
         : ya === 'out' ? { ok: 0, text: 'Not signed in to YouTube, so videos play with ads even with Premium.', fix: 'yt' }
         : ya === 'old' ? { ok: 0, text: "This copy of the Shelf app is older than the website, so it can't sign in to YouTube yet. On your Mac, run the installer again." }
         : ya === 'wait' ? { ok: 2, text: 'Checking your YouTube sign-in…' }
@@ -1925,7 +1960,7 @@
       signingIn = false; fillCheck(); updateDot();
       // The player was made before the sign-in: a fresh page gives YouTube a player that knows the account
       if (a.state === 'in') { toast('Signed in to YouTube. Reloading so the player notices…'); setTimeout(function () { location.reload(); }, 900); }
-      else toast("Google didn't finish signing you in. Videos still play; for Premium without ads, open them in the YouTube app (YouTube ↗ in the player).", 'warn');
+      else toast("Google didn't finish signing you in. Videos still play; for Premium without ads, open them in the YouTube app (Lock screen ↗ in the player).", 'warn');
     }, function () { signingIn = false; fillCheck(); toast("Couldn't open the sign-in page. Close and reopen Shelf.", 'warn'); });
   }
   function openCheck() { updateDot(); fillCheck(); openDlg($('#checkDlg')); }
@@ -2016,8 +2051,9 @@
     window.addEventListener('online', function () { updateDot(); if (ai) ai.retryHeld(); }); window.addEventListener('offline', updateDot);
     if (!canSave && !Native.inApp) setTimeout(function () { toast('Your browser is blocking saving, so nothing will be remembered. Tap the self-check for how to fix it.', 'warn'); }, 600);
     refreshAll(false);
+    catchUp(); // Shelf was closed by iOS while the video played in YouTube
     // Test hook
-    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture,
+    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture, catchUp: catchUp,
       get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did

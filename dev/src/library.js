@@ -95,14 +95,29 @@ var Library = (function () {
       }
       return next();
     }
-    function youtubeFeed(channelId) {
+    function youtubeFeed(channelId, before) {
       var urls = Feeds.youtubeFeedUrls(channelId);
       // The Shorts-free list can be empty for channels that only post Shorts or live streams
       return fetchFirst(urls).then(function (xml) {
         var f = Feeds.parseYouTube(xml);
         if (f.items.length) return f;
         return io.fetchText(urls[1]).then(Feeds.parseYouTube, function () { return f; });
-      });
+      }).catch(function (e) { return videosPage(channelId, before, e); });
+    }
+    // YouTube's feeds fail for some channels at times: read the channel's Videos tab instead.
+    // Videos seen before keep their earlier time, so "new" counts don't jump about.
+    function videosPage(channelId, before, why) {
+      return io.fetchText('https://www.youtube.com/channel/' + channelId + '/videos', CONSENT).then(function (html) {
+        var items = typeof Courses !== 'undefined' ? Courses.channelVideos(html, now()) : null;
+        if (!items || !items.length) throw why || new Error("Couldn't read the channel's videos.");
+        var known = {};
+        ((before && before.items) || []).forEach(function (x) { known[x.id] = x.published; });
+        items.forEach(function (x) { if (known[x.id]) x.published = known[x.id]; });
+        // Rough times are always newer than the real ones: keep each just under the one above it on the page
+        for (var i = 1; i < items.length; i++) if (items[i].published >= items[i - 1].published) items[i].published = items[i - 1].published - 1000;
+        var ch = Feeds.channelFromHtml(html);
+        return { channelId: channelId, title: (ch && ch.name) || '', items: items.slice(0, 15), viaPage: true };
+      }, function () { throw why; });
     }
     function channelIdFromPage(url) {
       return io.fetchText(url, CONSENT).then(function (html) {
@@ -199,7 +214,7 @@ var Library = (function () {
       var s = source(id); if (!s) return Promise.reject(new Error('gone'));
       var c = cache[id];
       if (!force && c && c.ok && now() - c.fetched < TTL) return Promise.resolve(c);
-      var p = s.type === 'podcast' ? io.fetchText(s.url).then(Feeds.parsePodcast) : youtubeFeed(s.id);
+      var p = s.type === 'podcast' ? io.fetchText(s.url).then(Feeds.parsePodcast) : youtubeFeed(s.id, c);
       return p.then(function (f) {
         cache[id] = { fetched: now(), ok: true, items: f.items };
         return cache[id];

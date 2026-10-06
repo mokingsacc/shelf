@@ -146,7 +146,8 @@ export async function installFakes(ctx, opts = {}) {
     if (u.pathname === '/feeds/videos.xml') {
       const key = u.searchParams.get('playlist_id') || u.searchParams.get('channel_id');
       const ch = yt.find((c) => key.endsWith(c.id.slice(2)));
-      if (!ch) return r.fulfill({ status: 404, headers: cors, body: '' });
+      const down = (opts.feedDown || []).some((h) => CHANNELS[h] && CHANNELS[h].id === (ch && ch.id));
+      if (!ch || down) return r.fulfill({ status: down ? 500 : 404, headers: cors, body: '' });
       return r.fulfill({ contentType: 'application/atom+xml', headers: cors, body: ytFeed(ch, now, first(ch.id)) });
     }
     if (u.pathname === '/@MehlmanMedical/playlists') {
@@ -169,6 +170,15 @@ export async function installFakes(ctx, opts = {}) {
       const v = u.searchParams.get('v') || '';
       const status = /priv/.test(v) ? 'LOGIN_REQUIRED' : 'OK', len = /long/.test(v) ? 3 * 3600 : 600;
       return r.fulfill({ contentType: 'text/html', headers: cors, body: `<html><script>var ytInitialPlayerResponse = {"playabilityStatus":{"status":"${status}"},"videoDetails":{"videoId":"${v}","lengthSeconds":"${len}"}};</script></html>` });
+    }
+    const vids = u.pathname.match(/^\/channel\/(UC[\w-]{22})\/videos$/);
+    if (vids) { // a channel's Videos tab (newer lockup shape), used when its feed fails
+      const ch = yt.find((c) => c.id === vids[1]);
+      if (!ch) return r.fulfill({ status: 404, headers: cors, body: '' });
+      const ago = (ms) => ms < D ? Math.round(ms / H) + ' hours ago' : Math.round(ms / D) + ' days ago';
+      const data = { contents: ch.videos.map((v, i) => ({ lockupViewModel: { contentId: vidId(ch, i), contentType: 'LOCKUP_CONTENT_TYPE_VIDEO',
+        metadata: { lockupMetadataViewModel: { title: { content: v[0] }, metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: '9K views' } }, { text: { content: ago(v[1]) } }] }] } } } } } })) };
+      return r.fulfill({ contentType: 'text/html', headers: cors, body: `<html><head><meta property="og:title" content="${ch.name}"><meta itemprop="identifier" content="${ch.id}"></head><script>var ytInitialData = ${JSON.stringify(data)};</script></html>` });
     }
     const handle = decodeURIComponent(u.pathname.slice(1));
     if (CHANNELS[handle]) {
