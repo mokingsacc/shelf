@@ -77,6 +77,7 @@ YT.Player = function (el, opts) {
     id = o.videoId; base = o.startSeconds || 0; t0 = Date.now(); window.__lastStart = base; window.__lastId = id; dur = 600;
     if (id === 'blockedxxxx') { setTimeout(function(){ opts.events.onError({ data: 150 }); }, 50); return; }
     setTimeout(function () { t0 = Date.now(); set(1); }, 50); };
+  self.cueVideoById = function (o) { id = o.videoId; base = o.startSeconds || 0; window.__cued = base; set(5); };
   self.getCurrentTime = function () { var t = now(); if (t >= dur) { t = dur; } return t; };
   self.getDuration = function () { return id ? dur : 0; };
   self.getPlayerState = function () { return state; };
