@@ -210,9 +210,9 @@ ok(pos2 - pos > 12 && pos2 - pos < 18, 'a11y: arrow keys step through the video 
 ok(Number(await p.getAttribute('#vScrub', 'aria-valuenow')) > 90 && /of/.test(await p.getAttribute('#vScrub', 'aria-valuetext')), 'a11y: the position line reads as a slider with its time');
 const yt = await p.evaluate(() => { const a = document.querySelector('#ytLink'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
 const at = +(yt.match(/[?&]t=(\d+)s/) || [])[1];
-ok(at > 100, 'Lock screen ↗ opens at the spot playing now (t=' + at + ')');
+ok(at > 100 && /^youtube:\/\/www\.youtube\.com\/watch\?v=/.test(yt), 'Play locked ↗ opens the YouTube app (youtube://) at the spot playing now (t=' + at + ')');
 const hand = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
-ok(hand && Math.abs(hand.t - at) < 2 && await shelf(p, () => window.__fake.getPlayerState()) !== 1, 'Lock screen ↗ pauses Shelf and remembers where it handed over');
+ok(hand && Math.abs(hand.t - at) < 2 && await shelf(p, () => window.__fake.getPlayerState()) !== 1, 'Play locked ↗ pauses Shelf and remembers where it handed over');
 await shelf(p, () => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; });
 ok(await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')).armed === true), 'the hand-off counts once Shelf actually goes to YouTube');
 await shelf(p, () => { const h = JSON.parse(localStorage.getItem('shelf.handoff')); h.at -= 180e3; localStorage.setItem('shelf.handoff', JSON.stringify(h)); window.__shelf.catchUp(); });
@@ -232,6 +232,11 @@ await shelf(p, () => window.__shelf.catchUp());
 await p.evaluate((h) => { localStorage.setItem('shelf.handoff', JSON.stringify(Object.assign({}, h, { at: Date.now() - 600e3 }))); window.__shelf.catchUp(); }, hand);
 await p.evaluate((h) => { localStorage.setItem('shelf.handoff', JSON.stringify(Object.assign({}, h, { at: Date.now() - 10 * 3600e3, armed: true }))); window.__shelf.catchUp(); }, hand);
 ok(Math.abs(await shelf(p, () => window.__shelf.videos[window.__shelf.current].t) - hand.t) < 2, 'a second return, a cancelled tap, or a night away does nothing');
+// Locking while it plays in Shelf (no hand-off): back in Shelf, a hint with a Play locked button
+await shelf(p, () => window.__fake.playVideo()); await p.waitForTimeout(300);
+await shelf(p, () => { const vis = (v) => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; }; vis('hidden'); vis('visible'); });
+await p.waitForTimeout(150);
+ok(/stops videos inside other apps when the phone locks/.test(await p.locator('#toast').textContent()) && await p.locator('#toast button', { hasText: 'Play locked' }).count() === 1 && await shelf(p, () => window.__fake.getPlayerState()) !== 1, 'locked while playing in Shelf: paused, and the hint offers Play locked');
 await p.keyboard.press('Escape'); await p.waitForTimeout(400);
 ok(await p.evaluate(() => !document.querySelector('#home').inert && document.activeElement && document.activeElement.id === 'statusBtn'), 'a11y: closing hands focus back to what opened it');
 await ctx.close();

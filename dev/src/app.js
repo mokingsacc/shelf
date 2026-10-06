@@ -689,22 +689,29 @@
   }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') {
-      try { var h = JSON.parse(rawGet(HAND_KEY) || 'null'); if (h && !h.armed && Date.now() - h.at < 5000) { h.armed = true; h.at = Date.now(); rawSet(HAND_KEY, JSON.stringify(h), false); } } catch (e) {}
+      clearTimeout(appFallback); // the YouTube app opened
+      var handing = false;
+      try { var h = JSON.parse(rawGet(HAND_KEY) || 'null'); if (h && !h.armed && Date.now() - h.at < 5000) { h.armed = true; h.at = Date.now(); rawSet(HAND_KEY, JSON.stringify(h), false); handing = true; } } catch (e) {}
+      var wasPlaying = false; try { wasPlaying = !!current && player.getPlayerState() === YT.PlayerState.PLAYING; } catch (e) {}
       capture(true);
       if (engine) engine.capture(true);
       // YouTube doesn't allow its videos to keep playing in the background, so pause when Shelf is hidden
       if ((Native.inApp || isPhone) && current) { try { player.pauseVideo(); } catch (e) {} }
+      lockPaused = wasPlaying && !handing && (Native.inApp || isPhone) ? current : null;
     } else {
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
       renderAll();
       catchUp();
+      // Locked while playing in Shelf: say how to keep it going next time
+      if (lockPaused && lockPaused === current) toast('YouTube stops videos inside other apps when the phone locks. Play locked opens it in the YouTube app, where Premium keeps playing.', '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 10000);
+      lockPaused = null;
     }
   });
   window.addEventListener('pagehide', function () { capture(true); if (engine) engine.capture(true); });
 
   // Back from the YouTube app: move the place on by the time away (at this video's speed), never past the end.
   // An Undo puts it back, and the scrub bar fine-tunes it.
-  var HAND_KEY = 'shelf.handoff', seekOnPlay = null;
+  var HAND_KEY = 'shelf.handoff', seekOnPlay = null, lockPaused = null;
   function catchUp() {
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
     if (!h) return;
@@ -827,7 +834,7 @@
   function sheetSwipe(el, handles, close) {
     var y0 = 0, t0 = 0, dy = 0, live = false, moved = false, pid = null;
     el.addEventListener('pointerdown', function (e) {
-      if (e.button > 0 || !e.target.closest(handles)) return;
+      if (e.button > 0 || !e.target.closest(handles) || e.target.closest('a')) return; // a link in the bar is a tap, never a swipe
       y0 = e.clientY; t0 = Date.now(); dy = 0; live = true; moved = false; pid = e.pointerId;
     });
     el.addEventListener('pointermove', function (e) {
@@ -1781,14 +1788,19 @@
     });
   }
   function scrubAria(el, t, d) { el.setAttribute('aria-valuemin', '0'); el.setAttribute('aria-valuemax', String(Math.round(d || 0))); el.setAttribute('aria-valuenow', String(Math.round(t || 0))); el.setAttribute('aria-valuetext', Core.fmt(t || 0) + (d ? ' of ' + Core.fmt(d) : '')); }
-  // Lock screen ↗ opens the video in the YouTube app at the spot playing now, where Premium keeps playing with
-  // the phone locked (YouTube stops its embedded player in the background). Back in Shelf, the place moves on by
-  // the time spent away (see catchUp).
+  // Play locked ↗ opens the video in the YouTube app at the spot playing now, where Premium keeps playing with
+  // the phone locked (YouTube stops its embedded player in the background). In the iPhone app it uses the
+  // youtube:// address, so iOS can't send it to Safari instead (Safari pauses on lock too); if no app opens
+  // within 1.5 s, the web page opens. Back in Shelf, the place moves on by the time spent away (see catchUp).
+  var appFallback = null;
   $('#ytLink').addEventListener('click', function () {
     capture(true); var v = current && videos[current]; if (!v) return;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
-    this.href = ytLink({ id: v.id, t: t, done: v.done });
+    var web = ytLink({ id: v.id, t: t, done: v.done });
+    this.href = Native.inApp ? web.replace(/^https:/, 'youtube:') : web;
+    clearTimeout(appFallback);
+    if (Native.inApp) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: v.id, t: t, at: Date.now(), rate: wantRate || 1 }), false);
   });
@@ -1886,7 +1898,7 @@
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       var ya = Native.ytAccount.state;
-      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. With "Allow Cross-Website Tracking" on for Shelf (iPhone Settings for Shelf, below), the player uses your Premium. If ads still show, Lock screen ↗ in the player opens the video in the YouTube app.' }
+      out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. With "Allow Cross-Website Tracking" on for Shelf (iPhone Settings for Shelf, below), the player uses your Premium. If ads still show, Play locked ↗ in the player opens the video in the YouTube app.' }
         : ya === 'out' ? { ok: 0, text: 'Not signed in to YouTube, so videos play with ads even with Premium.', fix: 'yt' }
         : ya === 'old' ? { ok: 0, text: "This copy of the Shelf app is older than the website, so it can't sign in to YouTube yet. On your Mac, run the installer again." }
         : ya === 'wait' ? { ok: 2, text: 'Checking your YouTube sign-in…' }
@@ -1960,7 +1972,7 @@
       signingIn = false; fillCheck(); updateDot();
       // The player was made before the sign-in: a fresh page gives YouTube a player that knows the account
       if (a.state === 'in') { toast('Signed in to YouTube. Reloading so the player notices…'); setTimeout(function () { location.reload(); }, 900); }
-      else toast("Google didn't finish signing you in. Videos still play; for Premium without ads, open them in the YouTube app (Lock screen ↗ in the player).", 'warn');
+      else toast("Google didn't finish signing you in. Videos still play; for Premium without ads, open them in the YouTube app (Play locked ↗ in the player).", 'warn');
     }, function () { signingIn = false; fillCheck(); toast("Couldn't open the sign-in page. Close and reopen Shelf.", 'warn'); });
   }
   function openCheck() { updateDot(); fillCheck(); openDlg($('#checkDlg')); }

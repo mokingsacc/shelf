@@ -28,11 +28,11 @@ The player only skips ads when it can see your Premium account. Two switches, bo
 1. On the iPhone: **Settings > Shelf > Allow Cross-Website Tracking** on. (Shelf tracks nothing; this lets the YouTube player inside Shelf see YouTube's own sign-in cookie, which iOS otherwise hides from it.) Then close Shelf and open it again.
 2. In Shelf, tap the self-check corner and **Sign in to YouTube**. Google's sign-in opens in a sheet; when it reaches YouTube's home page it closes by itself and the self-check says "Signed in to YouTube".
 
-If Google refuses to sign in inside an app ("this browser or app may not be secure"), the player still works with ads; for Premium, tap **Lock screen ↗** in the player to open the video in the YouTube app at your spot.
+If Google refuses to sign in inside an app ("this browser or app may not be secure"), the player still works with ads; for Premium, tap **Play locked ↗** in the player to open the video in the YouTube app at your spot.
 
 ## Playing with the phone locked
 
-YouTube stops its embedded player (in any app) when the phone locks, Premium or not. **Lock screen ↗** in the player opens the video in the YouTube app at the same second, where Premium keeps playing locked. Back in Shelf, your place moves on by the time you were away (at that video's speed, never past the end), with an Undo. While a video plays in Shelf the screen stays on, so it doesn't auto-lock.
+YouTube stops its embedded player (in any app) when the phone locks, Premium or not. **Play locked ↗** in the player opens the video in the YouTube app at the same second (via `youtube://`, so iOS can't hand it to Safari; the web page opens if no app answers in 1.5 s), where Premium keeps playing locked. Check YouTube app > Settings > Background & downloads > Background play is on. Back in Shelf, your place moves on by the time you were away (at that video's speed, never past the end), with an Undo. While a video plays in Shelf the screen stays on, so it doesn't auto-lock.
 
 ## For Claude
 
