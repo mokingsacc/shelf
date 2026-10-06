@@ -133,6 +133,10 @@ export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: 
         return { status: r.status, url: url, headers: { 'content-type': ct }, data: /json/.test(ct) ? JSON.parse(t) : t };
       } } } };
     if (signIn.plugin) { window.Capacitor.PluginHeaders = signIn.PluginHeaders; window.Capacitor.Plugins.ShelfSignIn = signIn.plugin; }
+    // shell.device: a shell with Shelf's phone helpers (ShelfDevice: keepAwake, dim, statusBar, locate); calls land in window.__devCalls
+    window.__devCalls = [];
+    if (${!!shell.device}) window.Capacitor.Plugins.ShelfDevice = { keepAwake: async (o) => { window.__devCalls.push('keepAwake:' + o.on); return o; }, dim: async (o) => { window.__devCalls.push('dim:' + o.on); return o; },
+      statusBar: async (o) => { window.__devCalls.push('statusBar:' + o.style); return o; }, locate: async () => { window.__devCalls.push('locate'); return { lat: 53.4808, lon: -2.2426 }; } };
   })();`; };
 
 // opts.fresh: hide the newest item on the first fetch of each feed, so a later refresh shows "new"

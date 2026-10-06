@@ -544,7 +544,7 @@
     var el = $(id), a = document.activeElement;
     if (!el.classList.contains('open')) sheetOpener[id] = a && a !== document.body && !el.contains(a) ? a : null;
     el.classList.add('open'); el.setAttribute('aria-hidden', 'false'); el.inert = false; el.style.transform = '';
-    behindSheets(true); document.body.classList.add('sheet-on');
+    behindSheets(true); document.body.classList.add('sheet-on'); statusBar();
     var b = el.querySelector('[data-act^="close"]'); if (b) setTimeout(function () { try { b.focus({ preventScroll: true }); } catch (e) {} }, 300);
   }
   function closeSheet(id) {
@@ -552,7 +552,7 @@
     el.classList.remove('open'); el.setAttribute('aria-hidden', 'true');
     var still = document.querySelector('.sheet.open');
     behindSheets(false); if (still) behindSheets(true);
-    document.body.classList.toggle('sheet-on', !!still);
+    document.body.classList.toggle('sheet-on', !!still); statusBar();
     el.inert = !!still; el.style.transform = '';
     if (!wasOpen) return;
     var o = sheetOpener[id]; sheetOpener[id] = null;
@@ -630,7 +630,7 @@
       clearInterval(tick); tick = setInterval(capture, 5000);
       if (player.getPlaybackRate && player.getPlaybackRate() !== wantRate) { try { player.setPlaybackRate(wantRate); } catch (er) {} }
       capture(); keepAwake(true);
-      var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake ? 'screen stays on' : 'saving your spot');
+      var v = videos[current], tag = v && courseTag(v.id); if (v) $('#vCh').textContent = (tag || v.author || '') + (tag || v.author ? ' · ' : '') + (wake || Native.device ? 'screen stays on' : 'saving your spot');
     } else {
       clearInterval(tick); keepAwake(false);
       if (e.data === S.ENDED && current && videos[current] && armed) {
@@ -672,7 +672,7 @@
     var cv = current && videos[current];
     if (cv && !cv.done && Core.isDone(cv.t, cv.dur)) { var cw = courseOf(cv.id); if (cw) { cv.done = true; cv.t = cv.dur; saveVideos(); cs.tick(cw.course.id, cv.id, true); } }
     try { player && player.pauseVideo(); } catch (e) {}
-    clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); clearTimeout(nextTimer); keepAwake(false);
+    clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); clearTimeout(nextTimer); keepAwake(false); sleepDim(false);
     current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
     closeSheet('#vsheet');
     renderAll();
@@ -769,6 +769,7 @@
     v.t = t; v.updated = Date.now(); saveVideos();
   }
   function keepAwake(on) {
+    Native.keepAwake(on); // the sure way, in shells from 6 Oct 2026; the web wake lock below for older ones
     try {
       if (on && !wake && navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { wake = w; w.addEventListener('release', function () { wake = null; }); }, function () {});
       else if (!on && wake) { wake.release(); wake = null; }
@@ -780,8 +781,9 @@
     try { t = player.getCurrentTime() || 0; d = player.getDuration() || 0; st = player.getPlayerState(); } catch (e) {}
     if (!scrubbing) paintScrub('v', t, d, wantRate);
     renderMarkBtn(t);
+    sleepDim(!!vTimer && st === 1);
     if (vTimer && SleepTimer.tick(vTimer, Date.now(), false) === 'stop') {
-      vTimer = null; capture(true);
+      vTimer = null; capture(true); sleepDim(false);
       try { player.pauseVideo(); } catch (e) {}
       vTimerMsg = 'Paused by the sleep timer. Sleep well.';
       renderTimerUI('v');
@@ -789,8 +791,18 @@
     }
     renderTimerUI('v');
   }
+  // Sleep dim (shells from 6 Oct 2026): while a video plays with its sleep timer on, the screen drops to its lowest
+  // after a minute untouched. A touch brings it back; the timer ending, a pause or closing the player undims it,
+  // and the shell itself gives the brightness back whenever Shelf goes to the background.
+  var dimmed = false, touchedAt = Date.now();
+  function sleepDim(running) {
+    var want = Native.device && running && Date.now() - touchedAt > 60000;
+    if (want !== dimmed) { dimmed = want; Native.dim(want); }
+  }
+  ['pointerdown', 'keydown'].forEach(function (t) { document.addEventListener(t, function () { touchedAt = Date.now(); if (dimmed) { dimmed = false; Native.dim(false); } }, true); });
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') {
+      dimmed = false;
       clearTimeout(appFallback); // the YouTube app opened
       var handing = false;
       try { var h = JSON.parse(rawGet(HAND_KEY) || 'null'); if (h && !h.armed && Date.now() - h.at < 5000) { h.armed = true; h.at = Date.now(); rawSet(HAND_KEY, JSON.stringify(h), false); handing = true; } } catch (e) {}
@@ -890,6 +902,7 @@
       $('#vSeg').hidden = !show; $('#vTmBtn').setAttribute('aria-expanded', String(show));
       if (!t) lab.textContent = msg || vTimerMsg || 'Off';
       else lab.innerHTML = t.mode === 'end' ? 'stops when it ends' : '<b>' + SleepTimer.countdown(SleepTimer.remaining(t, now)) + '</b> · stops ' + esc(clockText(t.endsAt));
+      if (t && Native.device) lab.innerHTML += ' · dims after 1 min';
       return;
     }
     var cd = $('#nCd'), off = $('#nOff');
@@ -1997,8 +2010,9 @@
     var st = lookState(), theme = st.light ? 'light' : 'dark', root = document.documentElement, phoneDark = !!(sysDark && sysDark.matches);
     if (root.getAttribute('data-theme') !== theme) root.setAttribute('data-theme', theme);
     // Kept for the next launch's first paint, with the time it stops being right (Auto only)
-    try { localStorage.setItem('shelf.look', JSON.stringify({ t: theme, u: st.mode === 'auto' ? st.sun.next : 0, app: Native.inApp ? 1 : 0 })); } catch (e) {}
-    root.classList.toggle('app', Native.inApp); root.classList.toggle('ph-dark', phoneDark); root.classList.toggle('ph-light', !phoneDark);
+    try { localStorage.setItem('shelf.look', JSON.stringify({ t: theme, u: st.mode === 'auto' ? st.sun.next : 0, app: Native.inApp && !Native.device ? 1 : 0 })); } catch (e) {}
+    root.classList.toggle('app', Native.inApp && !Native.device); root.classList.toggle('ph-dark', phoneDark); root.classList.toggle('ph-light', !phoneDark);
+    statusBar();
     Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function (m) { m.setAttribute('content', theme === 'light' ? '#FFFFFF' : '#0A0A0E'); });
     var b = $('#lookBtn');
     if (b.getAttribute('data-g') !== theme) { b.innerHTML = theme === 'light' ? I.sun : I.moon; b.setAttribute('data-g', theme); }
@@ -2008,6 +2022,8 @@
     if (st.mode === 'auto') lookTimer = setTimeout(applyLook, Math.max(1000, Math.min(st.sun.next - st.t + 1000, 30 * 60000)));
     if ($('#lookDlg').open) fillLook();
   }
+  // In shells from 6 Oct 2026 the clock itself changes colour: dark on the light look, white on the dark look and over the players
+  function statusBar() { if (Native.device) Native.statusBar(document.body.classList.contains('sheet-on') || document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
   function sameDay(a, b) { return new Date(a).toDateString() === new Date(b).toDateString(); }
   function fillLook() {
     var st = lookState(), s = st.sun;
@@ -2041,6 +2057,13 @@
   function lookHere() {
     var msg = $('#lookMsg');
     var no = function (why) { msg.textContent = why + ' Type your town instead.'; msg.className = 'msgline err'; };
+    if (Native.device) {
+      msg.textContent = 'Asking where you are…'; msg.className = 'msgline';
+      return Native.locate().then(function (p) {
+        setPlace({ name: 'your location', lat: Math.round(p.lat * 100) / 100, lon: Math.round(p.lon * 100) / 100 });
+        msg.textContent = 'Using your location.'; msg.className = 'msgline ok';
+      }, function (er) { msg.textContent = ((er && er.message) || "Couldn't get your location.") + ' Or type your town.'; msg.className = 'msgline err'; });
+    }
     if (!navigator.geolocation) return no("This phone won't share its location with Shelf.");
     msg.textContent = 'Asking where you are…'; msg.className = 'msgline';
     try {
@@ -2113,6 +2136,7 @@
         : ya === 'old' ? { ok: 0, text: "This copy of the Shelf app is older than the website, so it can't sign in to YouTube yet. On your Mac, run the installer again." }
         : ya === 'wait' ? { ok: 2, text: 'Checking your YouTube sign-in…' }
         : { ok: 0, text: "Couldn't check your YouTube sign-in. Close and reopen Shelf." });
+      if (!Native.device) out.push({ ok: 1, text: 'An app update is ready: plug in your iPhone and run the install command again for the screen staying on during videos, Sleep dim and the clock colour' });
       if (!restored) out.push({ ok: 0, text: "The phone's storage didn't answer at start, so nothing is being backed up to it (your spots, ticks and channels stay in Shelf for now).", fix: 'retry' });
       if (Native.prefError) out.push({ ok: 0, text: "The phone's storage refused a save. Close and reopen Shelf; your last saved spots are kept." });
       var fs = Native.feedStatus;
@@ -2280,7 +2304,7 @@
     catchUp(); // Shelf was closed by iOS while the video played in YouTube
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture, catchUp: catchUp,
-      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);

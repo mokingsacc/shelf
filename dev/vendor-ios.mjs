@@ -19,5 +19,7 @@ fs.writeFileSync(pkg, s);
 // Shelf's own plugin (ios/App/App/ShelfSignIn.swift) isn't an npm package, so cap sync drops it from the class list
 const cfg = `${root}ios/App/App/capacitor.config.json`, c = JSON.parse(fs.readFileSync(cfg, 'utf8'));
 c.packageClassList = c.packageClassList || [];
-if (!c.packageClassList.includes('ShelfSignInPlugin')) { c.packageClassList.push('ShelfSignInPlugin'); fs.writeFileSync(cfg, JSON.stringify(c, null, '\t') + '\n'); }
-console.log('vendored', plugins.join(', '), '+ ShelfSignInPlugin registered');
+let changed = false;
+for (const k of ['ShelfSignInPlugin', 'ShelfDevicePlugin']) if (!c.packageClassList.includes(k)) { c.packageClassList.push(k); changed = true; }
+if (changed) fs.writeFileSync(cfg, JSON.stringify(c, null, '\t') + '\n');
+console.log('vendored', plugins.join(', '), '+ ShelfSignInPlugin, ShelfDevicePlugin registered');

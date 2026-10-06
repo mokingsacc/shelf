@@ -55,6 +55,8 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Shelf uses your location once to work out sunrise and sunset for its day and night look. It stays on your phone.</string>
 	<key>NSCrossWebsiteTrackingUsageDescription</key>
 	<string>Lets the YouTube player see that you are signed in, so YouTube Premium plays without ads. Shelf tracks nothing.</string>
 	<key>CFBundleURLTypes</key>

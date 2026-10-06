@@ -19,6 +19,7 @@
 		"AppPlugin",
 		"ClipboardPlugin",
 		"PreferencesPlugin",
-		"ShelfSignInPlugin"
+		"ShelfSignInPlugin",
+		"ShelfDevicePlugin"
 	]
 }

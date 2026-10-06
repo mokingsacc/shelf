@@ -151,6 +151,15 @@ var Native = (function () {
   // Settings > Shelf, where "Allow Cross-Website Tracking" lets the player see the sign-in
   function openSettings() { return call('ShelfSignIn', 'openSettings'); }
 
+  // Shelf's phone helpers (ios/App/App/ShelfDevice.swift): screen stays on, Sleep dim, the clock's colour, location.
+  // Shells installed before 6 Oct 2026 don't have them; then everything carries on without (web wake lock, a strip under the clock).
+  var device = inApp && hasPlugin('ShelfDevice');
+  function dev(method, opts) { return device ? call('ShelfDevice', method, opts).catch(function () { return null; }) : Promise.resolve(null); }
+  function keepAwake(on) { return dev('keepAwake', { on: !!on }); }
+  function dim(on) { return dev('dim', { on: !!on }); }
+  function statusBar(style) { return dev('statusBar', { style: style }); }
+  function locate() { return device ? call('ShelfDevice', 'locate') : Promise.reject(new Error('This copy of the Shelf app has no location yet.')); }
+
   if (inApp) {
     document.documentElement.classList.add('in-app');
     try { consentCookies(); } catch (e) {}
@@ -161,5 +170,6 @@ var Native = (function () {
   return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
-    get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings };
+    get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,
+    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate };
 })();
