@@ -300,5 +300,12 @@ function setup(store, opts = {}) {
   assert.strictEqual(Courses.historyLatest(HS).title, 'OpenAI CEO says', 'the video title, not a menu item');
   assert.strictEqual(Courses.historyItems(HR).length, 2);
 
+  // Mo's report (6 Oct 15:40): a Shorts shelf (shortsLockupViewModel, menu "Add to queue") sits above the first video
+  const shortsShelf = { reelShelfRenderer: { title: { runs: [{ text: 'Shorts' }] }, items: [{ shortsLockupViewModel: { entityId: 'shorts-y35MBltJNgM', menuOnTap: { innertubeCommand: { showSheetCommand: { panelLoadingStrategy: { inlineContent: { sheetViewModel: { content: { listViewModel: { listItems: [{ listItemViewModel: { title: { content: 'Add to queue' } } }] } } } } } } } }, onTap: { innertubeCommand: { commandMetadata: { webCommandMetadata: { url: '/shorts/y35MBltJNgM' } }, reelWatchEndpoint: { videoId: 'y35MBltJNgM' } } } } }] } };
+  const HSS = hist([{ itemSectionRenderer: { contents: [shortsShelf] } }, { itemSectionRenderer: { contents: [real('dizqYRTo6aI', 30, '12:00')] } }]);
+  assert.strictEqual(Courses.historyLatest(HSS).id, 'dizqYRTo6aI', 'the Shorts shelf above the first video is skipped');
+  assert.strictEqual(Courses.historyLatest(HSS).title, 'OpenAI CEO says');
+  assert.strictEqual(Courses.historyLatest(HSS).t, 216);
+
   console.log('courses: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });
