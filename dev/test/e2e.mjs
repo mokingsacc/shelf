@@ -398,7 +398,9 @@ await p.locator('#coursesBtn').click(); await p.waitForTimeout(150);
 ok(await p.locator('#coursesBtn[aria-current="page"]').count() === 1 && await p.locator('#todayBtn[aria-current]').count() === 0, 'tabs: Courses is the current tab');
 ok(await p.locator('#page .course').count() === 6, 'C Courses page lists all six');
 await p.locator('#page .course .cr').first().click(); await p.waitForTimeout(150);
-ok(await p.locator('.course.open .epr').count() === 6 && (await p.locator('.course.open .epr.n .no').textContent()).includes('1115'), 'C expands to a short window around where you are (' + await p.locator('.course.open .epr').count() + ' rows)');
+ok(await p.locator('.course.open .epr').count() === 6 && (await p.locator('.course.open .epr.n').textContent()).includes('1115'), 'C expands to a short window around where you are (' + await p.locator('.course.open .epr').count() + ' rows)');
+const rowTxt = (await p.locator('.course.open .epr.n').innerText()).replace(/\s+/g, ' ').trim();
+ok(rowTxt === '1115 12:20', 'C a row says its number once, not "1115 HY USMLE Q #1115 - Pediatrics": ' + rowTxt);
 await p.locator('.course.open .epr.n .tk').click(); await p.waitForTimeout(150);
 ok(/92\/130/.test(await p.locator('.course.open .cn').textContent()), 'C tapping a tick ticks it');
 await p.locator('.course.open [data-act="course-later"]').click(); await p.waitForTimeout(100);
@@ -616,6 +618,25 @@ ok((await shelf(p, () => window.__shelf.checks().map((c) => c.text).join('|'))).
 await p.evaluate(() => { const k = 'resume.prefs.v1', v = JSON.parse(localStorage.getItem(k) || '{}'); v.goal = { name: 'Step 2 CK', date: '2026-11-30' }; localStorage.setItem(k, JSON.stringify(v)); });
 await p.reload(); await settle(p);
 ok(await shelf(p, () => window.__shelf.prefs.goal.date) === '2026-12-22' && await shelf(p, () => window.__shelf.courses.daysLeft()) === Math.round((new Date(2026, 11, 22) - new Date(new Date().toDateString())) / 864e5), 'D an old Step 2 CK goal on 30 Nov becomes 22 Dec');
+await ctx.close();
+
+console.log('\n== P Polish: a broken duplicate channel');
+({ ctx, p } = await appPage({ fakes: { fresh: false } }));
+await settle(p);
+// A second "The Ezra Klein Show" that never loads (Mo has one)
+await p.evaluate(() => { const k = 'shelf.v2.library', v = JSON.parse(localStorage.getItem(k)); const ez = Object.values(v.sources).find((s) => s.name === 'The Ezra Klein Show'); v.sources.UCbrokenCopy0000000000xx = Object.assign({}, ez, { id: 'UCbrokenCopy0000000000xx' }); localStorage.setItem(k, JSON.stringify(v)); });
+await p.reload(); await settle(p); await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
+ok(await shelf(p, () => !window.__shelf.lib.status('UCbrokenCopy0000000000xx').ok), 'P the copy fails to load');
+await p.locator('.band.c2 .tg').click(); await p.waitForTimeout(100);
+ok(await p.locator('.band.c2 .chl button', { hasText: 'The Ezra Klein Show' }).count() === 1 && !/Couldn't update/.test(await p.locator('.band.c2').textContent()), 'P Home lists Ezra once, with no "Couldn\'t update"');
+ok(!(await shelf(p, () => window.__shelf.checks().map((c) => c.text).join('|'))).includes("Couldn't update"), 'P the self-check doesn\'t nag about it');
+await p.locator('.band.c2 .hd .tm').click(); await p.locator('#page details.fold summary', { hasText: 'Channels' }).click();
+const rd = p.locator('#page [data-act="remove-dup"]');
+ok(await rd.count() === 1 && /in here twice/.test(await rd.textContent()), 'P the section page offers to remove the broken copy');
+await rd.click(); await p.waitForTimeout(100);
+ok(/Tap again/.test(await p.locator('#page [data-act="remove-dup"]').textContent()), 'P one tap asks for a second');
+await p.locator('#page [data-act="remove-dup"]').click(); await p.waitForTimeout(150);
+ok(await shelf(p, () => !window.__shelf.lib.source('UCbrokenCopy0000000000xx') && window.__shelf.lib.sources().filter((s) => s.name === 'The Ezra Klein Show').length === 1), 'P the second tap removes only the broken copy');
 await ctx.close();
 
 console.log('\n== Night (23:12)');

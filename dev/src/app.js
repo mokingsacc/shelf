@@ -94,6 +94,13 @@
   // Shorts (and clips under 90 s) stay off the sheet when the channel says so (on unless turned off)
   function hidesShorts(s) { return !!s && s.type !== 'podcast' && s.hideShorts !== false; }
   function isShort(it) { var v = videos[it.id]; return /#shorts?\b/i.test(it.title || '') || !!(v && v.dur > 0 && v.dur < 90); }
+  // A channel added twice where only one copy loads (Mo has two "The Ezra Klein Show"): the failing copy is a
+  // broken duplicate. It stays off Home and the self-check, and its section page offers one tap to remove it.
+  function brokenDup(s) {
+    var st = s && lib.status(s.id); if (!st || st.ok) return null;
+    var nm = s.name.toLowerCase();
+    return lib.sources().filter(function (t) { var tt = lib.status(t.id); return t.id !== s.id && t.type === s.type && t.name.toLowerCase() === nm && (!tt || tt.ok); })[0] || null;
+  }
   function itemsOf(s) { var all = lib.items(s.id); return hidesShorts(s) ? all.filter(function (it) { return !isShort(it); }) : all; }
 
   // Icons (inline, so nothing extra loads)
@@ -208,7 +215,7 @@
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
       if (rest > 0) html += '<button type="button" class="more" data-act="open-section" data-id="' + esc(sec.id) + '"><span>+' + rest + ' more in ' + esc(sec.name) + '</span><span aria-hidden="true">›</span></button>';
       // Its channels, one line each: tap one for its videos, newest first
-      if (srcs) html += '<div class="chl' + (list.length ? '' : ' first') + '">' + lib.sources(sec.id).map(bandChannel).join('') + '</div>';
+      if (srcs) html += '<div class="chl' + (list.length ? '' : ' first') + '">' + lib.sources(sec.id).filter(function (x) { return !brokenDup(x); }).map(bandChannel).join('') + '</div>';
       html += '</section>';
     });
     // Pasted videos that belong to no section
@@ -390,6 +397,7 @@
         var sub = st && !st.ok ? '<span class="err">Couldn\'t update: ' + esc(st.error) + '</span>' : (n ? n + ' new' : st ? 'Updated ' + esc(Core.ago(st.fetched)) : 'Not checked yet') + (hid ? ' · ' + hid + ' Shorts hidden' : '');
         ch += '<button type="button" class="chrow" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="av">' + esc(s.name.charAt(0)) + (s.image ? '<img src="' + esc(s.image) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</span>' +
           '<span class="tx"><b>' + esc(s.name) + '</b><small>' + (s.type === 'podcast' ? (s.private ? 'Private podcast · ' : 'Podcast · ') : '') + sub + '</small></span><span class="chev">' + I.chev + '</span></button>';
+        if (brokenDup(s)) ch += '<button type="button" class="more quiet" data-act="remove-dup" data-id="' + esc(s.id) + '"><span>' + esc(s.name) + ' is in here twice and this copy doesn\'t load</span><span class="mono">' + (confirmRemove === s.id ? 'Tap again' : 'Remove it') + '</span></button>';
       });
       // A channel Shelf couldn't find on its own is one quiet line with a way to add it
       misses.forEach(function (m) { ch += '<button type="button" class="more quiet" data-act="fix-seed" data-in="' + esc(m.input) + '" data-id="' + esc(sec.id) + '"><span>' + esc(m.input.replace(/^@/, '')) + ' · not found</span><span class="mono">+ Add it</span></button>'; });
@@ -1442,11 +1450,13 @@
     if (from > 0) h += '<button type="button" class="cmore" data-act="course-earlier" data-id="' + esc(c.id) + '"><span>▲ ' + from + ' earlier</span></button>';
     h += '<ul class="eps">';
     for (var i = from; i <= to; i++) {
-      var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
+      var x = arr[i], d = cs.isDone(c.id, x.id), lab = epLabel(x, i), bare = x.n != null && (titleFor(c, x), repCache[c.id].rep), da = ' data-id="' + esc(c.id) + '" data-v="' + esc(x.id) + '" data-i="' + i + '"';
       h += '<li class="epr' + (d ? ' d' : '') + (i === pr.notch ? ' n' : '') + '">' +
         '<button type="button" class="tk" data-act="ep-tick" data-hold="upto"' + da + ' aria-pressed="' + d + '" aria-label="' + esc((d ? 'Untick ' : 'Tick ') + lab + '. Hold to tick everything up to here.') + '"><span>' + (d ? '✓' : '') + '</span></button>' +
-        '<span class="no mono">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</span>' +
-        '<button type="button" class="et" data-act="ep-play" data-hold="pin"' + da + '>' + esc(titleFor(c, x)) + '</button>' +
+        // Titles that only repeat the number and the course's topic ("HY USMLE Q #1099 - Pediatrics") show just the number
+        (bare ? '<span class="no"></span><button type="button" class="et bare mono" data-act="ep-play" data-hold="pin"' + da + ' aria-label="Play ' + esc(x.title) + '">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</button>'
+          : '<span class="no mono">' + (c.pins[x.id] ? '<span class="pin">‼</span> ' : '') + esc(lab) + '</span>' +
+        '<button type="button" class="et" data-act="ep-play" data-hold="pin"' + da + '>' + esc(titleFor(c, x)) + '</button>') +
         '<span class="du mono">' + esc(spotOf(x)) + '</span></li>';
     }
     h += '</ul>';
@@ -1799,6 +1809,9 @@
       case 'remove-channel':
         if (confirmRemove !== id) { confirmRemove = id; b.textContent = 'Tap again to remove'; break; }
         var nm = lib.source(id).name; lib.remove(id); confirmRemove = null; lib.saveCache(); $('#chanDlg').close(); back(); toast('Removed ' + nm + '.'); break;
+      case 'remove-dup':
+        if (confirmRemove !== id) { confirmRemove = id; renderPage(); break; }
+        var dn = lib.source(id); if (dn) { lib.remove(id); lib.saveCache(); toast('Removed the broken copy of ' + dn.name + '.'); } confirmRemove = null; renderAll(); break;
       case 'remove-video':
         var gone = videos[id]; delete videos[id]; saveVideos(); renderAll();
         if (!Object.keys(videos).some(function (k) { return !entryFromVideo(videos[k]).section; }) && stack.length && stack[stack.length - 1].name === 'pasted') back();
@@ -2076,7 +2089,7 @@
         : { ok: 1, text: 'Saved your spot ' + (ago < 3 ? 'just now' : ago + ' seconds ago') });
     }
     if (feedsOn) {
-      var srcs = lib.sources(), failed = srcs.filter(function (s) { var st = lib.status(s.id); return st && !st.ok; });
+      var srcs = lib.sources(), failed = srcs.filter(function (s) { var st = lib.status(s.id); return st && !st.ok && !brokenDup(s); });
       if (refreshing) out.push({ ok: 2, text: 'Checking your channels for new uploads…' });
       else if (srcs.length && failed.length === srcs.length) out.push({ ok: 0, text: "Couldn't check any of your channels. Check your internet, then tap the date at the top to try again." });
       else if (failed.length) out.push({ ok: 0, text: "Couldn't update " + failed.map(function (s) { return s.name + ' (' + lib.status(s.id).error + ')'; }).join(', ') + '. Open the channel and tap Refresh.' });

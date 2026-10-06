@@ -329,6 +329,9 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .epr.d .no,.epr.d .et,.epr.d .du{opacity:.5}
 .epr.n{border-top:3px solid var(--ink)}
 .epr.n .et{font-weight:900}
+.epr .et.bare{font-size:16px;font-weight:600;display:flex;align-items:center;gap:6px;letter-spacing:0}
+.epr.n .et.bare{font-weight:700}
+.epr:has(.et.bare){grid-template-columns:var(--tap) 0 minmax(0,1fr) auto}
 .epr.n .no::before{content:"▸ "}
 [data-hold]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .cmore{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:var(--tap);font:600 12px var(--mono);border-top:1px solid var(--hair);color:var(--grey)}
