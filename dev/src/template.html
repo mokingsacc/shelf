@@ -127,6 +127,13 @@ svg{display:block;flex:none}
 .row .pr{max-width:220px}
 .band .more{display:flex;justify-content:space-between;align-items:center;min-height:var(--tap);border-top:2px solid currentColor;font:600 12px var(--mono);width:100%}
 .band .chl{margin:0}
+.steps{margin:8px 0 14px;padding-left:22px;display:grid;gap:8px;line-height:1.4}
+.tw-list{display:grid;gap:0;margin:8px 0}
+.tw-ep{display:block;width:100%;min-height:56px;padding:10px 0;text-align:left;border-top:2px solid var(--hair);color:var(--ink);background:none}
+.tw-ep:last-child{border-bottom:2px solid var(--hair)}
+.tw-ep.best{border-top:3px solid var(--ink)}
+.tw-ep b{display:block;font-size:15px;font-weight:800;line-height:1.25}
+.tw-ep small{display:block;font:400 12px var(--mono);color:var(--grey);margin-top:3px}
 .band .chl button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;min-height:52px;border-top:2px solid currentColor;padding:6px 0;text-align:left}
 .band .chl.first button:first-child{margin-top:6px;border-top-width:3px}
 .band .chl b{display:block;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -703,6 +710,28 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="grab" aria-hidden="true"></div>
   <div class="dh"><h2 id="notesH">Notes</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
   <div class="db" id="notesBody"></div>
+</dialog>
+
+<dialog id="twinDlg" aria-labelledby="twinH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="twinH">Podcast version</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db" id="twinBody"></div>
+</dialog>
+
+<dialog id="lockDlg" aria-labelledby="lockH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="lockH">Lock automatically</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db">
+    <p>iPhone apps aren't allowed to lock the screen, but an iPhone Shortcut can. Make it once:</p>
+    <ol class="steps">
+      <li>Open <b>Shortcuts</b>, tap <b>+</b>, and name it <b class="mono">Shelf Play Locked</b>.</li>
+      <li>Add three actions: <b>Open URLs</b> (tap its URL and pick <b>Shortcut Input</b>), <b>Wait</b> 3 seconds, <b>Lock Screen</b>.</li>
+      <li>Come back here and turn it on.</li>
+    </ol>
+    <p class="cnote">If Shortcuts says it can't find the shortcut, check the name is exactly Shelf Play Locked, or turn auto-lock off here.</p>
+    <div class="msgline" id="lockMsg" role="status"></div>
+    <button type="button" class="primary" id="lockToggle" data-act="lock-toggle">Turn on auto-lock</button>
+  </div>
 </dialog>
 
 <dialog id="aiKeyDlg" aria-labelledby="aiKeyH">

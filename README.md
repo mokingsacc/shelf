@@ -32,9 +32,11 @@ If Google refuses to sign in inside an app ("this browser or app may not be secu
 
 ## Playing with the phone locked
 
-YouTube stops its embedded player (in any app) when the phone locks, Premium or not. **Play locked ↗** in the player opens the video in the YouTube app at the same second (via `youtube://`, so iOS can't hand it to Safari; the web page opens if no app answers in 1.5 s), where Premium keeps playing locked. Check YouTube app > Settings > Background & downloads > Background play is on. Back in Shelf, your place moves on by the time you were away (at that video's speed, never past the end), with an Undo. While a video plays in Shelf the screen stays on, so it doesn't auto-lock.
+YouTube stops its embedded player (in any app) when the phone locks, Premium or not. **Play locked ↗** in the player opens the video in the YouTube app at the same second (via `youtube://`, so iOS can't hand it to Safari; the web page opens if no app answers in 1.5 s), where Premium keeps playing locked. Check YouTube app > Settings > Background & downloads > Background play is on.
 
-**Listen** (in the player) appears for channels that publish the same show as a podcast (found by name in Apple's podcast search, once a week; the episode matched by title, date and length). It plays the episode in Shelf's own audio player from the video's spot, so it keeps going with the phone locked; listening moves the video's place forward (never to the end, never ticked).
+**Auto-lock** (optional, set up from the self-check): apps can't lock the phone, so Play locked can instead run an iPhone Shortcut named `Shelf Play Locked` (Open URLs with Shortcut Input, Wait 3 s, Lock Screen) via `shortcuts://run-shortcut?name=…&input=text&text=<youtube:// link>`. Back in Shelf, your place moves on by the time you were away (at that video's speed, never past the end), with an Undo. While a video plays in Shelf the screen stays on, so it doesn't auto-lock.
+
+**Listen** (in the player, on every channel video in the app) finds the channel's podcast version: it plays straight away when Shelf is sure of the episode, offers a short pick list when it isn't, and says so (with Play locked) when the channel has no podcast. It works for channels that publish the same show as a podcast (found by name in Apple's podcast search, once a week; the episode matched by title, date and length). It plays the episode in Shelf's own audio player from the video's spot, so it keeps going with the phone locked; listening moves the video's place forward (never to the end, never ticked).
 
 ## For Claude
 

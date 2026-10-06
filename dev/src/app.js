@@ -593,7 +593,7 @@
       var vd = player.getVideoData && player.getVideoData();
       if (vd && vd.video_id && vd.video_id !== current) return;
       t = player.getCurrentTime(); d = player.getDuration();
-      if (vd) { if (vd.title && !v.title) { v.title = vd.title; $('#vTitle').textContent = v.title; } if (vd.author && !v.author) v.author = vd.author; }
+      if (vd) { if (vd.title && !v.title) { v.title = vd.title; $('#vTitle').textContent = v.title; } if (vd.author && !v.author) { v.author = vd.author; if (current === v.id) renderListen(v); } }
     } catch (e) { return; }
     if (typeof t !== 'number' || isNaN(t)) return;
     if (!armed) {
@@ -677,19 +677,25 @@
   }
   // A clip of a longer show (or a different cut) isn't its twin: lengths must be close (podcasts add a few minutes of ads)
   function twinFits(v, ep) { var d = v.dur || 0; return !!ep && (!d || !ep.duration || Math.abs(d - ep.duration) <= Math.max(600, 0.25 * d)); }
-  function renderListen(v) {
-    var tw = twins[v.id];
-    $('#vListen').hidden = !(tw && tw.ep && twinFits(v, tw.ep)); layoutTwin();
-    var s = Native.inApp && twinSource(v);
-    if (!s || (tw && (tw.ep || Date.now() - tw.at < 10 * 60000))) return; // a miss is asked again after 10 minutes (podcasts often come out later)
-    var it = lib.items(s.id).filter(function (x) { return x.id === v.id; })[0];
+  // Listen shows on every YouTube video in the app; the podcast is looked up as the video opens, so a tap is usually instant
+  function twinWho(v) { var s = twinSource(v); return s ? s.id : (v.author || ''); }
+  function twinLook(v) {
+    var tw = twins[v.id], who = twinWho(v);
+    if (tw && (tw.busy || tw.r && !tw.r.offline && (tw.r.ep || Date.now() - tw.at < 10 * 60000))) return tw; // misses are asked again after 10 minutes, failures at once
+    var it = (twinSource(v) && lib.items(twinSource(v).id).filter(function (x) { return x.id === v.id; })[0]) || null;
     var title = v.title || (it && it.title);
-    if (!title) return;
-    twins[v.id] = { ep: null, at: Date.now() };
-    lib.twinEpisode(s.id, { title: title, published: it ? it.published : 0 }).then(function (ep) {
-      twins[v.id] = { ep: ep, at: Date.now() };
-      if (current === v.id) { $('#vListen').hidden = !twinFits(videos[v.id], ep); layoutTwin(); }
-    });
+    if (!who || !title) return null;
+    tw = twins[v.id] = { busy: true, at: Date.now(), r: null, published: it ? it.published : 0 };
+    lib.twinLookup(who, { title: title, published: tw.published }).then(function (r) { tw.r = r; }, function () { tw.r = { offline: true }; })
+      .then(function () { var w = tw.waiting; tw.busy = false; tw.waiting = false; tw.at = Date.now(); if (current === v.id) { listenLabel(v); if (w) offerTwin(v, tw.r); } });
+    return tw;
+  }
+  function listenLabel(v) { var tw = v && twins[v.id]; $('#vListen').querySelector('span').textContent = tw && tw.waiting ? 'Finding podcast…' : 'Listen'; }
+  function renderListen(v) {
+    var on = Native.inApp && !!twinWho(v);
+    $('#vListen').hidden = !on; layoutTwin();
+    if (on) twinLook(v);
+    listenLabel(v);
   }
   // Two buttons a row; an odd last one takes the whole row
   function layoutTwin() {
@@ -697,18 +703,51 @@
     if (vis.length > 1 && vis.length % 2) vis[vis.length - 1].style.gridColumn = '1 / -1';
   }
   function listen() {
-    var v = current && videos[current], ep = v && twins[v.id] && twins[v.id].ep;
-    if (!ep) return;
-    capture(true);
-    if (!twinFits(v, ep)) { $('#vListen').hidden = true; layoutTwin(); toast("The podcast's episode is a different length, so it isn't the same as this video.", 'warn'); return; }
+    var v = current && videos[current];
+    if (!v) return;
+    var tw = twinLook(v);
+    if (!tw) { toast("Shelf doesn't know this video's channel, so it can't look for its podcast.", 'warn'); return; }
+    if (tw.busy) { tw.waiting = true; listenLabel(v); return; }
+    // Sure of the episode: play now, inside the tap (iOS only starts audio from a tap)
+    if (tw.r && tw.r.ep && twinFits(v, tw.r.ep)) { playTwin(v, tw.r.ep, true); return; }
+    offerTwin(v, tw.r);
+  }
+  function offerTwin(v, r) {
+    if (!r || r.offline) { toast("Couldn't reach the podcast directory. Check your internet and tap Listen again.", 'warn'); return; }
+    if (r.none) { toast("This channel doesn't put its videos out as a podcast. Play locked opens it in YouTube instead.", '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 8000); return; }
+    var fit = r.ep && twinFits(v, r.ep), list = (r.ep ? [r.ep] : []).concat(r.items || []);
+    twinPick = { vid: v.id, list: list };
+    var h = '<p>' + (fit ? 'This looks like the same episode:' : r.ep ? 'Closest episode (a different length, so it may be a longer cut):' : "Shelf isn't sure which episode this is. Pick it:") + '</p><div class="tw-list">';
+    list.forEach(function (ep, i) {
+      h += '<button type="button" class="tw-ep' + (i === 0 && r.ep ? ' best' : '') + '" data-act="twin-pick" data-i="' + i + '"><b>' + esc(ep.title) + '</b><small class="mono">' +
+        esc([ep.published ? Core.ago(ep.published) : '', ep.duration ? Core.fmt(ep.duration) : ''].filter(Boolean).join(' · ')) + '</small></button>';
+    });
+    h += '</div><p class="cnote">' + esc(r.podcast) + ' · plays with the phone locked, with the sleep timer.</p>';
+    $('#twinBody').innerHTML = h; openDlg($('#twinDlg'));
+  }
+  var twinPick = null;
+  function pickTwin(i) {
+    var v = twinPick && videos[twinPick.vid], ep = twinPick && twinPick.list[i];
+    $('#twinDlg').close();
+    if (v && ep) playTwin(v, ep, twinFits(v, ep));
+  }
+  // linked: the same show as the video, so it starts at the video's spot and moves the video's place as it plays.
+  // Otherwise (a longer cut) it starts where that episode was left, and the video's place is left alone.
+  function playTwin(v, ep, linked) {
+    if (current === v.id) capture(true);
     var t = v.t || 0;
-    try { var pt = player.getCurrentTime(); if (armed && pt > 0) t = pt; } catch (e) {}
+    try { var pt = player.getCurrentTime(); if (current === v.id && armed && pt > 0) t = pt; } catch (e) {}
     if (ep.duration && t > ep.duration - 30) t = Math.max(0, ep.duration - 60); // a shorter cut: start near its end, not past it
-    arec[ep.guid] = Object.assign({}, arec[ep.guid] || {}, { video: v.id, url: ep.url, title: ep.title, podcast: ep.podcast, image: ep.image || '', t: t, dur: ep.duration || 0, done: false, updated: Date.now() });
+    var old = arec[ep.guid] || {};
+    arec[ep.guid] = Object.assign({}, old, { url: ep.url, title: ep.title, podcast: ep.podcast, image: ep.image || '', dur: ep.duration || old.dur || 0, updated: Date.now() },
+      linked ? { video: v.id, t: t, done: false } : { video: '' });
     saveAudio();
-    closeVideo(true);
+    if (current) closeVideo(true);
     openAudio({ key: ep.guid, url: ep.url, title: ep.title, srcName: ep.podcast, image: ep.image, dur: ep.duration, src: '' });
-    setTimeout(function () { var tm = engine.state().timer; toast('Podcast version from ' + Core.fmt(t) + '. You can lock the phone. The two can be a minute apart, so nudge it if needed.' + (tm ? ' 45-minute sleep timer on.' : '')); }, 450);
+    setTimeout(function () {
+      var tm = engine.state().timer;
+      toast((linked ? 'Podcast version from ' + Core.fmt(t) + '. You can lock the phone. The two can be a minute apart, so nudge it if needed.' : 'Playing the podcast episode. Your place in the video stays as it was.') + (tm ? ' 45-minute sleep timer on.' : ''));
+    }, 450);
   }
   // Listening moves the video's place along with it, never to the very end (so it is never ticked by the audio;
   // a podcast cut differently could otherwise finish a video that isn't finished)
@@ -783,6 +822,18 @@
     }
     put(to);
     toast('Moved your place to ' + Core.fmt(to) + ' for the time you were in YouTube.', '', { label: 'Undo', fn: function () { put(h.t); toast('Back at ' + Core.fmt(h.t) + '.'); } }, 20000);
+    // Once: the phone can lock itself after Play locked
+    if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
+  }
+
+  // ---------- Auto-lock after Play locked (an iPhone Shortcut, made once) ----------
+  var LOCK_SHORTCUT = 'Shelf Play Locked';
+  function openLockDlg() { renderLockDlg(); openDlg($('#lockDlg')); }
+  function renderLockDlg() {
+    var on = !!prefs.autoLock, b = $('#lockToggle');
+    b.textContent = on ? 'Auto-lock is on' : 'Turn on auto-lock';
+    b.className = on ? 'ghost' : 'primary';
+    $('#lockMsg').textContent = on ? 'Play locked now opens YouTube and locks the phone 3 seconds later. Tap again to turn it off.' : '';
   }
 
   // ---------- Sleep timer UI (shared by both players) ----------
@@ -1755,6 +1806,9 @@
       case 'open-marks': push({ name: 'marks' }); break;
       case 'mark': doMark(); break;
       case 'listen': listen(); break;
+      case 'lock-setup': openLockDlg(); break;
+      case 'lock-toggle': prefs.autoLock = !prefs.autoLock; savePrefs(); renderLockDlg(); if (prefs.autoLock) toast('Auto-lock on. Try Play locked on any video.'); break;
+      case 'twin-pick': pickTwin(+b.getAttribute('data-i')); break;
       case 'ai-sum':
         aiSumOpen = !aiSumOpen; renderAiUI();
         if (aiSumOpen && aiKey && current && ai.status(current, 'summary').state === 'none' && !aiAsk[current + 'summary']) aiStart('summary');
@@ -1851,10 +1905,11 @@
     capture(true); var v = current && videos[current]; if (!v) return;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
-    var web = ytLink({ id: v.id, t: t, done: v.done });
-    this.href = Native.inApp ? web.replace(/^https:/, 'youtube:') : web;
+    var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
+    // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
+    this.href = !Native.inApp ? web : prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app) : app;
     clearTimeout(appFallback);
-    if (Native.inApp) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(web, '_blank'); }, 1500);
+    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(web, '_blank'); }, 1500);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: v.id, t: t, at: Date.now(), rate: wantRate || 1 }), false);
   });
@@ -1951,6 +2006,7 @@
     out.push(aiCheck());
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
+      out.push({ ok: 1, text: prefs.autoLock ? 'Play locked locks the phone by itself (Shortcut "' + LOCK_SHORTCUT + '")' : 'Play locked: the phone can lock by itself with a one-time Shortcut', fix: 'lock' });
       var ya = Native.ytAccount.state;
       out.push(ya === 'in' ? { ok: 1, text: 'Signed in to YouTube. With "Allow Cross-Website Tracking" on for Shelf (iPhone Settings for Shelf, below), the player uses your Premium. If ads still show, Play locked ↗ in the player opens the video in the YouTube app.' }
         : ya === 'out' ? { ok: 0, text: 'Not signed in to YouTube, so videos play with ads even with Premium.', fix: 'yt' }
@@ -1991,6 +2047,7 @@
     var ya = Native.ytAccount.state;
     if (kind === 'yt') return '<button type="button" class="fix" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : ya === 'in' ? 'Sign out of YouTube' : 'Sign in to YouTube') + '</button>';
     if (kind === 'ai-key') return '<button type="button" class="fix" data-act="ai-key">' + (aiKey ? 'Gemini key' : 'Add Gemini key') + '</button>';
+    if (kind === 'lock') return '<button type="button" class="fix" data-act="lock-setup">Auto-lock</button>';
     if (kind === 'retry') return '<button type="button" class="fix" id="retryBtn" data-act="phone-retry">Try again</button>';
     return '';
   }
