@@ -753,6 +753,7 @@ if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + '/pls.png'
 const plName = (await p.locator('#page .plrow b').first().textContent()).trim();
 await p.locator('#page .plrow').first().click(); await p.waitForTimeout(800);
 const plItems = await p.locator('#page .item').count();
+ok(await p.locator('#page [data-act="pl-add-open"]').count() === 0, 'S someone else\'s playlist has no + Add a video');
 ok(plItems > 0 && (await p.locator('#page h1').textContent()).trim().length > 0 && await p.locator('#page [data-act="pl-course"], #page [data-act="pl-open-course"]').count() === 1, 'S tapping one shows its videos (' + plItems + ' showing) with a Courses button: ' + plName);
 if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + '/plist.png' });
 await p.locator('#page .item').first().click(); await p.waitForTimeout(1500);
@@ -797,6 +798,20 @@ await p.locator('#page .plrow', { hasText: 'Cardio rapid review' }).click(); awa
 const privItems = await p.locator('#page .item').count();
 ok(privItems === 2 && await p.locator('#plsBtn[aria-current="page"]').count() === 1, 'L a private playlist opens with your sign-in and shows its videos (' + privItems + ')');
 ok(await p.locator('#page [data-act="pl-course"]').count() === 0 && /private playlist/.test(await p.locator('#page').textContent()), 'L a private playlist has no Track-as-a-course button (Courses can\'t read it)');
+await p.locator('#page [data-act="pl-add-open"]').click(); await p.waitForTimeout(200);
+ok(await p.locator('#pl-q').count() === 1, 'L your own playlist has + Add a video, which opens a search box');
+await p.fill('#pl-q', 'https://youtu.be/dQw4w9WgXcQ'); await p.press('#pl-q', 'Enter'); await p.waitForTimeout(200);
+const saveRow = p.locator('#page [data-act="pl-save"]');
+const saveHref = await saveRow.getAttribute('href');
+ok(await saveRow.count() === 1 && /^youtube:\/\/www\.youtube\.com\/watch\?v=dQw4w9WgXcQ$/.test(saveHref), 'L a pasted link gives one row that opens it in the YouTube app to Save: ' + saveHref);
+if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + '/pladd.png' });
+await p.evaluate(() => { const a = document.querySelector('[data-act="pl-save"]'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); });
+ok(/tap Save, tick Cardio rapid review/.test(await p.locator('#toast').textContent()), 'L it says what to tap in YouTube');
+await p.evaluate((h) => { window.__privpl.PLmine0000000000 = h; }, privHtml.replace('}}]};', '}},{"playlistVideoRenderer":{"videoId":"dQw4w9WgXcQ","title":{"runs":[{"text":"Added in YouTube"}]},"lengthSeconds":"212","isPlayable":true}}]};'));
+await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; document.dispatchEvent(new Event('visibilitychange')); });
+await p.waitForTimeout(800);
+ok(await p.locator('#page .item').count() === 3, 'L back in Shelf, the playlist reloads with the saved video (' + await p.locator('#page .item').count() + ')');
+await p.locator('#page [data-act="pl-add-close"]').click(); await p.waitForTimeout(150);
 await p.locator('#page .item').first().click(); await p.waitForTimeout(1500);
 const cardioLink = await p.evaluate(() => document.querySelector('#ytLink').href);
 ok(await shelf(p, () => window.__shelf.current) === 'cardio00001' && /[?&]list=PLmine0000000000/.test(cardioLink), 'L a playlist video plays in Shelf, and its YouTube link opens inside the playlist: ' + cardioLink);

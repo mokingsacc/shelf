@@ -245,6 +245,7 @@ details.fold[open]>summary svg{transform:rotate(180deg)}
 .top .subtabs+.addch{margin-top:10px}
 .plrow .av{font-size:12px;font-weight:600}
 .chrow{display:grid;grid-template-columns:44px minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;padding:8px 0 8px var(--g);border-bottom:2px solid var(--hair);min-height:60px}
+a.chrow{text-decoration:none;color:inherit}a.chrow *{text-decoration:none}
 .chrow .av{width:44px;height:44px;background:var(--soft);overflow:hidden;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;position:relative}
 .chrow .av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .chrow .tx{min-width:0}
@@ -3459,7 +3460,9 @@ if (typeof module !== 'undefined') module.exports = AI;
     } else if (v.name === 'plist') {
       var pv = v.list || [], have3 = cs && cs.get(v.id);
       html += topHTML('c2', v.title, '<b>Playlist</b>' + (pv.length ? ' · ' + pv.length + ' videos' : '') + (v.chTitle ? ' · ' + esc(v.chTitle) : ''), '',
-        cs && !v.priv ? (have3 ? '<button type="button" class="btn addch" data-act="pl-open-course" data-id="' + esc(have3.section || 'med') + '">In Courses ›</button>' : '<button type="button" class="btn addch" data-act="pl-course" data-id="' + esc(v.id) + '">+ Track as a course</button>') : '');
+        (cs && !v.priv ? (have3 ? '<button type="button" class="btn addch" data-act="pl-open-course" data-id="' + esc(have3.section || 'med') + '">In Courses ›</button>' : '<button type="button" class="btn addch" data-act="pl-course" data-id="' + esc(v.id) + '">+ Track as a course</button>') : '') +
+        (v.mine ? (v.adding ? '<form class="sform" id="pladdForm"><input id="pl-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search, or paste a link" value="' + esc(v.addQ || '') + '" aria-label="Find a video to add"><button type="submit">Go</button></form>' : '<button type="button" class="btn addch" data-act="pl-add-open">+ Add a video</button>') : ''));
+      if (v.mine && v.adding) html += plAddHTML(v);
       if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
       if (pv.length) html += listHTML(pv.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.chId || '', srcName: v.chTitle || v.title, dur: x.dur || 0, thumb: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg', list: v.id }; }), 'p', null, 'Videos');
     } else if (v.name === 'marks') {
@@ -3468,6 +3471,10 @@ if (typeof module !== 'undefined') module.exports = AI;
     pg.className = 'page';
     pg.innerHTML = html;
     fitAll(pg);
+    if (v.name === 'plist' && $('#pladdForm')) {
+      $('#pladdForm').addEventListener('submit', function (ev) { ev.preventDefault(); plAddSearch(v, $('#pl-q').value.trim()); });
+      if (!v.addFocused) { v.addFocused = true; setTimeout(function () { var q = $('#pl-q'); if (q) q.focus(); }, 50); }
+    }
     if (v.name === 'search') {
       var f = $('#sform');
       f.addEventListener('submit', function (ev) { ev.preventDefault(); var q = $('#sq').value.trim(); if (isLinkish(q)) { prefs.lastQ = ''; handleText(q); } else runSearch(q); });
@@ -3589,6 +3596,46 @@ if (typeof module !== 'undefined') module.exports = AI;
     });
   }
 
+  // Adding to one of Mo's playlists: find the video in Shelf (search, a link, or one played lately), then YouTube's own
+  // Save button does the adding (Shelf never sends changes to the account). Back in Shelf, the playlist reloads.
+  function plAddHTML(v) {
+    var have = {}; (v.list || []).forEach(function (x) { have[x.id] = 1; });
+    var rows = v.addRes, head = 'Results';
+    if (!rows) {
+      head = 'Played lately in Shelf';
+      rows = Object.keys(videos).map(function (k) { return videos[k]; }).filter(function (x) { return !have[x.id] && !x.audio; })
+        .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); }).slice(0, 4).map(function (x) { return { kind: 'video', id: x.id, title: x.title, channel: x.author }; });
+    }
+    rows = rows.filter(function (r) { return r.kind === 'video'; }).slice(0, 8);
+    var h = v.addMsg ? '<p class="pnote' + (v.addErr ? ' err' : '') + '">' + esc(v.addMsg) + '</p>' : '';
+    if (rows.length) h += '<p class="pnote">' + head + ' · tap one, then YouTube\'s <b>Save</b> and tick ' + esc(v.title) + '</p>';
+    h += rows.map(function (r) {
+      var inIt = have[r.id];
+      return '<a class="chrow plrow" data-act="pl-save" data-id="' + esc(r.id) + '" href="' + esc(saveHref(r.id)) + '" target="_blank" rel="noopener"><span class="av mono">' + (inIt ? '✓' : '+') + '</span><span class="tx"><b>' + esc(r.title || 'This video') + '</b><small>' + (inIt ? 'Already in it' : (r.channel ? esc(r.channel) + ' · ' : '') + 'Save in YouTube ↗') + '</small></span></a>';
+    }).join('');
+    return h + '<button type="button" class="more quiet" data-act="pl-add-close"><span>Done adding</span><span class="mono">×</span></button>';
+  }
+  // The YouTube app (the bounce automation lets it through when auto-lock's Shortcut is set up), or the web page in a browser
+  function saveHref(id) {
+    var web = 'https://www.youtube.com/watch?v=' + id, app = web.replace(/^https:/, 'youtube:');
+    if (!Native.inApp) return web;
+    return prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + '&shelf=nolock') : app;
+  }
+  var plAddSeq = 0;
+  function plAddSearch(v, q) {
+    v.addQ = q; v.addErr = false;
+    if (!q) { v.addRes = null; v.addMsg = ''; renderPage(); return; }
+    var ln = /youtu\.?be|youtube\.com|^https?:\/\//i.test(q) ? Core.parseLink(q) : null;
+    if (ln) { var w = videos[ln.id]; v.addRes = [{ kind: 'video', id: ln.id, title: w && w.title || '', channel: w && w.author || '' }]; v.addMsg = ''; renderPage(); return; }
+    v.addRes = []; v.addMsg = 'Searching…'; renderPage();
+    var my = ++plAddSeq;
+    Search.run({ fetchJSON: fetchJSON, fetchText: fetchText }, q, prefs.apiKey).then(function (r) {
+      if (my !== plAddSeq) return;
+      v.addRes = r; v.addMsg = r.some(function (x) { return x.kind === 'video'; }) ? '' : 'No videos for "' + q + '".';
+      if (stack[stack.length - 1] === v) renderPage();
+    }, function (e) { if (my !== plAddSeq) return; v.addMsg = (e && e.message) || 'Search failed.'; v.addErr = true; if (stack[stack.length - 1] === v) renderPage(); });
+  }
+
   // A channel's playlists (its Playlists page), and one playlist's videos, without adding anything
   function loadPls(v) {
     if (v.pls || v.plBusy) return;
@@ -3601,9 +3648,13 @@ if (typeof module !== 'undefined') module.exports = AI;
   }
   function openPlist(pid, title) {
     var from = stack[stack.length - 1] || {};
-    var v = { name: 'plist', id: pid, title: title, chId: from.id || '', chTitle: from.title || '', list: null, msg: 'Loading the videos…' };
+    var v = { name: 'plist', id: pid, title: title, chId: from.id || '', chTitle: from.title || '', list: null, msg: 'Loading the videos…', mine: from.name === 'mypls' };
     push(v);
     if (!cs || !feedsOn) { v.msg = 'Playlists load in the Shelf app on your iPhone.'; renderPage(); return; }
+    loadPlist(v);
+  }
+  function loadPlist(v) {
+    var pid = v.id;
     cs.peek(pid).then(function (r) { return r.items && r.items.length ? r : signedInList(pid).catch(function () { return r; }); },
       function (e) { return signedInList(pid).catch(function () { throw e; }); }).then(function (r) {
       if (r.signed) v.priv = true;
@@ -3949,6 +4000,8 @@ if (typeof module !== 'undefined') module.exports = AI;
       lockPaused = wasPlaying && !handing && (Native.inApp || isPhone) ? current : null;
     } else {
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
+      // Back from saving a video to one of Mo's playlists in YouTube: show the playlist as it is now
+      var tv = stack[stack.length - 1]; if (tv && tv.name === 'plist' && tv.saving && Date.now() - tv.saving < 3600e3) { tv.saving = 0; tv.addRes = null; tv.addQ = ''; mypls && (mypls.at = 0); loadPlist(tv); }
       applyLook();
       renderAll();
       catchUp();
@@ -5004,6 +5057,9 @@ if (typeof module !== 'undefined') module.exports = AI;
       case 'subch-tab': var sv = stack[stack.length - 1]; if (sv && sv.name === 'subch') { sv.tab = id; if (id === 'playlists') loadPls(sv); renderPage(); } break;
       case 'chan-playlists': openSub(id, b.getAttribute('data-t') || '', 'playlists'); break;
       case 'open-plist': openPlist(id, b.getAttribute('data-t') || ''); break;
+      case 'pl-add-open': var pav = stack[stack.length - 1]; if (pav && pav.name === 'plist') { pav.adding = true; pav.addFocused = false; pav.addRes = null; pav.addMsg = ''; renderPage(); } break;
+      case 'pl-add-close': var pcv = stack[stack.length - 1]; if (pcv && pcv.name === 'plist') { pcv.adding = false; renderPage(); } break;
+      case 'pl-save': var psv = stack[stack.length - 1]; if (psv && psv.name === 'plist') { psv.saving = Date.now(); toast('In YouTube: tap Save, tick ' + psv.title + ', then come back.'); } return;
       case 'my-playlists': loadMyPls(); openTab({ name: 'mypls' }); break;
       case 'mypls-retry': loadMyPls(true); break;
       case 'pl-course': var plv = stack[stack.length - 1]; openCourseAdd('https://www.youtube.com/playlist?list=' + id, 'med'); if (plv && plv.title) { $('#courseName').value = Courses.shortName(plv.title); $('#courseName').setAttribute('data-auto', '1'); } break;
