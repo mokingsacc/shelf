@@ -176,7 +176,7 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 }
 
 /* ---------- Tab bar ---------- */
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:3px solid var(--rule);background:var(--paper);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);border-top:3px solid var(--rule);background:var(--paper);padding-bottom:env(safe-area-inset-bottom,0px)}
 .tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);position:relative}
 .tabs button svg{width:24px;height:24px}
 .tabs button[aria-current]{color:var(--ink)}
@@ -589,6 +589,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <nav class="tabs" aria-label="Shelf">
   <button type="button" id="todayBtn" data-act="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/><path d="M4 10h16M4 15h16"/></svg>Today</button>
   <button type="button" id="coursesBtn" data-act="open-courses" data-id="med"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 5v4M12 10v4M16 15v4"/></svg>Courses</button>
+  <button type="button" id="plsBtn" data-act="my-playlists"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h11M4 11h11M4 16h7"/><path d="M15 14v6l5-3z" fill="currentColor"/></svg>Playlists</button>
   <button type="button" id="searchBtn" data-act="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/></svg>Search</button>
 </nav>
 
@@ -3295,8 +3296,8 @@ if (typeof module !== 'undefined') module.exports = AI;
     unwind(function () { push(view); }); return true;
   }
   function renderTabs() {
-    var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && (v.name === 'search' || ((v.name === 'subch' || v.name === 'plist') && stack[0].name === 'search')) ? 'searchBtn' : 'todayBtn';
-    ['todayBtn', 'coursesBtn', 'searchBtn'].forEach(function (id) { var b = document.getElementById(id); if (id === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+    var v = stack[stack.length - 1], on = v && v.name === 'courses' ? 'coursesBtn' : v && (v.name === 'mypls' || (v.name === 'plist' && stack[0].name === 'mypls')) ? 'plsBtn' : v && (v.name === 'search' || ((v.name === 'subch' || v.name === 'plist') && stack[0].name === 'search')) ? 'searchBtn' : 'todayBtn';
+    ['todayBtn', 'coursesBtn', 'plsBtn', 'searchBtn'].forEach(function (id) { var b = document.getElementById(id); if (id === on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   }
   function itemHTML(e, scope, opts) {
     opts = opts || {};
@@ -3328,7 +3329,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (v.name === 'section') { var s = lib.section(v.id); return s ? s.name : 'Back'; }
     if (v.name === 'channel') { var c = lib.source(v.id); return c ? c.name : 'Back'; }
     if (v.name === 'subch' || v.name === 'plist') return v.title || 'Back';
-    return { courses: 'Courses', search: 'Search', marks: 'Marks', pasted: 'Pasted' }[v.name] || 'Back';
+    return { courses: 'Courses', search: 'Search', marks: 'Marks', pasted: 'Pasted', mypls: 'Playlists' }[v.name] || 'Back';
   }
   function ib(act, id, icon, label, on) { return '<button type="button" class="ib' + (on ? ' on' : '') + '" data-act="' + act + '"' + (id != null ? ' data-id="' + esc(id) + '"' : '') + ' aria-label="' + esc(label) + '">' + icon + '</button>'; }
   function topHTML(cls, title, meta, icons, extra) {
@@ -3413,6 +3414,17 @@ if (typeof module !== 'undefined') module.exports = AI;
       vids.forEach(function (e) { html += '<div class="irow">' + itemHTML(e, 'p') + ib('remove-video', e.key, I.x, 'Remove ' + e.title) + '</div>'; });
     } else if (v.name === 'courses') {
       html += coursesPage(v);
+    } else if (v.name === 'mypls') {
+      var mine = (mypls && mypls.list) || [];
+      html += topHTML('c2', 'Playlists', '<b>Your YouTube playlists</b>' + (mine.length ? ' · ' + mine.length : ''), '');
+      if (myplsMsg) html += '<button type="button" class="more quiet" data-act="mypls-retry"><span>' + esc(myplsMsg) + '</span><span class="mono">↻</span></button>';
+      else if (!mine.length) html += myplsBusy ? '<p class="pnote">Reading your playlists…</p>' : '<button type="button" class="more quiet" data-act="mypls-retry"><span>Read your playlists</span><span class="mono">↻</span></button>';
+      html += mine.map(function (p) {
+        var c = cs && cs.get(p.id);
+        return '<button type="button" class="chrow plrow" data-act="open-plist" data-id="' + esc(p.id) + '" data-t="' + esc(p.title) + '"><span class="av mono">' + (p.count || '·') + '</span><span class="tx"><b>' + esc(p.title) + '</b><small>' + (p.count ? p.count + ' videos' : 'Playlist') + (c ? ' · in Courses' : '') + '</small></span><span class="chev">' + I.chev + '</span></button>';
+      }).join('');
+      if (mine.length && mypls.more) html += '<p class="pnote">YouTube sent the first ' + mine.length + ' playlists.</p>';
+      if (mine.length) html += '<button type="button" class="more quiet" data-act="mypls-retry"><span>Updated ' + esc(Core.ago(mypls.at)) + '</span><span class="mono">' + (myplsBusy ? 'Checking…' : '↻ Refresh') + '</span></button>';
     } else if (v.name === 'search') {
       html += topHTML('c2', 'Search', '', '', '<form class="sform" id="sform"><input id="sq" type="search" enterkeyhint="search" autocomplete="off" placeholder="hyperkalemia, or paste a link" value="' + esc(v.q || '') + '" aria-label="Search YouTube, or paste a link"><button type="submit">Go</button></form>');
       html += subsHTML();
@@ -3447,9 +3459,9 @@ if (typeof module !== 'undefined') module.exports = AI;
     } else if (v.name === 'plist') {
       var pv = v.list || [], have3 = cs && cs.get(v.id);
       html += topHTML('c2', v.title, '<b>Playlist</b>' + (pv.length ? ' · ' + pv.length + ' videos' : '') + (v.chTitle ? ' · ' + esc(v.chTitle) : ''), '',
-        cs ? (have3 ? '<button type="button" class="btn addch" data-act="pl-open-course" data-id="' + esc(have3.section || 'med') + '">In Courses ›</button>' : '<button type="button" class="btn addch" data-act="pl-course" data-id="' + esc(v.id) + '">+ Track as a course</button>') : '');
+        cs && !v.priv ? (have3 ? '<button type="button" class="btn addch" data-act="pl-open-course" data-id="' + esc(have3.section || 'med') + '">In Courses ›</button>' : '<button type="button" class="btn addch" data-act="pl-course" data-id="' + esc(v.id) + '">+ Track as a course</button>') : '');
       if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
-      if (pv.length) html += listHTML(pv.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.chId || '', srcName: v.chTitle || '', dur: x.dur || 0, thumb: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg' }; }), 'p', null, 'Videos');
+      if (pv.length) html += listHTML(pv.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.chId || '', srcName: v.chTitle || v.title, dur: x.dur || 0, thumb: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg', list: v.id }; }), 'p', null, 'Videos');
     } else if (v.name === 'marks') {
       html += marksPage();
     }
@@ -3547,6 +3559,36 @@ if (typeof module !== 'undefined') module.exports = AI;
     }, function (e) { v.msg = (e && e.message) || "Couldn't load it."; v.err = true; if (stack[stack.length - 1] === v) renderPage(); });
   }
 
+  // ---------- Playlists tab: the playlists on Mo's YouTube account (read with Shelf's YouTube sign-in) ----------
+  var MYPLS_KEY = 'shelf.mypls', MYPLS_URL = 'https://www.youtube.com/feed/playlists', mypls = load(MYPLS_KEY, null), myplsBusy = false, myplsMsg = '';
+  function loadMyPls(force) {
+    if (!Native.device) { myplsMsg = 'Your playlists show here in the Shelf app on your iPhone.'; return; }
+    if (myplsBusy || (!force && mypls && Date.now() - mypls.at < 6 * 3600e3)) return;
+    myplsBusy = true; myplsMsg = '';
+    Native.youtubeGet(MYPLS_URL).then(function (r) {
+      myplsBusy = false;
+      if (!r || !r.signedIn) myplsMsg = 'Sign in to YouTube in the self-check to see your playlists here.';
+      else {
+        var got = Courses.readPlaylists(Courses.initialData(r.data || '') || {}), l = got.items;
+        if (l.length) { mypls = { at: Date.now(), list: l, more: !!got.token }; store(MYPLS_KEY, mypls); }
+        else myplsMsg = r.status === 200 ? 'No playlists found on your YouTube account. Tap to try again.' : 'YouTube said ' + r.status + '. Tap to try again.';
+      }
+      renderMyPls();
+    }, function (e) { myplsBusy = false; myplsMsg = "Couldn't reach YouTube: " + (e && e.message || e); renderMyPls(); });
+    renderMyPls();
+  }
+  function renderMyPls() { var v = stack[stack.length - 1]; if (v && v.name === 'mypls') renderPage(); }
+  // A private or unlisted playlist of Mo's only opens signed in
+  function signedInList(pid) {
+    if (!Native.device) return Promise.reject(new Error('gone'));
+    return Native.youtubeGet('https://www.youtube.com/playlist?list=' + pid).then(function (r) {
+      var d = r && r.signedIn && r.status === 200 && Courses.initialData(r.data || '');
+      var items = d ? Courses.readVideos(d).items : [];
+      if (!items.length) throw new Error('gone');
+      return { items: items, partial: items.length >= 100 ? -1 : 0, signed: true };
+    });
+  }
+
   // A channel's playlists (its Playlists page), and one playlist's videos, without adding anything
   function loadPls(v) {
     if (v.pls || v.plBusy) return;
@@ -3562,9 +3604,11 @@ if (typeof module !== 'undefined') module.exports = AI;
     var v = { name: 'plist', id: pid, title: title, chId: from.id || '', chTitle: from.title || '', list: null, msg: 'Loading the videos…' };
     push(v);
     if (!cs || !feedsOn) { v.msg = 'Playlists load in the Shelf app on your iPhone.'; renderPage(); return; }
-    cs.peek(pid).then(function (r) {
+    cs.peek(pid).then(function (r) { return r.items && r.items.length ? r : signedInList(pid).catch(function () { return r; }); },
+      function (e) { return signedInList(pid).catch(function () { throw e; }); }).then(function (r) {
+      if (r.signed) v.priv = true;
       var seen = {}; v.list = (r.items || []).filter(function (x) { if (seen[x.id]) return false; seen[x.id] = 1; return true; });
-      v.msg = v.list.length ? (r.partial ? 'YouTube sent only the first ' + v.list.length + ' videos.' : '') : 'This playlist has no videos Shelf can play.'; v.err = !v.list.length;
+      v.msg = v.list.length ? (r.partial ? 'YouTube sent only the first ' + v.list.length + ' videos.' : v.priv ? 'A private playlist: it plays here, but Courses can only track public ones.' : '') : 'This playlist has no videos Shelf can play.'; v.err = !v.list.length;
       if (stack[stack.length - 1] === v) renderPage();
     }, function (e) { v.msg = (e && e.message) || "Couldn't load the playlist."; v.err = true; if (stack[stack.length - 1] === v) renderPage(); });
   }
@@ -3611,11 +3655,14 @@ if (typeof module !== 'undefined') module.exports = AI;
     document.head.appendChild(s);
     setTimeout(function () { if (!ytLoaded) { ytFailed = true; updateDot(); } }, 12000);
   }
-  function ytLink(v) { return 'https://www.youtube.com/watch?v=' + v.id + (v.t > 5 && !v.done ? '&t=' + Math.floor(v.t) + 's' : ''); }
+  // Opened from a playlist (or a course, which is a playlist): YouTube opens it inside that playlist, so it carries on to the next one
+  function listOf(v) { var w = videos[v.id], c = courseOf(v.id); return (w && w.list) || (c && c.course.id) || ''; }
+  function ytLink(v) { var l = listOf(v); return 'https://www.youtube.com/watch?v=' + v.id + (l ? '&list=' + encodeURIComponent(l) : '') + (v.t > 5 && !v.done ? '&t=' + Math.floor(v.t) + 's' : ''); }
   function ensureVideo(o) {
     var now = Date.now(), v = videos[o.id];
     if (!v) v = videos[o.id] = { id: o.id, t: o.t || 0, dur: o.dur || 0, title: o.title || '', author: o.author || '', added: now, updated: now, done: false };
     if (o.title && !v.title) v.title = o.title;
+    if (o.list) v.list = o.list;
     if (o.author && !v.author) v.author = o.author;
     if (o.channelId && !v.channelId) v.channelId = o.channelId;
     if (o.section && !v.section) v.section = o.section;
@@ -4438,7 +4485,7 @@ if (typeof module !== 'undefined') module.exports = AI;
       if (!e.url) { var r = arec[e.key]; if (r && r.url) e.url = r.url; }
       if (!e.url) { toast("This episode's audio link is missing. Open its podcast and play it from there.", 'warn'); return; }
       openAudio(e);
-    } else openVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur });
+    } else openVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur, list: e.list });
   }
 
   // ---------- A pasted link (Search box, ⌘V on the Mac, a shelf link) ----------
@@ -4957,6 +5004,8 @@ if (typeof module !== 'undefined') module.exports = AI;
       case 'subch-tab': var sv = stack[stack.length - 1]; if (sv && sv.name === 'subch') { sv.tab = id; if (id === 'playlists') loadPls(sv); renderPage(); } break;
       case 'chan-playlists': openSub(id, b.getAttribute('data-t') || '', 'playlists'); break;
       case 'open-plist': openPlist(id, b.getAttribute('data-t') || ''); break;
+      case 'my-playlists': loadMyPls(); openTab({ name: 'mypls' }); break;
+      case 'mypls-retry': loadMyPls(true); break;
       case 'pl-course': var plv = stack[stack.length - 1]; openCourseAdd('https://www.youtube.com/playlist?list=' + id, 'med'); if (plv && plv.title) { $('#courseName').value = Courses.shortName(plv.title); $('#courseName').setAttribute('data-auto', '1'); } break;
       case 'pl-open-course': openCourses(id); break;
       case 'open-pasted': push({ name: 'pasted' }); break;

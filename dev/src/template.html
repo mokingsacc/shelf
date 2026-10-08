@@ -176,7 +176,7 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 }
 
 /* ---------- Tab bar ---------- */
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:1fr 1fr 1fr;border-top:3px solid var(--rule);background:var(--paper);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(4,1fr);border-top:3px solid var(--rule);background:var(--paper);padding-bottom:env(safe-area-inset-bottom,0px)}
 .tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--grey);position:relative}
 .tabs button svg{width:24px;height:24px}
 .tabs button[aria-current]{color:var(--ink)}
@@ -589,6 +589,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <nav class="tabs" aria-label="Shelf">
   <button type="button" id="todayBtn" data-act="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="4" y="4" width="16" height="16"/><path d="M4 10h16M4 15h16"/></svg>Today</button>
   <button type="button" id="coursesBtn" data-act="open-courses" data-id="med"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><path d="M8 5v4M12 10v4M16 15v4"/></svg>Courses</button>
+  <button type="button" id="plsBtn" data-act="my-playlists"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 6h11M4 11h11M4 16h7"/><path d="M15 14v6l5-3z" fill="currentColor"/></svg>Playlists</button>
   <button type="button" id="searchBtn" data-act="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/></svg>Search</button>
 </nav>
 
