@@ -149,12 +149,20 @@ final class SignInSheet: UIViewController, WKNavigationDelegate, WKUIDelegate {
         ShelfSignInPlugin.isSignedIn { if $0 { self.close(signedIn: true) } }
     }
 
-    // Web links stay in the sheet: no jumping to the YouTube app through a universal link (custom app links are refused)
+    // Web links stay in the sheet: no jumping to the YouTube app (custom app links are refused, see below for universal links)
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         if start == nil { return decisionHandler(.allow) } // the sign-in sheet behaves as before
         let scheme = navigationAction.request.url?.scheme ?? ""
         guard scheme == "https" || scheme == "http" || scheme == "about" || scheme == "blob" || scheme == "data" else { return decisionHandler(.cancel) }
-        decisionHandler(.allowWithoutTryingAppLink)
+        // A tap to another site (youtu.be, www.youtube.com) could open the YouTube app as a universal link;
+        // loading it from code instead never does
+        if navigationAction.navigationType == .linkActivated, navigationAction.targetFrame?.isMainFrame ?? true,
+           let to = navigationAction.request.url?.host, let here = webView.url?.host, to != here {
+            decisionHandler(.cancel)
+            webView.load(navigationAction.request)
+            return
+        }
+        decisionHandler(.allow)
     }
 
     // Links that want a new window ("Learn more", help pages) open in this same sheet
