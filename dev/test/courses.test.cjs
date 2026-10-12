@@ -307,6 +307,15 @@ function setup(store, opts = {}) {
   assert.strictEqual(Courses.historyLatest(HSS).title, 'OpenAI CEO says');
   assert.strictEqual(Courses.historyLatest(HSS).t, 216);
 
+  // Mo's history (12 Oct): one video today, then yesterday opens with a Shorts shelf. The Shorts after it
+  // belong to the next day, so today's video still counts (it used to be skipped as if it were a Short)
+  const day = (items) => ({ itemSectionRenderer: { header: { itemSectionHeaderRenderer: { title: { runs: [{ text: 'Today' }] } } }, contents: items } });
+  const HD = hist([day([real('bpbpbpbpbpb', 98, '22:16')]), day([shortsShelf, real('oldoldoldol', 50, '4:00')])]);
+  assert.strictEqual(Courses.historyLatest(HD).id, 'bpbpbpbpbpb', 'the only video of today is found even with a Shorts shelf right after it');
+  assert.strictEqual(Courses.historyLatest(HD).t, Math.round(0.98 * 1336));
+  assert.deepStrictEqual(Courses.historyItems(HD).map((x) => x.id), ['bpbpbpbpbpb', 'oldoldoldol']);
+  assert.deepStrictEqual(Courses.historySpot(HD, 'bpbpbpbpbpb'), { pct: 98 });
+
   // Subscriptions page: channelRenderer (and newer channel lockups), A to Z, no repeats
   const subsPage = hist([{ channelRenderer: { channelId: 'UCzzzzzzzzzzzzzzzzzzzzzz', title: { simpleText: 'Zebra Medicine' }, thumbnail: { thumbnails: [{ url: '//yt3.ggpht.com/zz=s88' }] } } },
     { channelRenderer: { channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa', title: { simpleText: 'aj mnemonics' } } },

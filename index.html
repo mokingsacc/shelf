@@ -2087,7 +2087,9 @@ var Courses = (function () {
   // History items are lockupViewModel (newer) or videoRenderer (older) objects. A newer item lists its thumbnail first
   // (the red bar and the length badge), then the buttons and title, then the video's id, so a video's data is the
   // whole item around its id, not just what follows it.
-  var ITEM = /"(?:lockupViewModel|videoRenderer)":\{/g;
+  // Where one history item ends: the next item, or the next shelf or day section (a Shorts shelf after the
+  // last video of a day must not count as part of that video, or the video looks like a Short and is skipped)
+  var ITEM = /"(?:lockupViewModel|videoRenderer|shortsLockupViewModel|reelShelfRenderer|reelItemRenderer|itemSectionRenderer|richSectionRenderer|continuationItemRenderer)":\{/g;
   function itemAround(html, at) {
     var s = Math.max(html.lastIndexOf('"lockupViewModel":{', at), html.lastIndexOf('"videoRenderer":{', at));
     ITEM.lastIndex = at; var n = ITEM.exec(html);
@@ -2129,7 +2131,8 @@ var Courses = (function () {
     re.lastIndex = start;
     while ((m = re.exec(html))) starts.push(m.index);
     for (var i = 0; i < starts.length && out.length < (max || 10); i++) {
-      var item = html.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : Math.min(html.length, starts[i] + 20000));
+      ITEM.lastIndex = starts[i] + 2; var nx = ITEM.exec(html);
+      var item = html.slice(starts[i], nx ? nx.index : Math.min(html.length, starts[i] + 20000));
       if (/reelWatchEndpoint|\/shorts\/|LOCKUP_CONTENT_TYPE_(?!VIDEO)/.test(item)) continue;
       var idm = item.match(/"contentId":"([\w-]{11})"/) || item.match(/"watchEndpoint":\{"videoId":"([\w-]{11})"/) || item.match(/"videoId":"([\w-]{11})"/);
       if (!idm) continue;
