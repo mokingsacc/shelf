@@ -150,6 +150,9 @@ var Native = (function () {
   function signOutYT() { return call('ShelfSignIn', 'signOut').then(function () { return setYT(null); }); }
   // Settings > Shelf, where "Allow Cross-Website Tracking" lets the player see the sign-in
   function openSettings() { return call('ShelfSignIn', 'openSettings'); }
+  // A YouTube video page in a signed-in sheet inside Shelf (YouTube's own Save button); shells before 12 Oct 2026 don't have it
+  var pageSheet = inApp && hasMethod('ShelfSignIn', 'openPage');
+  function openPage(url, title) { return call('ShelfSignIn', 'openPage', { url: url, title: title || '' }); }
 
   // Shelf's phone helpers (ios/App/App/ShelfDevice.swift): screen stays on, Sleep dim, the clock's colour, location.
   // Shells installed before 6 Oct 2026 don't have them; then everything carries on without (web wake lock, a strip under the clock).
@@ -185,7 +188,7 @@ var Native = (function () {
     checkYT();
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkYT(); });
   }
-  return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+  return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, get pageSheet() { return pageSheet; }, openPage: openPage, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
     get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,

@@ -866,6 +866,19 @@ await p.evaluate(() => { window.__mypls = 'out'; }); await p.locator('#plsBtn').
 await p.locator('#page [data-act="mypls-retry"]').last().click(); await p.waitForTimeout(500);
 ok(/Sign in to YouTube/.test(await p.locator('#page').textContent()), 'L signed out of YouTube, it says to sign in');
 await ctx.close();
+// A newer iPhone app: YouTube's page slides up inside Shelf instead of opening the YouTube app
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true, pageSheet: true } }));
+await settle(p);
+await p.evaluate(([a, b, c]) => { window.__mypls = a; window.__privpl = { PLmine0000000000: b }; window.__onPage = () => { window.__privpl.PLmine0000000000 = c; }; },
+  [myHtml, privHtml, privHtml.replace('}}]};', '}},{"playlistVideoRenderer":{"videoId":"dQw4w9WgXcQ","title":{"runs":[{"text":"Added in the sheet"}]},"lengthSeconds":"212","isPlayable":true}}]};')]);
+await p.locator('#plsBtn').click(); await p.waitForTimeout(500);
+await p.locator('#page .plrow', { hasText: 'Cardio rapid review' }).click(); await p.waitForTimeout(800);
+await p.locator('#page [data-act="pl-add-open"]').click(); await p.waitForTimeout(200);
+await p.fill('#pl-q', 'https://youtu.be/dQw4w9WgXcQ'); await p.press('#pl-q', 'Enter'); await p.waitForTimeout(200);
+ok(/Save ›/.test(await p.locator('#page [data-act="pl-save"]').textContent()), 'L with the newer app the row says Save ›');
+await p.locator('#page [data-act="pl-save"]').click(); await p.waitForTimeout(900);
+ok((await p.evaluate(() => window.__ytCalls)).includes('openPage:https://m.youtube.com/watch?v=dQw4w9WgXcQ') && await shelf(p, () => !window.__shelf.stack.some((v) => v.name === 'yt')) && await p.locator('#page .item').count() === 3, 'L it opens YouTube\'s page in a sheet inside Shelf, and Done reloads the playlist (' + await p.locator('#page .item').count() + ')');
+await ctx.close();
 
 console.log('\n== P Polish: a broken duplicate channel');
 ({ ctx, p } = await appPage({ fakes: { fresh: false } }));

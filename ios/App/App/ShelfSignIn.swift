@@ -14,7 +14,8 @@ public class ShelfSignInPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "status", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "signIn", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "signOut", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openSettings", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openPage", returnType: CAPPluginReturnPromise)
     ]
 
     // YouTube's own "Sign in" link: Google's page for the YouTube service, landing on YouTube's home page when done
@@ -40,6 +41,24 @@ public class ShelfSignInPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             guard let host = self.bridge?.viewController else { return call.reject("Shelf's screen isn't ready") }
             let sheet = SignInSheet(processPool: self.bridge?.webView?.configuration.processPool) { signedIn in
+                call.resolve(["signedIn": signedIn])
+            }
+            host.present(UINavigationController(rootViewController: sheet), animated: true)
+        }
+    }
+
+    // A YouTube video page in the same signed-in sheet, so YouTube's own Save button can add it to a playlist without
+    // leaving Shelf. Only youtube.com watch pages; settles when Done closes it.
+    @objc func openPage(_ call: CAPPluginCall) {
+        guard let s = call.getString("url"), let url = URL(string: s), url.scheme == "https",
+              url.host == "m.youtube.com" || url.host == "www.youtube.com", url.path == "/watch" else {
+            return call.reject("Only YouTube video pages")
+        }
+        DispatchQueue.main.async {
+            guard let host = self.bridge?.viewController else { return call.reject("Shelf's screen isn't ready") }
+            guard host.presentedViewController == nil else { return call.reject("A sheet is already open") }
+            let name = call.getString("title").flatMap { $0.isEmpty ? nil : $0 } ?? "Save to a playlist"
+            let sheet = SignInSheet(processPool: self.bridge?.webView?.configuration.processPool, start: url, title: name) { signedIn in
                 call.resolve(["signedIn": signedIn])
             }
             host.present(UINavigationController(rootViewController: sheet), animated: true)
@@ -75,11 +94,14 @@ public class ShelfSignInPlugin: CAPPlugin, CAPBridgedPlugin {
 }
 
 // The sheet: Google's sign-in page with a Done button. Closes itself once it reaches YouTube's home page signed in.
+// openPage reuses it for a YouTube video page (start); that one only closes with Done.
 final class SignInSheet: UIViewController, WKNavigationDelegate, WKUIDelegate {
     private let web: WKWebView
     private var finish: ((Bool) -> Void)?
+    private let start: URL?
 
-    init(processPool: WKProcessPool?, finish: @escaping (Bool) -> Void) {
+    init(processPool: WKProcessPool?, start: URL? = nil, title sheetTitle: String = "Sign in to YouTube", finish: @escaping (Bool) -> Void) {
+        self.start = start
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         if let pool = processPool { config.processPool = pool }
@@ -89,7 +111,7 @@ final class SignInSheet: UIViewController, WKNavigationDelegate, WKUIDelegate {
         web.customUserAgent = ShelfSignInPlugin.safariUserAgent
         web.navigationDelegate = self
         web.uiDelegate = self
-        title = "Sign in to YouTube"
+        title = sheetTitle
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
         isModalInPresentation = true // only Done closes it, so Shelf always hears the result
     }
@@ -107,7 +129,7 @@ final class SignInSheet: UIViewController, WKNavigationDelegate, WKUIDelegate {
             web.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             web.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
-        web.load(URLRequest(url: ShelfSignInPlugin.signInURL))
+        web.load(URLRequest(url: start ?? ShelfSignInPlugin.signInURL))
     }
 
     @objc private func doneTapped() {
@@ -123,8 +145,16 @@ final class SignInSheet: UIViewController, WKNavigationDelegate, WKUIDelegate {
 
     // Landed on YouTube's home page (www or m): signed in means we're done
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard let url = webView.url, let host = url.host, host.hasSuffix("youtube.com"), url.path == "/" || url.path.isEmpty else { return }
+        guard start == nil, let url = webView.url, let host = url.host, host.hasSuffix("youtube.com"), url.path == "/" || url.path.isEmpty else { return }
         ShelfSignInPlugin.isSignedIn { if $0 { self.close(signedIn: true) } }
+    }
+
+    // Web links stay in the sheet: no jumping to the YouTube app through a universal link (custom app links are refused)
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if start == nil { return decisionHandler(.allow) } // the sign-in sheet behaves as before
+        let scheme = navigationAction.request.url?.scheme ?? ""
+        guard scheme == "https" || scheme == "http" || scheme == "about" || scheme == "blob" || scheme == "data" else { return decisionHandler(.cancel) }
+        decisionHandler(.allowWithoutTryingAppLink)
     }
 
     // Links that want a new window ("Learn more", help pages) open in this same sheet

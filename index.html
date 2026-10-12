@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="3fb55db797dc">
+<meta name="build" content="3291101cbdf2">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -1178,6 +1178,9 @@ var Native = (function () {
   function signOutYT() { return call('ShelfSignIn', 'signOut').then(function () { return setYT(null); }); }
   // Settings > Shelf, where "Allow Cross-Website Tracking" lets the player see the sign-in
   function openSettings() { return call('ShelfSignIn', 'openSettings'); }
+  // A YouTube video page in a signed-in sheet inside Shelf (YouTube's own Save button); shells before 12 Oct 2026 don't have it
+  var pageSheet = inApp && hasMethod('ShelfSignIn', 'openPage');
+  function openPage(url, title) { return call('ShelfSignIn', 'openPage', { url: url, title: title || '' }); }
 
   // Shelf's phone helpers (ios/App/App/ShelfDevice.swift): screen stays on, Sleep dim, the clock's colour, location.
   // Shells installed before 6 Oct 2026 don't have them; then everything carries on without (web wake lock, a strip under the clock).
@@ -1213,7 +1216,7 @@ var Native = (function () {
     checkYT();
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkYT(); });
   }
-  return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+  return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, get pageSheet() { return pageSheet; }, openPage: openPage, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
     get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,
@@ -3637,7 +3640,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (rows.length) h += '<p class="pnote">' + head + ' · tap one, then YouTube\'s <b>Save</b> and tick ' + esc(v.title) + '</p>';
     h += rows.map(function (r) {
       var inIt = have[r.id];
-      return '<a class="chrow plrow" data-act="pl-save" data-id="' + esc(r.id) + '" href="' + esc(saveHref(r.id)) + '" target="_blank" rel="noopener"><span class="av mono">' + (inIt ? '✓' : '+') + '</span><span class="tx"><b>' + esc(r.title || 'This video') + '</b><small>' + (inIt ? 'Already in it' : (r.channel ? esc(r.channel) + ' · ' : '') + 'Save in YouTube ↗') + '</small></span></a>';
+      return '<a class="chrow plrow" data-act="pl-save" data-id="' + esc(r.id) + '" href="' + esc(saveHref(r.id)) + '" target="_blank" rel="noopener"><span class="av mono">' + (inIt ? '✓' : '+') + '</span><span class="tx"><b>' + esc(r.title || 'This video') + '</b><small>' + (inIt ? 'Already in it' : (r.channel ? esc(r.channel) + ' · ' : '') + (Native.pageSheet ? 'Save ›' : 'Save in YouTube ↗')) + '</small></span></a>';
     }).join('');
     return h + '<button type="button" class="more quiet" data-act="pl-add-close"><span>Done adding</span><span class="mono">×</span></button>';
   }
@@ -3647,6 +3650,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (!Native.inApp) return web;
     return prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + '&shelf=nolock') : app;
   }
+  function plSaved(v) { v.saving = 0; v.addRes = null; v.addQ = ''; if (mypls) mypls.at = 0; loadPlist(v); }
   var plAddSeq = 0;
   function plAddSearch(v, q) {
     v.addQ = q; v.addErr = false;
@@ -4027,7 +4031,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     } else {
       if (Date.now() - lastRefresh > 30 * 60000) refreshAll(false);
       // Back from saving a video to one of Mo's playlists in YouTube: show the playlist as it is now
-      var tv = stack[stack.length - 1]; if (tv && tv.name === 'plist' && tv.saving && Date.now() - tv.saving < 3600e3) { tv.saving = 0; tv.addRes = null; tv.addQ = ''; mypls && (mypls.at = 0); loadPlist(tv); }
+      var tv = stack[stack.length - 1]; if (tv && tv.name === 'plist' && tv.saving && Date.now() - tv.saving < 3600e3) plSaved(tv);
       applyLook();
       renderAll();
       catchUp();
@@ -5135,7 +5139,17 @@ if (typeof module !== 'undefined') module.exports = AI;
       case 'open-plist': openPlist(id, b.getAttribute('data-t') || ''); break;
       case 'pl-add-open': var pav = stack[stack.length - 1]; if (pav && pav.name === 'plist') { pav.adding = true; pav.addFocused = false; pav.addRes = null; pav.addMsg = ''; renderPage(); } break;
       case 'pl-add-close': var pcv = stack[stack.length - 1]; if (pcv && pcv.name === 'plist') { pcv.adding = false; renderPage(); } break;
-      case 'pl-save': var psv = stack[stack.length - 1]; if (psv && psv.name === 'plist') { psv.saving = Date.now(); toast('In YouTube: tap Save, tick ' + psv.title + ', then come back.'); } return;
+      case 'pl-save':
+        var psv = stack[stack.length - 1]; if (!psv || psv.name !== 'plist') return;
+        // Newer iPhone app: YouTube's page slides up inside Shelf; Done brings back the playlist, reloaded
+        if (Native.pageSheet) {
+          e.preventDefault();
+          if (current) { try { player.pauseVideo(); } catch (er0) {} }
+          Native.openPage('https://m.youtube.com/watch?v=' + id, 'Save to ' + psv.title).then(function () { plSaved(psv); }, function (er) { toast("Couldn't open YouTube's page: " + (er && er.message || er), 'warn'); });
+          toast('Tap Save under the video, tick ' + psv.title + ', then Done.');
+          return;
+        }
+        psv.saving = Date.now(); toast('In YouTube: tap Save, tick ' + psv.title + ', then come back.'); return;
       case 'my-playlists': loadMyPls(); openTab({ name: 'mypls' }); break;
       case 'mypls-retry': loadMyPls(true); break;
       case 'pl-course': var plv = stack[stack.length - 1]; openCourseAdd('https://www.youtube.com/playlist?list=' + id, 'med'); if (plv && plv.title) { $('#courseName').value = Courses.shortName(plv.title); $('#courseName').setAttribute('data-auto', '1'); } break;

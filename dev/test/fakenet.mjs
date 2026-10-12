@@ -99,7 +99,8 @@ setTimeout(function(){ window.onYouTubeIframeAPIReady && window.onYouTubeIframeA
 // Phone storage (Preferences) outlives a reload, like the real one. shell.prefFail: every read fails (the switch
 // is localStorage 'fake.prefFail', so a test can heal it before a reload); shell.web: web-view storage to start with.
 // shell.ytSignedIn: YouTube cookies already there (default yes); shell.ytRefuse: Google won't finish the
-// sign-in; shell.oldShell: a shell built before the ShelfSignIn plugin (its plugin list lacks it).
+// sign-in; shell.oldShell: a shell built before the ShelfSignIn plugin (its plugin list lacks it); shell.pageSheet:
+// a shell with openPage (YouTube's page in a sheet; it "closes" straight away, after window.__onPage).
 export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: true }, shell); return `window.__clip = ${JSON.stringify(clip || '')}; window.__httpCalls = []; window.__prefWrites = 0; window.__ytCalls = [];
   (function () {
     if (!sessionStorage.getItem('fake.started')) {
@@ -112,7 +113,8 @@ export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: 
     var keep = function () { sessionStorage.setItem('fake.prefs', JSON.stringify(window.__prefs)); };
     // The sheet's cookie jar outlives a page reload, like the real one
     var yt = { get signedIn() { var v = localStorage.getItem('fake.yt'); return v == null ? ${!!shell.ytSignedIn} : v === '1'; }, set signedIn(b) { localStorage.setItem('fake.yt', b ? '1' : '0'); } };
-    var signIn = ${shell.oldShell ? '{}' : `{ PluginHeaders: [{ name: 'ShelfSignIn', methods: [] }], plugin: {
+    var signIn = ${shell.oldShell ? '{}' : `{ PluginHeaders: [{ name: 'ShelfSignIn', methods: ${shell.pageSheet ? "[{ name: 'openPage', rtype: 'promise' }]" : '[]'} }], plugin: {
+      openPage: async (o) => { window.__ytCalls.push('openPage:' + o.url); if (window.__onPage) window.__onPage(o.url); return { signedIn: yt.signedIn }; },
       status: async () => ({ signedIn: yt.signedIn }),
       signIn: async () => { window.__ytCalls.push('signIn'); if (!${!!shell.ytRefuse}) yt.signedIn = true; return { signedIn: yt.signedIn }; },
       signOut: async () => { window.__ytCalls.push('signOut'); yt.signedIn = false; return { signedIn: false }; },
