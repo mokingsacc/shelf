@@ -20,5 +20,7 @@ jobs:
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 && code=0 || code=$?
           tail -40 build.log
           # Compile errors as annotations too, so they show on the check without opening the log
-          { grep -iE "error|failed" build.log || tail -5 build.log; } | grep -v "^\s*$" | sort -u | head -12 | while IFS= read -r l; do echo "::error::${l#*/ios/}"; done
+          if [ "$code" != 0 ]; then
+            { grep -iE "error|failed" build.log || tail -5 build.log; } | grep -v "^\s*$" | sort -u | head -12 | while IFS= read -r l; do echo "::error::${l#*/ios/}"; done
+          fi
           exit $code
