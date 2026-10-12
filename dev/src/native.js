@@ -158,8 +158,24 @@ var Native = (function () {
   function keepAwake(on) { return dev('keepAwake', { on: !!on }); }
   function dim(on) { return dev('dim', { on: !!on }); }
   function statusBar(style) { return dev('statusBar', { style: style }); }
-  // A youtube.com page read as the signed-in account (null when this copy of the app can't)
+  // A youtube.com page read as the signed-in account (null when this copy of the app can't): {status, data, signedIn, host}
   function youtubeGet(url) { return device ? call('ShelfDevice', 'youtubeGet', { url: url }) : Promise.resolve(null); }
+  // Shells from 12 Oct 2026 can renew the YouTube sign-in by themselves: a hidden web view opens YouTube's sign-in
+  // link on the same cookie jar for a few seconds (signed in to Google still, YouTube signs in again with no typing).
+  // Settles with {signedIn} (null when this shell can't, or it took over 30 s). The method is checked in the
+  // shell's plugin list first: the bridge never answers a call to a method it doesn't know.
+  function hasMethod(plugin, method) {
+    try { return (Cap.PluginHeaders || []).some(function (h) { return h.name === plugin && (h.methods || []).some(function (m) { return m.name === method; }); }); } catch (e) { return false; }
+  }
+  var canRefreshYT = device && hasMethod('ShelfDevice', 'youtubeRefresh');
+  function youtubeRefresh() {
+    if (!canRefreshYT) return Promise.resolve(null);
+    return new Promise(function (res) {
+      var done = false, end = function (v) { if (!done) { done = true; res(v); } };
+      setTimeout(function () { end(null); }, 30000);
+      call('ShelfDevice', 'youtubeRefresh').then(end, function () { end(null); });
+    });
+  }
   function locate() { return device ? call('ShelfDevice', 'locate') : Promise.reject(new Error('This copy of the Shelf app has no location yet.')); }
 
   if (inApp) {
@@ -173,5 +189,5 @@ var Native = (function () {
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
     get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,
-    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate, youtubeGet: youtubeGet };
+    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate, youtubeGet: youtubeGet, youtubeRefresh: youtubeRefresh, canRefreshYT: canRefreshYT };
 })();

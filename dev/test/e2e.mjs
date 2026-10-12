@@ -728,8 +728,8 @@ await p.locator('[data-act="yt-report"]').click(); await p.waitForTimeout(500);
 ok(/Copied/.test(await p.locator('#toast').textContent()), 'R the self-check copies a YouTube report for Claude: ' + await p.locator('#toast').textContent());
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 // YouTube ended Shelf's sign-in on its side: the page has no data (a Google sign-in page) -> the card says so, the self-check offers Sign in again
-await p.evaluate(() => { window.__hist = { html: '<html><title>Sign in - Google Accounts</title>' + 'x'.repeat(5000) + '</html>' }; window.__shelf.refreshLastYT(true); }); await p.waitForTimeout(300);
-ok(/signed out/i.test(await p.locator('#ytLastK').textContent()) && /sign in again/i.test(await p.locator('#ytLastT').textContent()), 'R when YouTube signs Shelf out, Last in YouTube says so instead of showing an old video: ' + await p.locator('#ytLast').textContent());
+await p.evaluate(() => { window.__hist = { html: '<html><title>Sign in - Google Accounts</title>' + 'x'.repeat(5000) + '</html>' }; window.__devCalls.length = 0; window.__shelf.refreshLastYT(true); }); await p.waitForTimeout(300);
+ok(/signed out/i.test(await p.locator('#ytLastK').textContent()) && /sign in again/i.test(await p.locator('#ytLastT').textContent()) && (await devCalls()).includes('youtubeRefresh'), 'R when YouTube signs Shelf out (page with no data, renewal doesn\'t help), Last in YouTube says so instead of showing an old video: ' + await p.locator('#ytLast').textContent());
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
 ok(await p.locator('#checkProblems [data-act="yt-resign"]').count() === 1, 'R and the self-check lists it as a problem with Sign in again');
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
@@ -737,6 +737,34 @@ await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLas
 ok(/PLAGUE/.test(await p.locator('#ytLastT').textContent()) && await shelf(p, () => localStorage.getItem('shelf.ytout') === '0'), 'R once the history loads again, the card is back to the video');
 await p.locator('#ytLast').click(); await p.waitForTimeout(1500);
 ok(await shelf(p, () => window.__lastId === 'eeeeeeeeeee' && Math.abs(window.__lastStart - 890) < 1), 'R tapping it plays that video from 14:53 in Shelf (3 s back, like every resume)');
+await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
+// YouTube stops accepting the sign-in (its page redirects to Google): this shell renews it by itself, then reads again
+const signinPage = { status: 302, data: '', signedIn: true, host: 'accounts.google.com' };
+await p.evaluate(([sp, h]) => { window.__hist = [sp, { html: h.replace(/PLAGUE Leaks From KNOWN Lab/, 'Secret AI Disaster Plans') }]; window.__refresh = { signedIn: true }; window.__devCalls.length = 0; window.__shelf.healAgain(); window.__shelf.refreshLastYT(true); }, [signinPage, ytHist]); await p.waitForTimeout(400);
+ok(/Secret AI Disaster Plans/.test(await p.locator('#ytLastT').textContent()) && (await devCalls()).join(',') === 'youtubeGet:https://www.youtube.com/feed/history,youtubeRefresh,youtubeGet:https://www.youtube.com/feed/history' && await shelf(p, () => localStorage.getItem('shelf.ytout') === '0'), 'R a lapsed sign-in heals itself: renewed in the shell, read again, the card moves on: ' + (await devCalls()).join(', '));
+// Google wouldn't renew it (signed out of Google too): the card says so; a tap opens the sign-in sheet without wiping the cookies first
+await p.evaluate((sp) => { window.__hist = sp; window.__refresh = { signedIn: false }; window.__devCalls.length = 0; window.__ytCalls.length = 0; window.__shelf.healAgain(); window.__shelf.refreshLastYT(true); }, signinPage); await p.waitForTimeout(400);
+ok(/signed out/i.test(await p.locator('#ytLastK').textContent()) && (await devCalls()).join(',') === 'youtubeGet:https://www.youtube.com/feed/history,youtubeRefresh', 'R when Google won\'t renew it, the card says signed out (no second read): ' + (await devCalls()).join(', '));
+await p.evaluate((sp) => { window.__devCalls.length = 0; window.__shelf.refreshLastYT(true); }, signinPage); await p.waitForTimeout(300);
+ok((await devCalls()).join(',') === 'youtubeGet:https://www.youtube.com/feed/history', 'R the renewal is tried at most once in 15 minutes: ' + (await devCalls()).join(', '));
+await p.locator('#ytLast').click(); await p.waitForTimeout(300);
+ok(await shelf(p, () => window.__ytCalls.join(',')) === 'signIn', 'R tapping it opens the sign-in sheet straight away (no sign-out first, so Google needs nothing typed while its own sign-in holds): ' + await shelf(p, () => window.__ytCalls.join(',')));
+// A newer build on the site: back in Shelf with nothing going on, the page reloads itself
+await p.evaluate(() => { window.__notReloaded = 1; document.querySelector('meta[name="build"]').content = 'older'; window.__shelf.checkBuild(); });
+await p.waitForFunction(() => window.__shelf && !window.__notReloaded, null, { timeout: 8000 }).catch(() => {});
+ok(await shelf(p, () => !window.__notReloaded && !!window.__shelf), 'R a newer build on the site reloads the page when Shelf comes back idle');
+await ctx.close();
+
+console.log('\n== R2 Last in YouTube on a shell from before the sign-in renewal');
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true, oldDevice: true } }));
+await settle(p);
+await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, ytHist); await p.waitForTimeout(300);
+ok(/PLAGUE/.test(await p.locator('#ytLastT').textContent()), 'R2 the card works as before');
+await p.evaluate((sp) => { window.__hist = sp; window.__devCalls.length = 0; window.__shelf.refreshLastYT(true); }, signinPage); await p.waitForTimeout(400);
+ok(/signed out/i.test(await p.locator('#ytLastK').textContent()) && !(await devCalls()).some((c) => c === 'youtubeRefresh') && await shelf(p, () => localStorage.getItem('shelf.ytout') === '1'), 'R2 without the renewal, a lapsed sign-in goes straight to "signed out · tap to sign in again": ' + (await devCalls()).join(', '));
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(/YouTube signed Shelf out/.test(await p.locator('#checkProblems').textContent()) && !/tried to renew/.test(await p.locator('#checkProblems').textContent()), 'R2 the self-check says so without mentioning a renewal this shell can\'t do');
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 await ctx.close();
 
 console.log('\n== S Subscriptions on Search, removing courses');

@@ -10,9 +10,13 @@ import Capacitor
 // - statusBar: the clock and battery in dark or light, to match Shelf's day or night look
 // - locate: where the phone is, once, for sunrise and sunset (asks the first time)
 // - youtubeGet: a youtube.com page read as the signed-in account (the sign-in from Sign in to YouTube), so Shelf
-//   can see in the watch history where the YouTube app stopped a video after Play locked
+//   can see in the watch history where the YouTube app stopped a video after Play locked. Cookies YouTube renews
+//   in its answer go back into the jar, like a browser keeps them (sending the old ones on ends the sign-in)
+// - youtubeRefresh: a hidden, silent web view opens YouTube's own sign-in link with the same cookie jar for a few
+//   seconds. Signed in to Google still, YouTube's sign-in renews by itself with no typing; and YouTube's own page
+//   refreshes the cookies the way a browser would. Every few hours on activation, and when the page asks
 @objc(ShelfDevicePlugin)
-public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate {
+public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate, WKNavigationDelegate {
     public let identifier = "ShelfDevicePlugin"
     public let jsName = "ShelfDevice"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -20,18 +24,24 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
         CAPPluginMethod(name: "dim", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "statusBar", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "locate", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "youtubeGet", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "youtubeGet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "youtubeRefresh", returnType: CAPPluginReturnPromise)
     ]
 
     private var awake = false
     private var savedBrightness: CGFloat?
     private var locator: CLLocationManager?
     private var waiting: [CAPPluginCall] = []
+    private var keeper: WKWebView?
+    private var keeperDone: [(Bool) -> Void] = []
+    private var keeperTimer: DispatchWorkItem?
+    private static let refreshKey = "shelf.ytRefreshAt"
 
     override public func load() {
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(leaving), name: UIApplication.willResignActiveNotification, object: nil)
         nc.addObserver(self, selector: #selector(back), name: UIApplication.didBecomeActiveNotification, object: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.refreshSignIn(force: false) }
     }
 
     private var screen: UIScreen {
@@ -47,7 +57,75 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
         }
     }
     @objc private func back() {
-        DispatchQueue.main.async { UIApplication.shared.isIdleTimerDisabled = self.awake }
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = self.awake
+            self.refreshSignIn(force: false)
+        }
+    }
+
+    // ---------- Keeping the YouTube sign-in alive ----------
+    // Opens YouTube's sign-in link (Google's page with passive=true: signed in to Google still, it lands on YouTube's
+    // home page signed in without asking anything) in a hidden web view on Shelf's cookie jar, lets YouTube's own
+    // scripts run a few seconds, then takes it down. At most every 3 hours unless forced. Nothing can play in it
+    // (media needs a tap) and nothing shows. done(true) when the page it reached says it's signed in.
+    private func refreshSignIn(force: Bool, done: ((Bool) -> Void)? = nil) {
+        let last = UserDefaults.standard.double(forKey: ShelfDevicePlugin.refreshKey)
+        if !force && Date().timeIntervalSince1970 - last < 3 * 3600 { done?(false); return }
+        if keeper != nil { if let d = done { keeperDone.append(d) }; return }
+        ShelfSignInPlugin.isSignedIn { signedIn in
+            guard signedIn else { done?(false); return }
+            DispatchQueue.main.async {
+                guard self.keeper == nil, let host = self.bridge?.viewController?.view else { done?(false); return }
+                let config = WKWebViewConfiguration()
+                config.websiteDataStore = .default()
+                if let pool = self.bridge?.webView?.configuration.processPool { config.processPool = pool }
+                config.mediaTypesRequiringUserActionForPlayback = .all
+                config.allowsInlineMediaPlayback = false
+                let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 4, height: 4), configuration: config)
+                web.customUserAgent = ShelfSignInPlugin.safariUserAgent // the browser Google saw at sign-in
+                web.alpha = 0.01
+                web.isUserInteractionEnabled = false
+                web.navigationDelegate = self
+                host.addSubview(web)
+                self.keeper = web
+                if let d = done { self.keeperDone.append(d) }
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: ShelfDevicePlugin.refreshKey)
+                web.load(URLRequest(url: ShelfSignInPlugin.signInURL))
+                // Never longer than 20 s, whatever Google shows (a sign-in form means the Google sign-in ended too)
+                let timer = DispatchWorkItem { self.endKeeper(ok: false) }
+                self.keeperTimer = timer
+                DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timer)
+            }
+        }
+    }
+
+    // The hidden web view reached a page: on youtube.com, ask YouTube's own config whether it's signed in
+    public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard webView === keeper, let host = webView.url?.host, host.hasSuffix("youtube.com") else { return }
+        webView.evaluateJavaScript("!!(window.ytcfg && ytcfg.get && ytcfg.get('LOGGED_IN'))") { v, _ in
+            let ok = (v as? Bool) ?? false
+            // A few seconds more on the page, so YouTube's scripts finish renewing the cookies
+            DispatchQueue.main.asyncAfter(deadline: .now() + (ok ? 4 : 0)) { self.endKeeper(ok: ok) }
+        }
+    }
+
+    private func endKeeper(ok: Bool) {
+        guard let web = keeper else { return }
+        keeperTimer?.cancel()
+        keeperTimer = nil
+        web.stopLoading()
+        web.navigationDelegate = nil
+        web.removeFromSuperview()
+        keeper = nil
+        let waiting = keeperDone
+        keeperDone = []
+        waiting.forEach { $0(ok) }
+    }
+
+    @objc func youtubeRefresh(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.refreshSignIn(force: true) { call.resolve(["signedIn": $0]) }
+        }
     }
 
     @objc func keepAwake(_ call: CAPPluginCall) {
@@ -128,8 +206,41 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
         finish { $0.reject("The phone couldn't work out where you are: " + error.localizedDescription, "failed") }
     }
 
+    // ---------- Reading youtube.com as the account ----------
     // youtube.com pages only, sent with the account's YouTube cookies from the web view's jar
     static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+
+    // Cookies a youtube.com answer sets (renewed sign-in tokens, mostly) go into both jars Shelf has: the web view's
+    // (the sheet's sign-in, the player) and iOS's own (Capacitor's native reads), so no read sends old ones later
+    static func keepCookies(from http: HTTPURLResponse) {
+        guard let u = http.url, u.host?.hasSuffix("youtube.com") == true, let fields = http.allHeaderFields as? [String: String] else { return }
+        let fresh = HTTPCookie.cookies(withResponseHeaderFields: fields, for: u).filter { $0.domain.hasSuffix("youtube.com") }
+        if fresh.isEmpty { return }
+        DispatchQueue.main.async {
+            let store = WKWebsiteDataStore.default().httpCookieStore
+            for c in fresh {
+                store.setCookie(c)
+                HTTPCookieStorage.shared.setCookie(c)
+            }
+        }
+    }
+
+    // Follows a redirect only while it stays on www.youtube.com (with the same cookies). One that leaves for Google's
+    // sign-in means YouTube no longer accepts the sign-in: the page gets the redirect itself (3xx) and where it went,
+    // instead of Google's sign-in page, and YouTube's cookies never go to another site
+    final class Hop: NSObject, URLSessionTaskDelegate {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+            ShelfDevicePlugin.keepCookies(from: response)
+            guard request.url?.host == "www.youtube.com" else { return completionHandler(nil) }
+            var next = request
+            next.httpShouldHandleCookies = false
+            if let cookie = task.originalRequest?.value(forHTTPHeaderField: "Cookie") { next.setValue(cookie, forHTTPHeaderField: "Cookie") }
+            completionHandler(next)
+        }
+    }
+    private static let hop = Hop()
+    private static let session = URLSession(configuration: .default, delegate: hop, delegateQueue: nil)
+
     @objc func youtubeGet(_ call: CAPPluginCall) {
         guard let s = call.getString("url"), let url = URL(string: s), url.scheme == "https", url.host == "www.youtube.com" else {
             return call.reject("Only youtube.com pages")
@@ -142,10 +253,15 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
                 for (k, v) in HTTPCookie.requestHeaderFields(with: mine) { req.setValue(v, forHTTPHeaderField: k) }
                 req.setValue(ShelfDevicePlugin.desktopUserAgent, forHTTPHeaderField: "User-Agent")
                 req.setValue("en-GB,en;q=0.9", forHTTPHeaderField: "Accept-Language")
-                URLSession.shared.dataTask(with: req) { data, resp, err in
+                ShelfDevicePlugin.session.dataTask(with: req) { data, resp, err in
                     if let err = err { return call.reject("YouTube didn't answer: " + err.localizedDescription) }
-                    let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-                    call.resolve(["status": status, "data": String(decoding: data ?? Data(), as: UTF8.self), "signedIn": mine.contains { ShelfSignInPlugin.loginCookies.contains($0.name) }])
+                    let http = resp as? HTTPURLResponse
+                    if let http = http { ShelfDevicePlugin.keepCookies(from: http) }
+                    let status = http?.statusCode ?? 0
+                    // Where the answer came from, or where a redirect wanted to go (accounts.google.com: sign-in ended)
+                    let away = (http?.allHeaderFields["Location"] as? String).flatMap { URL(string: $0, relativeTo: http?.url) }?.host
+                    let host = (status >= 300 && status < 400 ? away : nil) ?? http?.url?.host ?? ""
+                    call.resolve(["status": status, "data": String(decoding: data ?? Data(), as: UTF8.self), "signedIn": mine.contains { ShelfSignInPlugin.loginCookies.contains($0.name) }, "host": host])
                 }.resume()
             }
         }

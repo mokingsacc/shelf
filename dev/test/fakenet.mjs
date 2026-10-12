@@ -134,9 +134,13 @@ export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: 
         return { status: r.status, url: url, headers: { 'content-type': ct }, data: /json/.test(ct) ? JSON.parse(t) : t };
       } } } };
     if (signIn.plugin) { window.Capacitor.PluginHeaders = signIn.PluginHeaders; window.Capacitor.Plugins.ShelfSignIn = signIn.plugin; }
-    // shell.device: a shell with Shelf's phone helpers (ShelfDevice: keepAwake, dim, statusBar, locate); calls land in window.__devCalls
+    // shell.device: a shell with Shelf's phone helpers (ShelfDevice: keepAwake, dim, statusBar, locate, youtubeGet, youtubeRefresh);
+    // calls land in window.__devCalls. shell.oldDevice: a shell from before youtubeRefresh (its plugin list lacks the method)
     window.__devCalls = [];
+    if (${!!shell.device}) (window.Capacitor.PluginHeaders = window.Capacitor.PluginHeaders || []).push({ name: 'ShelfDevice', methods: ['keepAwake', 'dim', 'statusBar', 'locate', 'youtubeGet'].concat(${shell.oldDevice ? '[]' : "['youtubeRefresh']"}).map((n) => ({ name: n, rtype: 'promise' })) });
     if (${!!shell.device}) window.Capacitor.Plugins.ShelfDevice = { keepAwake: async (o) => { window.__devCalls.push('keepAwake:' + o.on); return o; }, dim: async (o) => { window.__devCalls.push('dim:' + o.on); return o; },
+      // The hidden sign-in renewal: window.__refresh = { signedIn } (default signed in), or 'hang' for a shell that never answers
+      youtubeRefresh: async () => { window.__devCalls.push('youtubeRefresh'); if (window.__refresh === 'hang') return new Promise(() => {}); return Object.assign({ signedIn: true }, window.__refresh || {}); },
       statusBar: async (o) => { window.__devCalls.push('statusBar:' + o.style); return o; }, locate: async () => { window.__devCalls.push('locate'); return { lat: 53.4808, lon: -2.2426 }; },
       // Watch history: window.__hist = { signedIn, html } (or a list, one per call)
       youtubeGet: async (o) => { window.__devCalls.push('youtubeGet:' + o.url); if (o.url.includes('/feed/channels') && window.__subs) return { status: 200, data: window.__subs, signedIn: true }; if (o.url.includes('/feed/playlists') && window.__mypls) return window.__mypls === 'out' ? { status: 200, data: '', signedIn: false } : { status: 200, data: window.__mypls, signedIn: true }; const pm = o.url.indexOf('/playlist?list=') >= 0 ? o.url.split('list=')[1] : ''; if (pm) return window.__privpl && window.__privpl[pm] ? { status: 200, data: window.__privpl[pm], signedIn: true } : { status: 404, data: '', signedIn: true }; const h = Array.isArray(window.__hist) ? (window.__hist.length > 1 ? window.__hist.shift() : window.__hist[0]) : window.__hist; return h ? { status: 200, data: h.html || '', signedIn: h.signedIn !== false } : { status: 200, data: '', signedIn: false }; } };
