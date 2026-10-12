@@ -727,6 +727,14 @@ await p.locator('#statusBtn').click(); await p.waitForTimeout(150); await p.loca
 await p.locator('[data-act="yt-report"]').click(); await p.waitForTimeout(500);
 ok(/Copied/.test(await p.locator('#toast').textContent()), 'R the self-check copies a YouTube report for Claude: ' + await p.locator('#toast').textContent());
 await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+// YouTube ended Shelf's sign-in on its side: the page has no data (a Google sign-in page) -> the card says so, the self-check offers Sign in again
+await p.evaluate(() => { window.__hist = { html: '<html><title>Sign in - Google Accounts</title>' + 'x'.repeat(5000) + '</html>' }; window.__shelf.refreshLastYT(true); }); await p.waitForTimeout(300);
+ok(/signed out/i.test(await p.locator('#ytLastK').textContent()) && /sign in again/i.test(await p.locator('#ytLastT').textContent()), 'R when YouTube signs Shelf out, Last in YouTube says so instead of showing an old video: ' + await p.locator('#ytLast').textContent());
+await p.locator('#statusBtn').click(); await p.waitForTimeout(150);
+ok(await p.locator('#checkProblems [data-act="yt-resign"]').count() === 1, 'R and the self-check lists it as a problem with Sign in again');
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, ytHist); await p.waitForTimeout(300);
+ok(/PLAGUE/.test(await p.locator('#ytLastT').textContent()) && await shelf(p, () => localStorage.getItem('shelf.ytout') === '0'), 'R once the history loads again, the card is back to the video');
 await p.locator('#ytLast').click(); await p.waitForTimeout(1500);
 ok(await shelf(p, () => window.__lastId === 'eeeeeeeeeee' && Math.abs(window.__lastStart - 890) < 1), 'R tapping it plays that video from 14:53 in Shelf (3 s back, like every resume)');
 await ctx.close();
