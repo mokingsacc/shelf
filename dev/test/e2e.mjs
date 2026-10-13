@@ -786,14 +786,29 @@ await p.locator('#page [data-act="subch-tab"][data-id="playlists"]').click(); aw
 const plRows = await p.locator('#page .plrow').count();
 ok(plRows >= 3 && await p.locator('#page [data-act="subch-tab"][data-id="playlists"][aria-pressed="true"]').count() === 1, 'S the Playlists tab lists the channel\'s playlists (' + plRows + ')');
 if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + '/pls.png' });
-const plName = (await p.locator('#page .plrow b').first().textContent()).trim();
-await p.locator('#page .plrow').first().click(); await p.waitForTimeout(800);
+// A playlist that isn't a course (a course plays on through its unticked episodes instead)
+const plRow = p.locator('#page .plrow').filter({ hasNotText: 'in Courses' }).first();
+const plName = (await plRow.locator('b').textContent()).trim();
+await plRow.click(); await p.waitForTimeout(800);
 const plItems = await p.locator('#page .item').count();
 ok(await p.locator('#page [data-act="pl-add-open"]').count() === 0, 'S someone else\'s playlist has no + Add a video');
 ok(plItems > 0 && (await p.locator('#page h1').textContent()).trim().length > 0 && await p.locator('#page [data-act="pl-course"], #page [data-act="pl-open-course"]').count() === 1, 'S tapping one shows its videos (' + plItems + ' showing) with a Courses button: ' + plName);
 if (process.env.SHOTS) await p.screenshot({ path: process.env.SHOTS + '/plist.png' });
 await p.locator('#page .item').first().click(); await p.waitForTimeout(1500);
 ok(await shelf(p, () => !!window.__shelf.current), 'S a playlist video plays in Shelf');
+// Playlist mode: Next beside Mark, and the end counts down into the next video in the playlist's order
+ok(plItems > 1 && await p.locator('#vNextBtn').isVisible() && new RegExp('Next: 2 of ' + plItems).test(await p.locator('#vNextBtn').textContent()), 'P a playlist video offers the next one: ' + await p.locator('#vNextBtn').textContent());
+const plFirst = await shelf(p, () => window.__shelf.current);
+const plSecond = await p.locator('#page .item').nth(1).getAttribute('data-key').catch(() => null);
+await p.evaluate(() => window.__fake.seekTo(600)); await p.waitForTimeout(300);
+ok(await p.locator('#vNext').isVisible() && /Next up/.test(await p.locator('#vNext').textContent()) && /Plays in/.test(await p.locator('#vNext').textContent()), 'P the end counts down to the next video: ' + (await p.locator('#vNext').textContent()).slice(0, 80));
+await p.waitForTimeout(5600);
+const plNow = await shelf(p, () => window.__shelf.current);
+ok(plNow && plNow !== plFirst && (!plSecond || plNow === plSecond), 'P it plays the next video by itself (' + plNow + ')');
+ok(/Next: 3 of /.test(await p.locator('#vNextBtn').textContent()) || plItems < 3, 'P and keeps going in playlist order');
+await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
+ok(await p.locator('#page .fold').filter({ hasText: 'Watched' }).count() === 0 && (await p.locator('#page .item').first().textContent()).includes('watched'), 'P the playlist keeps its order: the watched first video stays at the top, no Watched section');
+await p.locator('#page .item').first().click(); await p.waitForTimeout(800);
 await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
 await p.locator('#page [data-act="back"]').click(); await p.waitForTimeout(300);
 await p.locator('#page [data-act="back"]').click(); await p.waitForTimeout(300);

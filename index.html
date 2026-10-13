@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="3291101cbdf2">
+<meta name="build" content="f740cf659926">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -3382,7 +3382,14 @@ if (typeof module !== 'undefined') module.exports = AI;
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(document); });
   var chanNew = {}, confirmRemove = null; // keys that were new when the channel page opened
   // Unwatched first (the ones you're in the middle of on top), then the rest folded: at most 8 showing
-  function listHTML(items, scope, opts, label) {
+  function listHTML(items, scope, opts, label, inOrder) {
+    // A playlist stays in its own order: watched videos keep their place, the rest folds under More
+    if (inOrder) {
+      var top = items.slice(0, 12), rest = items.slice(12);
+      return '<h2 class="subh"><span>' + label + '</span><span class="mono">' + items.length + '</span></h2>' +
+        top.map(function (e) { return itemHTML(e, scope, opts && opts(e)); }).join('') +
+        fold('More', rest.map(function (e) { return itemHTML(e, scope, opts && opts(e)); }).join(''), rest.length);
+    }
     var todo = items.filter(function (e) { return !isDoneE(e); }), done = items.filter(isDoneE), h = '';
     var shown = todo.slice(0, 8), older = todo.slice(8);
     h += '<h2 class="subh"><span>' + label + '</span><span class="mono">' + todo.length + '</span></h2>';
@@ -3491,7 +3498,7 @@ if (typeof module !== 'undefined') module.exports = AI;
         (v.mine ? (v.adding ? '<form class="sform" id="pladdForm"><input id="pl-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search, or paste a link" value="' + esc(v.addQ || '') + '" aria-label="Find a video to add"><button type="submit">Go</button></form>' : '<button type="button" class="btn addch" data-act="pl-add-open">+ Add a video</button>') : ''));
       if (v.mine && v.adding) html += plAddHTML(v);
       if (v.msg) html += '<p class="pnote' + (v.err ? ' err' : '') + '">' + esc(v.msg) + '</p>';
-      if (pv.length) html += listHTML(pv.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.chId || '', srcName: v.chTitle || v.title, dur: x.dur || 0, thumb: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg', list: v.id }; }), 'p', null, 'Videos');
+      if (pv.length) html += listHTML(pv.map(function (x) { return { type: 'video', key: x.id, title: x.title, src: v.chId || '', srcName: v.chTitle || v.title, dur: x.dur || 0, thumb: 'https://i.ytimg.com/vi/' + x.id + '/mqdefault.jpg', list: v.id }; }), 'p', null, 'Videos', true);
     } else if (v.name === 'marks') {
       html += marksPage();
     }
@@ -3689,6 +3696,7 @@ if (typeof module !== 'undefined') module.exports = AI;
       function (e) { return signedInList(pid).catch(function () { throw e; }); }).then(function (r) {
       if (r.signed) v.priv = true;
       var seen = {}; v.list = (r.items || []).filter(function (x) { if (seen[x.id]) return false; seen[x.id] = 1; return true; });
+      rememberPl(v);
       v.msg = v.list.length ? (r.partial ? 'YouTube sent only the first ' + v.list.length + ' videos.' : v.priv ? 'A private playlist: it plays here, but Courses can only track public ones.' : '') : 'This playlist has no videos Shelf can play.'; v.err = !v.list.length;
       if (stack[stack.length - 1] === v) renderPage();
     }, function (e) { v.msg = (e && e.message) || "Couldn't load the playlist."; v.err = true; if (stack[stack.length - 1] === v) renderPage(); });
@@ -3856,7 +3864,9 @@ if (typeof module !== 'undefined') module.exports = AI;
         saveVideos();
         if (inCourse) cs.tick(inCourse.course.id, w.id, true);
         // In a course: offer the next episode instead of closing (unless the sleep timer said "end")
+        var inPl = !inCourse && plOf(w.id);
         if (inCourse && !endTimer) { showNextUp(inCourse); renderAll(); }
+        else if (inPl && !endTimer) { showPlNext(inPl); renderAll(); }
         else { closeVideo(true); toast(inCourse ? 'Finished and ticked. Sleep well.' : 'Finished. It stays in its channel, marked as watched.'); }
       } else if (e.data === S.PAUSED) capture(true);
     }
@@ -5081,6 +5091,56 @@ if (typeof module !== 'undefined') module.exports = AI;
     box.hidden = false;
     box.innerHTML = rulerHTML(w.course, cs.progress(w.course.id), cs.items(w.course.id));
   }
+  // Playlists (not courses) play on in order, like YouTube's playlist mode. Shelf keeps the last few opened
+  // playlists' video order so a video started from one knows what comes next, even after a restart.
+  var PLQ_KEY = 'shelf.plq', plq = load(PLQ_KEY, {});
+  function rememberPl(v) {
+    if (!v.list || !v.list.length) return;
+    plq[v.id] = { title: v.title || 'Playlist', at: Date.now(), items: v.list.map(function (x) { return { id: x.id, title: x.title || '', dur: x.dur || 0 }; }) };
+    var ids = Object.keys(plq).sort(function (a, b) { return plq[b].at - plq[a].at; });
+    ids.slice(6).forEach(function (k) { delete plq[k]; });
+    store(PLQ_KEY, plq);
+  }
+  function plOf(vid) {
+    if (courseOf(vid)) return null;
+    var v = videos[vid], p = v && v.list && plq[v.list];
+    if (!p) return null;
+    for (var i = 0; i < p.items.length; i++) if (p.items[i].id === vid) return { id: v.list, pl: p, i: i };
+    return null;
+  }
+  function plNext(w) { var k = w.i + 1; return k < w.pl.items.length ? { x: w.pl.items[k], i: k } : null; }
+  function playPl(pid, vid) {
+    var p = plq[pid], x = p && p.items.filter(function (y) { return y.id === vid; })[0];
+    if (!x) return;
+    p.at = Date.now(); store(PLQ_KEY, plq);
+    openVideo({ id: vid, title: x.title, dur: x.dur, list: pid });
+  }
+  // The 5-second "Plays in" countdown under Next up; any other video, Stop or a closed player ends it
+  function countdown(box, go) {
+    var left = 5, vid = current;
+    var step = function () {
+      var cdn = $('#vNext .cdn');
+      if (current !== vid || !cdn || box.hidden) return;
+      if (document.visibilityState !== 'visible') { nextTimer = setTimeout(step, 1000); return; }
+      if (--left <= 0) { go(); return; }
+      cdn.textContent = 'Plays in ' + left + ' s'; nextTimer = setTimeout(step, 1000);
+    };
+    nextTimer = setTimeout(step, 1000);
+  }
+  function showPlNext(w) {
+    var n = plNext(w), box = $('#vNext'), auto = prefs.autoNext !== false && n && document.visibilityState === 'visible';
+    clearTimeout(nextTimer);
+    if (n) box.innerHTML = '<small>Next up · ' + esc(w.pl.title) + ' · ' + (n.i + 1) + ' of ' + w.pl.items.length + '</small><b>' + esc(n.x.title || 'Next video') + (n.x.dur ? ' · ' + Core.fmt(n.x.dur) : '') + '</b>' +
+      '<span class="cdn">' + (auto ? 'Plays in 5 s' : '') + '</span>' +
+      '<div class="twin"><button type="button" class="act solid" data-act="pl-play" data-id="' + esc(w.id) + '" data-v="' + esc(n.x.id) + '"><span>Play next</span>' + I.play + '</button>' +
+      (auto ? '<button type="button" class="act" data-act="next-cancel">Stop</button>' : '<button type="button" class="act" data-act="close-video">Done for now</button>') + '</div>' +
+      '<button type="button" class="auto" data-act="auto-toggle">Autoplay next: ' + (prefs.autoNext === false ? 'off' : 'on') + '</button>';
+    else box.innerHTML = '<small>' + esc(w.pl.title) + '</small><b>End of the playlist</b><div class="twin"><button type="button" class="act solid" data-act="close-video">Done</button></div>';
+    box.hidden = false;
+    $('#vNextBtn').hidden = true;
+    try { box.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {}
+    if (auto) countdown(box, function () { playPl(w.id, n.x.id); });
+  }
   // The next unticked episode after position i (or the first gap earlier on)
   function nextAfter(c, i) {
     var arr = cs.items(c.id);
@@ -5090,10 +5150,16 @@ if (typeof module !== 'undefined') module.exports = AI;
   }
   // In the player: "Next: 1123 ▶" beside Mark, inside a course
   function renderNextBtn(vid) {
-    var w = courseOf(vid), n = w && nextAfter(w.course, w.i), b = $('#vNextBtn');
-    b.hidden = !n; layoutTwin();
+    var w = courseOf(vid), n = w && nextAfter(w.course, w.i), b = $('#vNextBtn'), p = !w && plOf(vid), pn = p && plNext(p);
+    b.hidden = !n && !pn; layoutTwin();
+    if (pn) {
+      b.setAttribute('data-act', 'pl-play'); b.setAttribute('data-id', p.id); b.setAttribute('data-v', pn.x.id);
+      b.innerHTML = '<span>Next: ' + (pn.i + 1) + ' of ' + p.pl.items.length + '</span>' + I.play;
+      b.setAttribute('aria-label', 'Play next in ' + p.pl.title + ': ' + (pn.x.title || 'next video'));
+      return;
+    }
     if (!n) return;
-    b.setAttribute('data-id', w.course.id); b.setAttribute('data-v', n.x.id);
+    b.setAttribute('data-act', 'ep-play'); b.setAttribute('data-id', w.course.id); b.setAttribute('data-v', n.x.id);
     b.innerHTML = '<span>Next: ' + esc(epLabel(n.x, n.i)) + '</span>' + I.play;
     b.setAttribute('aria-label', 'Play next: ' + epLabel(n.x, n.i) + ' ' + shortTitle(n.x.title));
   }
@@ -5111,17 +5177,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     renderPlayerCourse(w.course.id && cs.items(c.id)[w.i] ? cs.items(c.id)[w.i].id : '');
     try { box.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {}
     // A question-bank session flows on: the next one starts after a 5-second countdown (Stop, or turn it off)
-    if (auto) {
-      var left = 5, vid = current;
-      var step = function () {
-        var cdn = $('#vNext .cdn');
-        if (current !== vid || !cdn || box.hidden) return;
-        if (document.visibilityState !== 'visible') { nextTimer = setTimeout(step, 1000); return; }
-        if (--left <= 0) { playEp(c.id, n.x.id); return; }
-        cdn.textContent = 'Plays in ' + left + ' s'; nextTimer = setTimeout(step, 1000);
-      };
-      nextTimer = setTimeout(step, 1000);
-    }
+    if (auto) countdown(box, function () { playEp(c.id, n.x.id); });
   }
 
   // ---------- Clicks ----------
@@ -5242,6 +5298,7 @@ if (typeof module !== 'undefined') module.exports = AI;
         if (openC && !cs.items(id).length && !cs.status(id).loading && (feedsOn || prefs.apiKey)) cs.load(id, true).then(renderAll);
         renderAll(); break;
       case 'ep-play': if (Date.now() < cSwallowUntil) break; playEp(id, b.getAttribute('data-v')); break;
+      case 'pl-play': playPl(id, b.getAttribute('data-v')); break;
       case 'ep-tick': if (Date.now() < cSwallowUntil) break; setTick(id, b.getAttribute('data-v'), !cs.isDone(id, b.getAttribute('data-v'))); break;
       case 'course-earlier': case 'course-later': var cw2 = cwin[id] || (cwin[id] = { b: 2, a: 3 }); if (act === 'course-earlier') cw2.b += 10; else cw2.a += 10; renderAll(); break;
       case 'course-grid': cgrid[id] = !cgrid[id]; renderAll(); break;
