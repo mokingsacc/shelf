@@ -18,7 +18,8 @@
 try{var lk=JSON.parse(localStorage.getItem('shelf.look')||'null'),R=document.documentElement,n=Date.now(),th=null,w=lk&&lk.w,i;if(lk&&!lk.u&&(lk.t==='light'||lk.t==='dark'))th=lk.t;else if(w&&w.length&&n<w[w.length-1][1]+864e5&&n>=w[0][0]-864e5){th='dark';for(i=0;i<w.length;i++)if(n>=w[i][0]&&n<w[i][1])th='light'}else if(lk&&(lk.t==='light'||lk.t==='dark')&&lk.u&&n-lk.u<432e5)th=n>lk.u?(lk.t==='light'?'dark':'light'):lk.t;if(!th){var h=new Date().getHours();th=h>=8&&h<18?'light':'dark'}R.setAttribute('data-theme',th);if(lk&&lk.app)R.classList.add('app',matchMedia('(prefers-color-scheme: dark)').matches?'ph-dark':'ph-light')}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Azeret+Mono:wght@400;600&display=swap">
+<!-- Fonts load beside the page, not before it: the first frame never waits on Google (a blank web view is white) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Azeret+Mono:wght@400;600&display=swap" media="print" onload="this.media='all'">
 <style>
 /* Day Sheet v3: the day as a timetable. Flat colour bands, heavy wide type, thick rules, mono numbers.
    One loud thing per screen, every tap at least 44 px. Dark mode is the same sheet with the lights down. */
