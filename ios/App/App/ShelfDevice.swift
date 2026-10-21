@@ -42,6 +42,36 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
         nc.addObserver(self, selector: #selector(leaving), name: UIApplication.willResignActiveNotification, object: nil)
         nc.addObserver(self, selector: #selector(back), name: UIApplication.didBecomeActiveNotification, object: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.refreshSignIn(force: false) }
+        paintBehind(ShelfDevicePlugin.launchLook())
+    }
+
+    // What shows before the page has drawn (and during a reload): Shelf's own look, never the web view's default white.
+    // The page sends its look and the light hours of the next two weeks; with nothing saved, dark (a dark first frame never hurts).
+    static let dark = UIColor(red: 10 / 255, green: 10 / 255, blue: 14 / 255, alpha: 1)
+    static func launchLook() -> String {
+        let d = UserDefaults.standard
+        let mode = d.string(forKey: "shelf.lookMode") ?? "auto"
+        if mode == "light" || mode == "dark" { return mode }
+        let now = Date().timeIntervalSince1970 * 1000
+        if let w = d.array(forKey: "shelf.lightWindows") as? [[Double]], let last = w.last, let first = w.first,
+           now >= first[0] - 864e5, now < last[1] + 864e5 {
+            return w.contains { $0.count == 2 && now >= $0[0] && now < $0[1] } ? "light" : "dark"
+        }
+        return "dark"
+    }
+    private func paintBehind(_ look: String) {
+        DispatchQueue.main.async {
+            let c: UIColor = look == "light" ? .white : ShelfDevicePlugin.dark
+            guard let vc = self.bridge?.viewController else { return }
+            vc.view.backgroundColor = c
+            vc.view.window?.backgroundColor = c
+            if let wv = self.bridge?.webView {
+                wv.isOpaque = false
+                wv.backgroundColor = c
+                wv.scrollView.backgroundColor = c
+                if #available(iOS 15.0, *) { wv.underPageBackgroundColor = c }
+            }
+        }
     }
 
     private var screen: UIScreen {
@@ -159,6 +189,13 @@ public class ShelfDevicePlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDe
 
     @objc func statusBar(_ call: CAPPluginCall) {
         let style = call.getString("style") ?? "default"
+        if let look = call.getString("look") {
+            let d = UserDefaults.standard
+            d.set(call.getString("mode") ?? "auto", forKey: "shelf.lookMode")
+            let w = (call.getArray("windows") ?? []).compactMap { ($0 as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue } }
+            d.set(w, forKey: "shelf.lightWindows")
+            paintBehind(look)
+        }
         DispatchQueue.main.async {
             guard let bridge = self.bridge else { return call.reject("Shelf's screen isn't ready") }
             bridge.statusBarStyle = style == "dark" ? .darkContent : style == "light" ? .lightContent : .default

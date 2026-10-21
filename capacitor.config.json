@@ -8,9 +8,12 @@
   },
   "ios": {
     "contentInset": "never",
-    "limitsNavigationsToAppBoundDomains": false
+    "limitsNavigationsToAppBoundDomains": false,
+    "backgroundColor": "#0A0A0E"
   },
   "plugins": {
-    "CapacitorHttp": { "enabled": true }
+    "CapacitorHttp": {
+      "enabled": true
+    }
   }
 }

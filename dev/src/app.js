@@ -2463,7 +2463,8 @@
     var st = lookState(), theme = st.light ? 'light' : 'dark', root = document.documentElement, phoneDark = !!(sysDark && sysDark.matches);
     if (root.getAttribute('data-theme') !== theme) root.setAttribute('data-theme', theme);
     // Kept for the next launch's first paint, with the time it stops being right (Auto only)
-    try { localStorage.setItem('shelf.look', JSON.stringify({ t: theme, u: st.mode === 'auto' ? st.sun.next : 0, app: Native.inApp && !Native.device ? 1 : 0 })); } catch (e) {}
+    // plus, in Auto, the light hours of the next two weeks, so a launch at any time of day opens in the right look
+    try { localStorage.setItem('shelf.look', JSON.stringify({ t: theme, u: st.mode === 'auto' ? st.sun.next : 0, w: lightWindows(st), app: Native.inApp && !Native.device ? 1 : 0 })); } catch (e) {}
     root.classList.toggle('app', Native.inApp && !Native.device); root.classList.toggle('ph-dark', phoneDark); root.classList.toggle('ph-light', !phoneDark);
     statusBar();
     Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function (m) { m.setAttribute('content', theme === 'light' ? '#FFFFFF' : '#0A0A0E'); });
@@ -2476,7 +2477,22 @@
     if ($('#lookDlg').open) fillLook();
   }
   // In shells from 6 Oct 2026 the clock itself changes colour: dark on the light look, white on the dark look and over the players
-  function statusBar() { if (Native.device) Native.statusBar(document.body.classList.contains('sheet-on') || document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+  // The shell paints behind the page in the same look (and keeps the light hours for its next launch), so nothing flashes white
+  function statusBar() {
+    if (!Native.device) return;
+    var th = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark', st = prefs ? lookState() : null;
+    Native.statusBar(document.body.classList.contains('sheet-on') || th === 'dark' ? 'light' : 'dark', { look: th, mode: st ? st.mode : 'auto', windows: st ? lightWindows(st) : [] });
+  }
+  // [from, to] of the light look for today and the next 13 days (Auto only)
+  function lightWindows(st) {
+    if (st.mode !== 'auto') return [];
+    var d = new Date(st.t), out = [];
+    for (var i = 0; i < 14; i++) {
+      var s = Core.sunLook(new Date(d.getFullYear(), d.getMonth(), d.getDate() + i, 12).getTime(), st.place.lat, st.place.lon);
+      if (s.to > s.from) out.push([s.from, s.to]);
+    }
+    return out;
+  }
   function sameDay(a, b) { return new Date(a).toDateString() === new Date(b).toDateString(); }
   function fillLook() {
     var st = lookState(), s = st.sun;

@@ -8,14 +8,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="f740cf659926">
+<meta name="build" content="8965b6c448a5">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='22' fill='%23ffe41a'/%3E%3Crect y='22' width='64' height='21' fill='%231a35d6'/%3E%3Crect y='43' width='64' height='21' fill='%230c0c10'/%3E%3C/svg%3E">
 <title>Shelf</title>
-<script>/* The last look Shelf chose, before anything draws (and the next one if its time has come while Shelf was closed) */
-try{var lk=JSON.parse(localStorage.getItem('shelf.look')||'null'),R=document.documentElement;if(lk&&(lk.t==='light'||lk.t==='dark')){var th=lk.u&&Date.now()>lk.u?(lk.t==='light'?'dark':'light'):lk.t;R.setAttribute('data-theme',th);if(lk.app)R.classList.add('app',matchMedia('(prefers-color-scheme: dark)').matches?'ph-dark':'ph-light')}}catch(e){}</script>
+<script>/* The look before anything draws: the light hours Shelf saved for the next two weeks, else the last look (flipped if its time has come), else the clock. Never a white first frame at night */
+try{var lk=JSON.parse(localStorage.getItem('shelf.look')||'null'),R=document.documentElement,n=Date.now(),th=null,w=lk&&lk.w,i;if(lk&&!lk.u&&(lk.t==='light'||lk.t==='dark'))th=lk.t;else if(w&&w.length&&n<w[w.length-1][1]+864e5&&n>=w[0][0]-864e5){th='dark';for(i=0;i<w.length;i++)if(n>=w[i][0]&&n<w[i][1])th='light'}else if(lk&&(lk.t==='light'||lk.t==='dark')&&lk.u&&n-lk.u<432e5)th=n>lk.u?(lk.t==='light'?'dark':'light'):lk.t;if(!th){var h=new Date().getHours();th=h>=8&&h<18?'light':'dark'}R.setAttribute('data-theme',th);if(lk&&lk.app)R.classList.add('app',matchMedia('(prefers-color-scheme: dark)').matches?'ph-dark':'ph-light')}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Azeret+Mono:wght@400;600&display=swap">
@@ -1188,7 +1188,7 @@ var Native = (function () {
   function dev(method, opts) { return device ? call('ShelfDevice', method, opts).catch(function () { return null; }) : Promise.resolve(null); }
   function keepAwake(on) { return dev('keepAwake', { on: !!on }); }
   function dim(on) { return dev('dim', { on: !!on }); }
-  function statusBar(style) { return dev('statusBar', { style: style }); }
+  function statusBar(style, look) { return dev('statusBar', Object.assign({ style: style }, look || {})); }
   // A youtube.com page read as the signed-in account (null when this copy of the app can't): {status, data, signedIn, host}
   function youtubeGet(url) { return device ? call('ShelfDevice', 'youtubeGet', { url: url }) : Promise.resolve(null); }
   // Shells from 12 Oct 2026 can renew the YouTube sign-in by themselves: a hidden web view opens YouTube's sign-in
@@ -5460,7 +5460,8 @@ if (typeof module !== 'undefined') module.exports = AI;
     var st = lookState(), theme = st.light ? 'light' : 'dark', root = document.documentElement, phoneDark = !!(sysDark && sysDark.matches);
     if (root.getAttribute('data-theme') !== theme) root.setAttribute('data-theme', theme);
     // Kept for the next launch's first paint, with the time it stops being right (Auto only)
-    try { localStorage.setItem('shelf.look', JSON.stringify({ t: theme, u: st.mode === 'auto' ? st.sun.next : 0, app: Native.inApp && !Native.device ? 1 : 0 })); } catch (e) {}
+    // plus, in Auto, the light hours of the next two weeks, so a launch at any time of day opens in the right look
+    try { localStorage.setItem('shelf.look', JSON.stringify({ t: theme, u: st.mode === 'auto' ? st.sun.next : 0, w: lightWindows(st), app: Native.inApp && !Native.device ? 1 : 0 })); } catch (e) {}
     root.classList.toggle('app', Native.inApp && !Native.device); root.classList.toggle('ph-dark', phoneDark); root.classList.toggle('ph-light', !phoneDark);
     statusBar();
     Array.prototype.forEach.call(document.querySelectorAll('meta[name="theme-color"]'), function (m) { m.setAttribute('content', theme === 'light' ? '#FFFFFF' : '#0A0A0E'); });
@@ -5473,7 +5474,22 @@ if (typeof module !== 'undefined') module.exports = AI;
     if ($('#lookDlg').open) fillLook();
   }
   // In shells from 6 Oct 2026 the clock itself changes colour: dark on the light look, white on the dark look and over the players
-  function statusBar() { if (Native.device) Native.statusBar(document.body.classList.contains('sheet-on') || document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+  // The shell paints behind the page in the same look (and keeps the light hours for its next launch), so nothing flashes white
+  function statusBar() {
+    if (!Native.device) return;
+    var th = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark', st = prefs ? lookState() : null;
+    Native.statusBar(document.body.classList.contains('sheet-on') || th === 'dark' ? 'light' : 'dark', { look: th, mode: st ? st.mode : 'auto', windows: st ? lightWindows(st) : [] });
+  }
+  // [from, to] of the light look for today and the next 13 days (Auto only)
+  function lightWindows(st) {
+    if (st.mode !== 'auto') return [];
+    var d = new Date(st.t), out = [];
+    for (var i = 0; i < 14; i++) {
+      var s = Core.sunLook(new Date(d.getFullYear(), d.getMonth(), d.getDate() + i, 12).getTime(), st.place.lat, st.place.lon);
+      if (s.to > s.from) out.push([s.from, s.to]);
+    }
+    return out;
+  }
   function sameDay(a, b) { return new Date(a).toDateString() === new Date(b).toDateString(); }
   function fillLook() {
     var st = lookState(), s = st.sun;

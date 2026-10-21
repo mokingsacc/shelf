@@ -160,7 +160,7 @@ var Native = (function () {
   function dev(method, opts) { return device ? call('ShelfDevice', method, opts).catch(function () { return null; }) : Promise.resolve(null); }
   function keepAwake(on) { return dev('keepAwake', { on: !!on }); }
   function dim(on) { return dev('dim', { on: !!on }); }
-  function statusBar(style) { return dev('statusBar', { style: style }); }
+  function statusBar(style, look) { return dev('statusBar', Object.assign({ style: style }, look || {})); }
   // A youtube.com page read as the signed-in account (null when this copy of the app can't): {status, data, signedIn, host}
   function youtubeGet(url) { return device ? call('ShelfDevice', 'youtubeGet', { url: url }) : Promise.resolve(null); }
   // Shells from 12 Oct 2026 can renew the YouTube sign-in by themselves: a hidden web view opens YouTube's sign-in
