@@ -242,6 +242,14 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
                 if task != .invalid { self.tasks[id] = task }
                 let page = self.plugin
                 page?.command(id: id, json: text)
+                // Shelf isn't on screen, so YouTube can't start: "Tap to play" goes up now, not after the page's wait
+                if app.applicationState != .active && Self.waits(name) {
+                    self.queue.async {
+                        guard let it = self.item(id) else { return }
+                        self.notify(it)
+                        if self.notificationsAllowed, let d = try? JSONSerialization.data(withJSONObject: ["ok": false, "why": "notified", "queued": true]) { self.answer(id, d) }
+                    }
+                }
                 // No answer from the page in time (or no page at all: Shelf isn't open): tell the watch plainly, and keep what should wait
                 self.queue.async {
                     let work = DispatchWorkItem { [weak self] in self?.noAnswer(id: id, name: name) }
@@ -309,6 +317,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     // MARK: "Tap to play" on the iPhone
 
     private func notify(_ item: Item) {
+        guard item.notified != true else { return }   // once per tap (it may go up at once and again when the page answers)
         var list = readInbox()
         if let i = list.firstIndex(where: { $0.id == item.id }) { list[i].notified = true; writeInbox(list) }
         let title = Command.title(of: Data(item.json.utf8))
