@@ -140,7 +140,7 @@
   // ---------- Home ----------
   var renderTimer = null;
   function renderSoon() { clearTimeout(renderTimer); renderTimer = setTimeout(renderAll, 60); }
-  function renderAll() { keepTyping(function () { renderHome(); if (stack.length) renderPage(); }); }
+  function renderAll() { keepTyping(function () { renderHome(); if (stack.length) renderPage(); }); watchSoon(); }
   var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   function durText(e) {
@@ -234,18 +234,7 @@
     html += '<button type="button" class="addcat" data-act="add-section"><span>+ Add category</span><span aria-hidden="true">›</span></button>';
     $('#bands').innerHTML = html;
     fitAll($('#bands'));
-    // Continue: the most recent unfinished thing anywhere. At night, the last podcast you fell asleep to (Bedtime).
-    var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(started))
-      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); })
-      // The last video in the YouTube app has its own card below, so Continue is the latest thing besides it
-      .filter(function (e) { return !(lastYT && e.type === 'video' && e.key === lastYT.id); });
-    var top = all[0], bed = night && all.filter(function (e) { return e.type === 'audio'; })[0];
-    if (bed) top = bed;
-    // The podcast bar at the bottom already is "continue" for the episode it holds
-    var held = engine && engine.state().episode;
-    if (held && arec[held.guid] && arec[held.guid].done) held = null;
-    if (held) { top = all.filter(function (e) { return !(e.type === 'audio' && e.key === held.guid); })[0]; bed = null; }
-    if (held && top && top.type === 'audio') top = null;
+    var pk = pickState(), top = pk.top, bed = pk.bed;
     $('#cont').hidden = !top;
     if (top) {
       var p = prog(top);
@@ -259,9 +248,7 @@
       $('#contBar').style.width = Core.pct(p).toFixed(1) + '%';
       $('#cont').setAttribute('aria-label', (bed ? 'Bedtime: ' : 'Continue ') + top.title + ' from ' + Core.fmt(p.t));
     }
-    // Up next: the next episode of the course on the go (not at night, and not when Continue already is it)
-    var nc = !night && upNextCourse(), npr = nc && cs.progress(nc.id), nx = npr && npr.next;
-    if (nx && top && top.key === nx.id) nx = null;
+    var nc = pk.nc, npr = pk.npr, nx = pk.nx;
     $('#next').hidden = !nx;
     if (nx) {
       $('#next').setAttribute('data-id', nc.id); $('#next').setAttribute('data-v', nx.id);
@@ -294,6 +281,26 @@
     var wn = $('#webNote');
     if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can pick up where you left off, or paste a YouTube link into Search.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can pick up where you left off, or press ⌘V to play a YouTube link.'; }
     else wn.hidden = true;
+  }
+  // Pick up from (Home, and the watch): Continue (Bedtime at night) and Up next
+  function pickState() {
+    var night = isNight();
+    // Continue: the most recent unfinished thing anywhere. At night, the last podcast you fell asleep to (Bedtime).
+    var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(started))
+      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); })
+      // The last video in the YouTube app has its own card below, so Continue is the latest thing besides it
+      .filter(function (e) { return !(lastYT && e.type === 'video' && e.key === lastYT.id); });
+    var top = all[0], bed = night && all.filter(function (e) { return e.type === 'audio'; })[0];
+    if (bed) top = bed;
+    // The podcast bar at the bottom already is "continue" for the episode it holds
+    var held = engine && engine.state().episode;
+    if (held && arec[held.guid] && arec[held.guid].done) held = null;
+    if (held) { top = all.filter(function (e) { return !(e.type === 'audio' && e.key === held.guid); })[0]; bed = null; }
+    if (held && top && top.type === 'audio') top = null;
+    // Up next: the next episode of the course on the go (not at night, and not when Continue already is it)
+    var nc = !night && upNextCourse(), npr = nc && cs.progress(nc.id), nx = npr && npr.next;
+    if (nx && top && top.key === nx.id) nx = null;
+    return { top: top || null, bed: bed || null, nc: nc || null, npr: npr || null, nx: nx || null };
   }
   // "11:57 pm"
   function clockText(t) { return SleepTimer.clock(t).replace('about ', ''); }
@@ -845,6 +852,7 @@
   }
   function onState(e) {
     var S = YT.PlayerState;
+    watchNowSoon();
     var playing = e.data === S.PLAYING;
     $('#vPlay').innerHTML = playing ? I.pause : I.play;
     $('#vPlay').setAttribute('aria-label', playing ? 'Pause' : 'Play');
@@ -904,7 +912,7 @@
     clearInterval(tick); clearInterval(uiTick); clearTimeout(startTimer); clearTimeout(nextTimer); keepAwake(false); sleepDim(false);
     current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
     closeSheet('#vsheet');
-    renderAll();
+    renderAll(); watchNowSoon(true);
   }
   // ---------- Listen: the same show as a podcast, which keeps playing with the phone locked ----------
   // Only for channels that publish their videos as a podcast too (matched by name, then episode title and date).
@@ -1223,6 +1231,7 @@
     else engine.setTimer(val);
     renderTimerUI(which);
     if (which === 'a') renderAudio();
+    watchNowSoon();
   }
   var vTmOpen = false;
   function renderTimerUI(which, msg) {
@@ -1325,10 +1334,11 @@
   // ---------- Mark (that's a card) ----------
   var noteFor = null;
   function renderMarkBtn(t) { var sp = $('#vMark span'); if (sp) sp.textContent = 'Mark ' + Core.fmt(t || 0); }
-  function doMark() {
+  function doMark(at) {
     if (!current || !videos[current]) return;
     var v = videos[current], t = 0, w = courseOf(current);
     try { t = player.getCurrentTime() || 0; } catch (e) {}
+    if (at != null && at >= 0) t = at;  // the second shown on the watch
     var m = marks.add({ vid: current, title: v.title || 'YouTube video', t: t, course: w ? w.course.name : '' });
     try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
     var card = aiOn() && aiKey && isMed(current);
@@ -1575,7 +1585,7 @@
       el: $('#audio'),
       load: function (g) { return arec[g] || null; },
       save: function (g, r) { arec[g] = Object.assign({}, arec[g] || {}, aMeta[g] || {}, r); syncTwin(arec[g]); saveAudio(); },
-      onChange: function () { renderAudio(); renderSoon(); }
+      onChange: function () { renderAudio(); renderSoon(); watchNowSoon(); }
     });
     // A podcast starting ends the self-check's sound test (the engine then takes the lock-screen controls back)
     $('#audio').addEventListener('play', function () { if (Native.tonePlaying) { Native.stopTone(); if ($('#checkDlg').open) fillCheck(); } clearInterval(aTick); aTick = setInterval(function () { engine.tick(); renderAudio(); }, 1000); });
@@ -2183,6 +2193,289 @@
     if (auto) countdown(box, function () { playEp(c.id, n.x.id); });
   }
 
+  // ---------- Apple Watch ----------
+  // The watch shows what Home shows and controls what plays here (ios/App/App/ShelfWatch.swift on the phone,
+  // ios/App/ShelfWatch on the watch, the shared shapes in ios/ShelfWatchKit). The page sends a snapshot when
+  // anything changes and "now" while something plays; the watch's taps come back as commands, each answered once.
+  var watch = { on: false, installed: false, reachable: false, last: '', lastNow: '', snapT: null, nowT: null, nowAt: 0, done: {}, at: 0, heard: 0 };
+  function watchEntry(e, extra) {
+    if (!e) return null;
+    var p = prog(e) || {}, out = { type: e.type, key: e.key, title: e.title || (e.type === 'video' ? 'YouTube video' : 'Episode'), srcName: e.srcName || '', src: e.src || '',
+      dur: Math.round(p.dur || e.dur || 0), t: Math.round(p.t || 0), done: !!p.done, isNew: isNew(e), section: e.section || '' };
+    if (e.type === 'audio') { out.url = e.url || (arec[e.key] && arec[e.key].url) || ''; out.image = e.image || (arec[e.key] && arec[e.key].image) || ''; }
+    if (e.list) out.list = e.list;
+    return Object.assign(out, extra || {});
+  }
+  function watchCourseEntry(c, x, i) {
+    return { type: 'video', key: x.id, title: x.title || 'Episode', srcName: c.channel || c.name, src: '', dur: Math.round(x.dur || (videos[x.id] && videos[x.id].dur) || 0),
+      t: Math.round((videos[x.id] && videos[x.id].t) || 0), done: cs.isDone(c.id, x.id), isNew: false, section: c.section || 'med', course: c.id, label: epLabel(x, i), short: shortTitle(x.title) };
+  }
+  function watchSnap() {
+    var pk = pickState(), night = isNight(), pick = [];
+    if (pk.top) pick.push({ kind: pk.bed ? 'bedtime' : 'continue', entry: watchEntry(pk.top) });
+    if (pk.nx) pick.push({ kind: 'upnext', label: pk.nc.name + ' · ' + (pk.npr.notch + 1) + ' of ' + pk.npr.total, entry: watchCourseEntry(pk.nc, pk.nx, pk.npr.notch) });
+    if (lastYT && !(Native.device && ytOut)) {
+      var lyDone = lastYT.pct != null && lastYT.pct >= 97;
+      pick.push({ kind: 'lastyt', entry: { type: 'video', key: lastYT.id, title: lastYT.title || 'YouTube video', srcName: lastYT.author || '', src: '', dur: Math.round(lastYT.dur || 0),
+        t: lyDone ? 0 : Math.round(lastYT.t || 0), done: lyDone, isNew: false, section: '', about: lastYT.exact === false } });
+    }
+    var sections = daySections().map(function (sec) {
+      var fresh = feedEntries(sec.id).filter(isNew), go = startedEntries(sec.id), seen = {}, items = [];
+      go.slice(0, 2).concat(fresh).concat(go.slice(2)).forEach(function (e) { if (!seen[e.key] && items.length < 6) { seen[e.key] = 1; items.push(watchEntry(e)); } });
+      return { id: sec.id, name: sec.name, newCount: fresh.length, more: Math.max(0, fresh.length + go.length - items.length), items: items,
+        channels: lib.sources(sec.id).filter(function (x) { return !brokenDup(x); }).map(function (x) { return { id: x.id, name: x.name, podcast: x.type === 'podcast', newCount: srcNewCount(x.id) }; }) };
+    });
+    var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
+      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+    if (loose.length) sections.push({ id: '_pasted', name: 'Pasted', newCount: 0, more: Math.max(0, loose.length - 6), items: loose.slice(0, 6).map(function (e) { return watchEntry(e); }), channels: [] });
+    var courses = cs ? cs.list().map(function (c) {
+      var pr = cs.progress(c.id) || { total: 0, done: 0, state: 'empty' }, nx = pr.next ? watchCourseEntry(c, pr.next, pr.notch) : null;
+      // ticks: one character per episode ("1" ticked), for the watch's ruler
+      var tk = cs.items(c.id).map(function (x) { return cs.isDone(c.id, x.id) ? '1' : '0'; }).join('');
+      return { id: c.id, name: c.name, done: pr.done, total: pr.total, state: pr.state, next: nx, notch: pr.notch, ticks: tk, touched: c.touched || 0, section: c.section || 'med' };
+    }).sort(function (a, b) { return (b.state === 'go') - (a.state === 'go') || b.touched - a.touched; }) : [];
+    var td = cs ? cs.today() : null, days = cs ? cs.daysLeft() : 0;
+    return {
+      v: 1, at: Date.now(), build: (document.querySelector('meta[name="build"]') || {}).content || '',
+      night: night, visible: document.visibilityState === 'visible',
+      now: watchNowState(), pick: pick, sections: sections, courses: courses,
+      step2: cs ? { goal: goalName(), date: goalISO(), days: days, past: cs.examPast(), today: td.n, todayMins: Math.round(td.secs / 60), left: td.left, perDay: Math.round((td.perDay || 0) * 10) / 10, week: td.week } : null,
+      rates: { video: VRATES, audio: RATES }, presets: SleepTimer.PRESETS, autoNext: prefs.autoNext !== false, ai: !!(aiOn() && aiKey)
+    };
+  }
+  // What plays on the phone now (the open video comes first; else the podcast player)
+  function watchNowState() {
+    if (current && videos[current]) {
+      var v = videos[current], t = v.t || 0, d = v.dur || 0, st = -1, w = courseOf(current), p = !w && plOf(current), n = w ? nextAfter(w.course, w.i) : p ? plNext(p) : null;
+      try { if (player && playerReady) { t = player.getCurrentTime() || t; d = player.getDuration() || d; st = player.getPlayerState(); } } catch (e) {}
+      var nxt = n ? (w ? { label: epLabel(n.x, n.i), title: shortTitle(n.x.title), key: n.x.id, course: w.course.id } : { label: (n.i + 1) + ' of ' + p.pl.items.length, title: n.x.title || '', key: n.x.id, list: p.id }) : null;
+      return { kind: 'video', key: v.id, title: v.title || 'YouTube video', tag: courseTag(v.id) || v.author || '', t: Math.round(t * 10) / 10, dur: Math.round(d), playing: st === 1,
+        buffering: st === 3 || (st === -1 && !sawPlaying), ended: st === 0, autoNext: prefs.autoNext !== false, rate: wantRate, timer: watchTimer(vTimer), next: nxt, notes: !!(ai && ai.get(v.id, 'summary')), at: Date.now() };
+    }
+    var es = engine && engine.state(), ep = es && es.episode;
+    if (ep) return { kind: 'audio', key: ep.guid, title: ep.title || 'Episode', tag: ep.podcast || '', t: Math.round(es.t * 10) / 10, dur: Math.round(es.dur || 0), playing: es.playing,
+      buffering: false, rate: es.rate, timer: watchTimer(es.timer), next: null, notes: false, message: es.message || '', at: Date.now() };
+    return null;
+  }
+  function watchTimer(t) { return t ? (t.mode === 'end' ? { mode: 'end' } : { mode: 'min', minutes: t.minutes, endsAt: t.endsAt }) : null; }
+  // A snapshot goes when something changed (at most every 0.8 s); "now" goes at once on a change, and every 5 s while playing
+  function watchSoon() { if (!watch || !watch.on || !watch.installed) return; clearTimeout(watch.snapT); watch.snapT = setTimeout(watchPush, 800); }
+  function watchPush() {
+    if (!watch.on || !watch.installed) return;
+    var snap; try { snap = watchSnap(); watch.err = ''; } catch (e) { watch.err = String((e && e.message) || e); return; }
+    var key = JSON.stringify(Object.assign({}, snap, { at: 0, now: snap.now && Object.assign({}, snap.now, { at: 0, t: Math.round(snap.now.t / 30) }) }));
+    if (key === watch.last) return;
+    watch.last = key; watch.at = Date.now();
+    Native.watchSend(snap);
+  }
+  function watchNowSoon(force) {
+    if (!watch || !watch.on || !watch.installed) return;
+    clearTimeout(watch.nowT);
+    watch.nowT = setTimeout(function () {
+      var n = watchNowState(), key = JSON.stringify(n && Object.assign({}, n, { at: 0, t: 0 }));
+      if (!force && key === watch.lastNow && Date.now() - watch.nowAt < 5000) return;
+      watch.lastNow = key; watch.nowAt = Date.now();
+      if (watch.reachable) Native.watchNow({ now: n, at: Date.now() });
+      watchSoon();
+    }, 150);
+  }
+  setInterval(function () { if (watch.on && watch.reachable) { var n = watchNowState(); if (n && n.playing) watchNowSoon(true); } }, 5000);
+
+  // ----- Commands from the watch -----
+  function watchCmd(item) {
+    var id = item && item.id; if (!id || watch.done[id]) return;
+    watch.done[id] = Date.now(); watch.heard = Date.now();
+    var c; try { c = JSON.parse(item.json || '{}'); } catch (e) { c = {}; }
+    // A command that waited for Shelf to open: a play stays good for 15 minutes (tap the iPhone's notification), a tick
+    // or a podcast spot for a week; a remote tap (pause, seek…) only for a minute, so nothing starts out of the blue later
+    var life = c.cmd === 'play' ? 15 * 60000 : c.cmd === 'tick' || c.cmd === 'audioSpot' ? 7 * 864e5 : 60000;
+    if (c.at && Date.now() - c.at > life) { Native.watchReply(id, { ok: false, why: 'old' }); return; }
+    Promise.resolve().then(function () { return watchDo(c); }).then(function (r) {
+      // Shelf is in the background: the iPhone keeps the play and shows "Tap to play"; it comes back here when Shelf opens
+      if (r && r.why === 'hidden') delete watch.done[id];
+      Native.watchReply(id, r || { ok: true });
+    }, function (e) { Native.watchReply(id, { ok: false, why: 'error', msg: String((e && e.message) || e) }); })
+      .then(function () { watchNowSoon(true); watchSoon(); });
+  }
+  function watchAfter(ms, fn) { return new Promise(function (res) { setTimeout(function () { res(fn()); }, ms); }); }
+  function watchPlaying(kind, key) {
+    // Did it really start? (a video needs Shelf on screen; YouTube stops videos in apps in the background)
+    return watchAfter(kind === 'video' ? 2500 : 1500, function () {
+      var n = watchNowState();
+      return n && n.key === key && (n.playing || n.buffering) ? { ok: true, playing: true, now: n } : { ok: false, why: document.visibilityState === 'visible' ? 'stalled' : 'hidden', now: n };
+    });
+  }
+  function watchDo(c) {
+    var hidden = document.visibilityState !== 'visible';
+    switch (c.cmd) {
+      case 'snap': return { ok: true, snap: watchSnap() };
+      case 'play': {
+        var e = c.entry; if (!e || !e.key) return { ok: false, why: 'missing' };
+        if (e.course && cs && cs.get(e.course)) { if (hidden && e.type === 'video') return { ok: false, why: 'hidden' }; playEp(e.course, e.key); return watchPlaying('video', e.key); }
+        if (e.type === 'video') {
+          if (hidden) return { ok: false, why: 'hidden' };
+          var ent = { type: 'video', key: e.key, title: e.title, srcName: e.srcName, src: e.src, section: e.section, dur: e.dur, list: e.list };
+          if (c.from != null) openVideo({ id: e.key, t: c.from, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur, list: e.list }); else play(ent);
+          return watchPlaying('video', e.key);
+        }
+        if (!e.url && arec[e.key]) e.url = arec[e.key].url;
+        if (!e.url) return { ok: false, why: 'nourl' };
+        play({ type: 'audio', key: e.key, title: e.title, url: e.url, srcName: e.srcName, src: e.src, image: e.image, dur: e.dur, section: e.section });
+        return watchPlaying('audio', e.key);
+      }
+      case 'toggle': case 'pause': case 'resume': {
+        if (current) {
+          if (hidden && c.cmd !== 'pause') return { ok: false, why: 'hidden' };
+          try { var ps = player.getPlayerState(); if (c.cmd === 'pause' || (c.cmd === 'toggle' && ps === 1)) player.pauseVideo(); else player.playVideo(); } catch (er) {}
+          return watchAfter(600, function () { return { ok: true, now: watchNowState() }; });
+        }
+        if (engine && engine.state().episode) {
+          var on = engine.state().playing;
+          if (c.cmd === 'pause' ? on : c.cmd === 'resume' ? !on : true) engine.toggle();
+          return watchAfter(600, function () { var n = watchNowState(); return c.cmd !== 'pause' && !on && n && !n.playing && hidden ? { ok: false, why: 'hidden', now: n } : { ok: true, now: n }; });
+        }
+        return { ok: false, why: 'nothing' };
+      }
+      case 'seek': case 'seekTo': {
+        if (current) { try { var to = c.cmd === 'seek' ? player.getCurrentTime() + (+c.by || 0) : +c.t; player.seekTo(Math.max(0, to), true); videoTick(); } catch (er) {} return watchAfter(300, function () { return { ok: true, now: watchNowState() }; }); }
+        if (engine && engine.state().episode) { if (c.cmd === 'seek') engine.seekBy(+c.by || 0); else engine.seek(+c.t || 0); return { ok: true, now: watchNowState() }; }
+        return { ok: false, why: 'nothing' };
+      }
+      case 'rate': {
+        var r = +c.r; if (!(r > 0)) return { ok: false, why: 'missing' };
+        if (current) { setRateFor(current, r); try { player.setPlaybackRate(r); } catch (er) {} videoTick(); return { ok: true, now: watchNowState() }; }
+        var ast = engine && engine.state();
+        if (ast && ast.episode) { engine.setRate(r); prefs.rates = prefs.rates || {}; prefs.rates[podKey(ast.episode.guid)] = r; savePrefs(); renderAudio(); return { ok: true, now: watchNowState() }; }
+        return { ok: false, why: 'nothing' };
+      }
+      case 'timer': {
+        var which = current ? 'v' : engine && engine.state().episode ? 'a' : null;
+        if (!which) return { ok: false, why: 'nothing' };
+        var m = c.m === 'off' || c.m == null ? null : c.m === 'end' ? 'end' : +c.m, cur = timerFor(which);
+        if (m == null) { if (cur) setTimer(which, cur.mode === 'end' ? 'end' : cur.minutes); }  // setTimer toggles a timer that is already on off
+        else if (!(cur && (cur.mode === 'end' ? m === 'end' : cur.minutes === m))) setTimer(which, m);
+        if (which === 'a') renderAudio();
+        return { ok: true, now: watchNowState() };
+      }
+      case 'mark': {
+        if (!current) return { ok: false, why: 'nothing' };
+        var mt = c.t != null && +c.t >= 0 ? +c.t : (function () { try { return player.getCurrentTime(); } catch (e) { return 0; } })();
+        doMark(mt);
+        return { ok: true, t: Math.round(mt) };
+      }
+      case 'next': {
+        if (!current) return { ok: false, why: 'nothing' };
+        if (hidden) return { ok: false, why: 'hidden' };
+        var w = courseOf(current), pp = !w && plOf(current), n = w ? nextAfter(w.course, w.i) : pp ? plNext(pp) : null;
+        if (!n) return { ok: false, why: 'end' };
+        if (w) playEp(w.course.id, n.x.id); else playPl(pp.id, n.x.id);
+        return watchPlaying('video', n.x.id);
+      }
+      case 'stop': {
+        if (current) closeVideo(true); else if (engine && engine.state().playing) engine.pause();
+        return { ok: true, now: watchNowState() };
+      }
+      case 'tick': {
+        if (!cs || !cs.get(c.course)) return { ok: false, why: 'missing' };
+        setTick(c.course, c.key, c.on !== false);
+        var pr = cs.progress(c.course);
+        return { ok: true, done: pr.done, total: pr.total };
+      }
+      case 'channel': {
+        var src = lib.source(c.id); if (!src) return { ok: false, why: 'missing' };
+        var go = function () { return { ok: true, items: itemsOf(src).slice(0, 20).map(function (it) { return watchEntry(entryFromItem(src, it)); }), status: lib.status(src.id) || null }; };
+        if (!lib.items(src.id).length && feedsOn) return lib.refresh ? Promise.resolve(lib.refresh(src.id)).then(go, go) : go();
+        return go();
+      }
+      case 'section': {
+        if (c.id === '_pasted') return { ok: true, items: Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
+          .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); }).slice(0, 20).map(function (e) { return watchEntry(e); }) };
+        if (!lib.section(c.id)) return { ok: false, why: 'missing' };
+        var all = startedEntries(c.id).concat(feedEntries(c.id)), sn = {}, list = [];
+        all.forEach(function (e) { if (!sn[e.key] && list.length < 20) { sn[e.key] = 1; list.push(watchEntry(e)); } });
+        return { ok: true, items: list };
+      }
+      case 'course': {
+        if (!cs || !cs.get(c.id)) return { ok: false, why: 'missing' };
+        // A window of episodes: from c.from (default two before your place), c.n of them (default 8)
+        var co = cs.get(c.id), arr = cs.items(c.id), pr2 = cs.progress(c.id), cn = Math.max(1, Math.min(40, +c.n || 8)),
+          from = c.from != null ? Math.max(0, Math.min(arr.length - 1, +c.from)) : Math.max(0, (pr2.notch < 0 ? arr.length : pr2.notch) - 2);
+        return { ok: true, items: arr.slice(from, from + cn).map(function (x, j) { return watchCourseEntry(co, x, from + j); }), from: from, count: arr.length, notch: pr2.notch, done: pr2.done, total: pr2.total };
+      }
+      case 'twin': {
+        var v = videos[c.key] || (c.entry ? ensureTwinVideo(c.entry) : null);
+        if (!v) return { ok: false, why: 'missing' };
+        var tw = twinLook(v);
+        if (!tw) return { ok: true, twin: null, why: 'nochannel' };
+        return new Promise(function (res) {
+          var tries = 0;
+          (function wait() {
+            if (!tw.busy || tries++ > 24) {
+              var ep = tw.r && tw.r.ep, fits = ep && twinFits(v, ep);
+              res({ ok: true, twin: ep ? { guid: ep.guid, url: ep.url, title: ep.title, podcast: ep.podcast || (tw.r && tw.r.podcast) || '', image: ep.image || '', dur: Math.round(ep.duration || 0), linked: !!fits,
+                start: fits ? Math.round(v.t || 0) : Math.round((arec[ep.guid] && arec[ep.guid].t) || 0) } : null, none: !!(tw.r && tw.r.none), offline: !!(tw.r && tw.r.offline) });
+              return;
+            }
+            setTimeout(wait, 500);
+          })();
+        });
+      }
+      case 'notes': {
+        var s = ai && ai.get(c.key, 'summary');
+        if (s) return { ok: true, summary: { gist: s.gist || '', points: (s.points || []).slice(0, 12).map(function (p) { return { t: p.t == null ? null : p.t, text: p.text }; }) } };
+        if (!(aiOn() && aiKey)) return { ok: true, summary: null, why: 'noai' };
+        var st = ai.status(c.key, 'summary');
+        if (st.state === 'none' && c.make) {
+          var vv = videos[c.key] || {};
+          videoSecs(c.key).then(function (r) { if (r.open && (r.secs || 600) <= 5400) ai.request({ vid: c.key, kind: 'summary', title: vv.title || c.title || '', med: isMed(c.key), secs: r.secs || 600 }).catch(function () {}).then(renderAiSoon); });
+          return { ok: true, summary: null, working: true };
+        }
+        return { ok: true, summary: null, working: st.state === 'busy' || st.state === 'queued', error: st.state === 'error' ? (st.msg || '') : '' };
+      }
+      case 'audioSpot': {
+        // A podcast played on the watch: its spot comes back here (newest wins), and a linked video moves on with it
+        var g = c.guid; if (!g) return { ok: false, why: 'missing' };
+        var old = arec[g] || {};
+        if ((old.updated || 0) > (c.updated || 0)) return { ok: true, kept: true };
+        arec[g] = Object.assign({}, old, { t: +c.t || 0, dur: +c.dur || old.dur || 0, done: !!c.done, updated: +c.updated || Date.now(), url: c.url || old.url, title: c.title || old.title, podcast: c.podcast || old.podcast, image: c.image || old.image || '' },
+          c.video ? { video: c.video } : {}, c.source ? { source: c.source } : {});
+        syncTwin(arec[g]); saveAudio(); renderSoon();
+        return { ok: true };
+      }
+    }
+    return { ok: false, why: 'unknown' };
+  }
+  // A video tapped on the watch that the phone hasn't seen yet (from a channel's list)
+  function ensureTwinVideo(e) { var v = ensureVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur }); saveVideos(); return v; }
+  function watchStatus() {
+    return Native.watchStatus().then(function (st) {
+      if (!st) return;
+      var was = watch.installed && watch.reachable;
+      watch.installed = !!(st.paired && st.installed); watch.reachable = !!st.reachable; watch.paired = !!st.paired;
+      if (watch.installed && (!was || !watch.last)) { watchPush(); watchNowSoon(true); }
+    });
+  }
+  function watchBoot() {
+    if (!Native.watchOn) return;
+    watch.on = true;
+    Native.watchListen('command', watchCmd);
+    Native.watchListen('reach', function (e) { watch.reachable = !!(e && e.reachable); watch.installed = e && e.installed != null ? !!(e.paired && e.installed) : watch.installed; if (watch.reachable) { watchPush(); watchNowSoon(true); } });
+    watchStatus().then(function () { return Native.watchInbox(); }).then(function (items) { (items || []).forEach(watchCmd); });
+    document.addEventListener('visibilitychange', function () {
+      watchStatus(); watchNowSoon(true); watchSoon();
+      if (document.visibilityState === 'visible') Native.watchInbox().then(function (items) { (items || []).forEach(watchCmd); });
+    });
+    setInterval(function () { var cut = Date.now() - 3600e3; Object.keys(watch.done).forEach(function (k) { if (watch.done[k] < cut) delete watch.done[k]; }); }, 600000);
+  }
+  function watchCheck() {
+    if (!Native.inApp) return null;
+    if (!Native.watchOn) return { ok: 1, text: 'Apple Watch: this copy of the Shelf app is older than the watch app. The next update adds it' };
+    if (!watch.paired) return { ok: 1, text: 'Apple Watch: none paired with this iPhone' };
+    if (!watch.installed) return { ok: 2, text: "Apple Watch: Shelf isn't on the watch yet. Watch app on the iPhone › Available Apps › Shelf › Install" };
+    if (watch.err) return { ok: 2, text: 'Apple Watch: Shelf could not put together what the watch shows (' + watch.err + '). The watch keeps the last one' };
+    return { ok: 1, text: 'Apple Watch: ' + (watch.reachable ? 'connected now' : 'Shelf is on the watch') + (watch.at ? ' · sent ' + Core.ago(watch.at) : '') + (watch.heard ? ' · last tap ' + Core.ago(watch.heard) : '') };
+  }
+
   // ---------- Clicks ----------
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]'); if (!b) return;
@@ -2596,6 +2889,7 @@
     out.push({ ok: 1, text: prefs.apiKey ? 'Search uses your Google key' : 'Search reads YouTube\'s results page (no key needed)' });
     out.push(aiCheck());
     out.push(lookCheck());
+    var wc = watchCheck(); if (wc) out.push(wc);
     if (Native.inApp) {
       out.push({ ok: 1, text: 'Running inside the Shelf app' });
       out.push({ ok: 1, text: prefs.autoLock ? 'Play locked locks the phone by itself (Shortcut "' + LOCK_SHORTCUT + '")' : 'Play locked: the phone can lock by itself with a one-time Shortcut', fix: 'lock' });
@@ -2786,8 +3080,9 @@
     refreshAll(false);
     catchUp(); // Shelf was closed by iOS while the video played in YouTube
     refreshLastYT(true);
+    watchBoot();
     // Test hook
-    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
+    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
       get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did

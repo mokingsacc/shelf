@@ -1,0 +1,308 @@
+[
+ {
+  "now": null,
+  "at": 1792749853024
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 0.2,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749854339
+  },
+  "at": 1792749854339
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 2.6,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749856789
+  },
+  "at": 1792749856789
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 2.9,
+   "dur": 600,
+   "playing": false,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749857200
+  },
+  "at": 1792749857200
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 3,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749857806
+  },
+  "at": 1792749857806
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 3.2,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749857984
+  },
+  "at": 1792749857984
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 18.6,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749858407
+  },
+  "at": 1792749858407
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "peds000091q",
+   "title": "HY USMLE Q #1115 - Pediatrics",
+   "tag": "PAEDS · 92 OF 130",
+   "t": 0.2,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": {
+    "label": "1123",
+    "title": "Pediatrics",
+    "key": "peds000092q",
+    "course": "PLpeds0000000000"
+   },
+   "notes": false,
+   "at": 1792749858799
+  },
+  "at": 1792749858800
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "peds000091q",
+   "title": "HY USMLE Q #1115 - Pediatrics",
+   "tag": "PAEDS · 92 OF 130",
+   "t": 2.6,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": {
+    "label": "1123",
+    "title": "Pediatrics",
+    "key": "peds000092q",
+    "course": "PLpeds0000000000"
+   },
+   "notes": false,
+   "at": 1792749861250
+  },
+  "at": 1792749861250
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "peds000092q",
+   "title": "HY USMLE Q #1123 - Pediatrics",
+   "tag": "PAEDS · 93 OF 130",
+   "t": 0.2,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": {
+    "label": "1131",
+    "title": "Pediatrics",
+    "key": "peds000093q",
+    "course": "PLpeds0000000000"
+   },
+   "notes": false,
+   "at": 1792749861513
+  },
+  "at": 1792749861513
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "peds000092q",
+   "title": "HY USMLE Q #1123 - Pediatrics",
+   "tag": "PAEDS · 93 OF 130",
+   "t": 1.6,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1,
+   "timer": null,
+   "next": {
+    "label": "1131",
+    "title": "Pediatrics",
+    "key": "peds000093q",
+    "course": "PLpeds0000000000"
+   },
+   "notes": false,
+   "at": 1792749862984
+  },
+  "at": 1792749862984
+ },
+ {
+  "now": {
+   "kind": "audio",
+   "key": "https://feeds.megaphone.fm/finvshistory#00",
+   "title": "Ep. 212: The Shortest War in History",
+   "tag": "Fin vs History",
+   "t": 0.1,
+   "dur": 120,
+   "playing": true,
+   "buffering": false,
+   "rate": 1,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "message": "",
+   "at": 1792749864075
+  },
+  "at": 1792749864075
+ },
+ {
+  "now": {
+   "kind": "audio",
+   "key": "https://feeds.megaphone.fm/finvshistory#00",
+   "title": "Ep. 212: The Shortest War in History",
+   "tag": "Fin vs History",
+   "t": 1.4,
+   "dur": 120,
+   "playing": false,
+   "buffering": false,
+   "rate": 1.25,
+   "timer": {
+    "mode": "min",
+    "minutes": 15,
+    "endsAt": 1792750765372
+   },
+   "next": null,
+   "notes": false,
+   "message": "",
+   "at": 1792749865532
+  },
+  "at": 1792749865533
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 15.2,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1.5,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749866224
+  },
+  "at": 1792749866224
+ },
+ {
+  "now": {
+   "kind": "video",
+   "key": "DirtyMedv0x",
+   "title": "Hyperkalemia Mnemonics and Treatment",
+   "tag": "Dirty Medicine",
+   "t": 17.9,
+   "dur": 600,
+   "playing": true,
+   "buffering": false,
+   "ended": false,
+   "autoNext": true,
+   "rate": 1.5,
+   "timer": null,
+   "next": null,
+   "notes": false,
+   "at": 1792749867984
+  },
+  "at": 1792749867984
+ }
+]

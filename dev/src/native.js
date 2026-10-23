@@ -181,6 +181,24 @@ var Native = (function () {
   }
   function locate() { return device ? call('ShelfDevice', 'locate') : Promise.reject(new Error('This copy of the Shelf app has no location yet.')); }
 
+  // Shelf on Apple Watch (ios/App/App/ShelfWatch.swift, shells from 23 Oct 2026). The page sends the watch what it
+  // shows (a snapshot) and what's playing (now); the watch's taps arrive as 'command' events, each answered once.
+  // Everything is JSON strings, so nothing is lost in the trip through iOS. Older shells: all of this does nothing.
+  var watchOn = inApp && hasPlugin('ShelfWatch');
+  function watchCall(method, opts) { return watchOn ? call('ShelfWatch', method, opts).catch(function () { return null; }) : Promise.resolve(null); }
+  function watchStatus() { return watchCall('status'); }
+  function watchSend(snap) { return watchCall('send', { json: JSON.stringify(snap) }); }
+  function watchNow(now) { return watchCall('now', { json: JSON.stringify(now) }); }
+  function watchReply(id, data) { return watchCall('reply', { id: id, json: JSON.stringify(data || {}) }); }
+  function watchInbox() { return watchCall('inbox').then(function (r) { return (r && r.items) || []; }); }
+  function watchListen(event, fn) {
+    if (!watchOn) return;
+    try {
+      var P = (Cap.Plugins && Cap.Plugins.ShelfWatch) || (Cap.registerPlugin && Cap.registerPlugin('ShelfWatch'));
+      if (P && P.addListener) P.addListener(event, fn);
+    } catch (e) {}
+  }
+
   if (inApp) {
     document.documentElement.classList.add('in-app');
     try { consentCookies(); } catch (e) {}
@@ -192,5 +210,6 @@ var Native = (function () {
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
     get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,
-    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate, youtubeGet: youtubeGet, youtubeRefresh: youtubeRefresh, canRefreshYT: canRefreshYT };
+    device: device, canLocate: device, keepAwake: keepAwake, dim: dim, statusBar: statusBar, locate: locate, youtubeGet: youtubeGet, youtubeRefresh: youtubeRefresh, canRefreshYT: canRefreshYT,
+    watchOn: watchOn, watchStatus: watchStatus, watchSend: watchSend, watchNow: watchNow, watchReply: watchReply, watchInbox: watchInbox, watchListen: watchListen };
 })();

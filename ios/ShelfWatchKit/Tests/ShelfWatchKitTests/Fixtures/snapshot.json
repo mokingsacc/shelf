@@ -1,0 +1,400 @@
+{
+ "v": 1,
+ "at": 1792749859601,
+ "build": "c119772cabb1",
+ "night": false,
+ "visible": true,
+ "now": {
+  "kind": "video",
+  "key": "peds000091q",
+  "title": "HY USMLE Q #1115 - Pediatrics",
+  "tag": "PAEDS · 92 OF 130",
+  "t": 1,
+  "dur": 600,
+  "playing": true,
+  "buffering": false,
+  "ended": false,
+  "autoNext": true,
+  "rate": 1,
+  "timer": null,
+  "next": {
+   "label": "1123",
+   "title": "Pediatrics",
+   "key": "peds000092q",
+   "course": "PLpeds0000000000"
+  },
+  "notes": false,
+  "at": 1792749859601
+ },
+ "pick": [
+  {
+   "kind": "continue",
+   "entry": {
+    "type": "video",
+    "key": "DirtyMedv0x",
+    "title": "Hyperkalemia Mnemonics and Treatment",
+    "srcName": "Dirty Medicine",
+    "src": "UCDirtyMedicinexxxxxxxxx",
+    "dur": 600,
+    "t": 19,
+    "done": false,
+    "isNew": false,
+    "section": "med"
+   }
+  },
+  {
+   "kind": "upnext",
+   "label": "Paeds · 92 of 130",
+   "entry": {
+    "type": "video",
+    "key": "peds000091q",
+    "title": "HY USMLE Q #1115 - Pediatrics",
+    "srcName": "Mehlman Medical",
+    "src": "",
+    "dur": 740,
+    "t": 0,
+    "done": false,
+    "isNew": false,
+    "section": "med",
+    "course": "PLpeds0000000000",
+    "label": "1115",
+    "short": "Pediatrics"
+   }
+  }
+ ],
+ "sections": [
+  {
+   "id": "ent",
+   "name": "Entertainment",
+   "newCount": 2,
+   "more": 0,
+   "items": [
+    {
+     "type": "video",
+     "key": "Breakingv0x",
+     "title": "Krystal and Saagar: Fed Cuts Rates Again",
+     "srcName": "Breaking Points",
+     "src": "UCBreakingPointsxxxxxxxx",
+     "dur": 0,
+     "t": 0,
+     "done": false,
+     "isNew": true,
+     "section": "ent"
+    },
+    {
+     "type": "video",
+     "key": "EzraKleiv0x",
+     "title": "Why the Housing Market Is Stuck",
+     "srcName": "The Ezra Klein Show",
+     "src": "UCEzraKleinShowxxxxxxxxx",
+     "dur": 0,
+     "t": 0,
+     "done": false,
+     "isNew": true,
+     "section": "ent"
+    }
+   ],
+   "channels": [
+    {
+     "id": "UCBreakingPointsxxxxxxxx",
+     "name": "Breaking Points",
+     "podcast": false,
+     "newCount": 1
+    },
+    {
+     "id": "UCEzraKleinShowxxxxxxxxx",
+     "name": "The Ezra Klein Show",
+     "podcast": false,
+     "newCount": 1
+    }
+   ]
+  },
+  {
+   "id": "med",
+   "name": "Medicine",
+   "newCount": 2,
+   "more": 0,
+   "items": [
+    {
+     "type": "video",
+     "key": "DirtyMedv0x",
+     "title": "Hyperkalemia Mnemonics and Treatment",
+     "srcName": "Dirty Medicine",
+     "src": "UCDirtyMedicinexxxxxxxxx",
+     "dur": 600,
+     "t": 19,
+     "done": false,
+     "isNew": false,
+     "section": "med"
+    },
+    {
+     "type": "video",
+     "key": "AJsMnemov0x",
+     "title": "Dermatology COMPLETE Review for the USMLE",
+     "srcName": "AJmonics",
+     "src": "UCAJsMnemonicsxxxxxxxxxx",
+     "dur": 0,
+     "t": 0,
+     "done": false,
+     "isNew": true,
+     "section": "med"
+    },
+    {
+     "type": "video",
+     "key": "MehlmanMv0x",
+     "title": "HY Arrows: Renal Physiology",
+     "srcName": "Mehlman Medical",
+     "src": "UCMehlmanMedicalxxxxxxxx",
+     "dur": 0,
+     "t": 0,
+     "done": false,
+     "isNew": true,
+     "section": "med"
+    }
+   ],
+   "channels": [
+    {
+     "id": "UCDirtyMedicinexxxxxxxxx",
+     "name": "Dirty Medicine",
+     "podcast": false,
+     "newCount": 0
+    },
+    {
+     "id": "UCMehlmanMedicalxxxxxxxx",
+     "name": "Mehlman Medical",
+     "podcast": false,
+     "newCount": 1
+    },
+    {
+     "id": "UCAJsMnemonicsxxxxxxxxxx",
+     "name": "AJmonics",
+     "podcast": false,
+     "newCount": 1
+    }
+   ]
+  },
+  {
+   "id": "sleep",
+   "name": "Sleep",
+   "newCount": 2,
+   "more": 0,
+   "items": [
+    {
+     "type": "audio",
+     "key": "https://feeds.megaphone.fm/finvshistory#00",
+     "title": "Ep. 212: The Shortest War in History",
+     "srcName": "Fin vs History",
+     "src": "p11prqap",
+     "dur": 3851,
+     "t": 0,
+     "done": false,
+     "isNew": true,
+     "section": "sleep",
+     "url": "https://audio.example.com/ep0.wav",
+     "image": "https://img.example.com/Fin%20vs%20History.png"
+    },
+    {
+     "type": "audio",
+     "key": "https://feeds.example.com/foc#00",
+     "title": "Rome: The Fall of the Western Empire",
+     "srcName": "Fall of Civilizations Podcast",
+     "src": "pog8mn9",
+     "dur": 13732,
+     "t": 0,
+     "done": false,
+     "isNew": true,
+     "section": "sleep",
+     "url": "https://audio.example.com/ep0.wav",
+     "image": "https://img.example.com/Fall%20of%20Civilizations%20Podcast.png"
+    }
+   ],
+   "channels": [
+    {
+     "id": "p11prqap",
+     "name": "Fin vs History",
+     "podcast": true,
+     "newCount": 1
+    },
+    {
+     "id": "pog8mn9",
+     "name": "Fall of Civilizations Podcast",
+     "podcast": true,
+     "newCount": 1
+    }
+   ]
+  }
+ ],
+ "courses": [
+  {
+   "id": "PLpeds0000000000",
+   "name": "Paeds",
+   "done": 91,
+   "total": 130,
+   "state": "go",
+   "next": {
+    "type": "video",
+    "key": "peds000091q",
+    "title": "HY USMLE Q #1115 - Pediatrics",
+    "srcName": "Mehlman Medical",
+    "src": "",
+    "dur": 740,
+    "t": 0,
+    "done": false,
+    "isNew": false,
+    "section": "med",
+    "course": "PLpeds0000000000",
+    "label": "1115",
+    "short": "Pediatrics"
+   },
+   "notch": 91,
+   "ticks": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111000000000000000000000000000000000000000",
+   "touched": 1792749858597,
+   "section": "med"
+  },
+  {
+   "id": "PLobgyn000000000",
+   "name": "OBGYN",
+   "done": 60,
+   "total": 60,
+   "state": "done",
+   "next": null,
+   "notch": -1,
+   "ticks": "111111111111111111111111111111111111111111111111111111111111",
+   "touched": 0,
+   "section": "med"
+  },
+  {
+   "id": "PLoph00000000000",
+   "name": "Ophthal",
+   "done": 12,
+   "total": 12,
+   "state": "done",
+   "next": null,
+   "notch": -1,
+   "ticks": "111111111111",
+   "touched": 0,
+   "section": "med"
+  },
+  {
+   "id": "PLim000000000000",
+   "name": "Internal Med",
+   "done": 0,
+   "total": 150,
+   "state": "new",
+   "next": {
+    "type": "video",
+    "key": "im00000000q",
+    "title": "HY USMLE Q #100 - Internal Medicine",
+    "srcName": "Mehlman Medical",
+    "src": "",
+    "dur": 460,
+    "t": 0,
+    "done": false,
+    "isNew": false,
+    "section": "med",
+    "course": "PLim000000000000",
+    "label": "100",
+    "short": "Internal Medicine"
+   },
+   "notch": 0,
+   "ticks": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "touched": 0,
+   "section": "med"
+  },
+  {
+   "id": "PLpharm000000000",
+   "name": "Pharm",
+   "done": 0,
+   "total": 80,
+   "state": "new",
+   "next": {
+    "type": "video",
+    "key": "phar000000q",
+    "title": "HY USMLE Q #50 - Pharmacology",
+    "srcName": "Mehlman Medical",
+    "src": "",
+    "dur": 620,
+    "t": 0,
+    "done": false,
+    "isNew": false,
+    "section": "med",
+    "course": "PLpharm000000000",
+    "label": "50",
+    "short": "Pharmacology"
+   },
+   "notch": 0,
+   "ticks": "00000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "touched": 0,
+   "section": "med"
+  },
+  {
+   "id": "PLfm000000000000",
+   "name": "Family Med",
+   "done": 0,
+   "total": 40,
+   "state": "new",
+   "next": {
+    "type": "video",
+    "key": "fm00000000q",
+    "title": "HY USMLE Q #700 - Family Medicine",
+    "srcName": "Mehlman Medical",
+    "src": "",
+    "dur": 700,
+    "t": 0,
+    "done": false,
+    "isNew": false,
+    "section": "med",
+    "course": "PLfm000000000000",
+    "label": "700",
+    "short": "Family Medicine"
+   },
+   "notch": 0,
+   "ticks": "0000000000000000000000000000000000000000",
+   "touched": 0,
+   "section": "med"
+  }
+ ],
+ "step2": {
+  "goal": "Step 2 CK",
+  "date": "2026-12-22",
+  "days": 60,
+  "past": false,
+  "today": 0,
+  "todayMins": 0,
+  "left": 309,
+  "perDay": 5.2,
+  "week": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ },
+ "rates": {
+  "video": [
+   1,
+   1.25,
+   1.5,
+   1.75,
+   2
+  ],
+  "audio": [
+   1,
+   1.25,
+   1.5,
+   2,
+   0.8
+  ]
+ },
+ "presets": [
+  15,
+  30,
+  45,
+  60
+ ],
+ "autoNext": true,
+ "ai": false
+}

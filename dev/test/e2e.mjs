@@ -33,7 +33,7 @@ async function appPage({ prefs = {}, clip = '', fakes = {}, ctxOpts = {}, shell 
   return { ctx, p };
 }
 const settle = (p) => p.waitForFunction(() => window.__shelf && !window.__shelf.busy, null, { timeout: 10000 }).then(() => p.waitForTimeout(150)).catch(() => {});
-const shelf = (p, fn) => p.evaluate(fn);
+const shelf = (p, fn, a) => p.evaluate(fn, a);
 
 console.log('\n== 1 Open');
 let { ctx, p } = await appPage({ fakes: { fresh: true } });
@@ -1107,6 +1107,115 @@ await p.locator('#twinDlg .tw-ep').first().click(); await p.waitForTimeout(600);
 const pk = await shelf(p, () => { const st = window.__shelf.engine.state(); return { title: st.episode && st.episode.title, rec: window.__shelf.audio[st.episode.guid], toast: document.querySelector('#toast').textContent }; });
 ok(await p.locator('#nsheet.open').count() === 1 && pk.title === 'The Case for Boredom' && !pk.rec.video && /Your place in the video stays/.test(pk.toast), 'L picking plays it in the sleep player, not tied to the video');
 ok(Math.abs(await p.evaluate((v) => window.__shelf.videos[v].t, vidB) - tBefore) < 2, 'L the video place is left alone for a different cut');
+await ctx.close();
+
+console.log('\n== W Apple Watch: the phone side of the link');
+({ ctx, p } = await appPage({ fakes: { fresh: true }, shell: { hour: 14.13, device: true, watch: true } }));
+await settle(p);
+await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
+await p.waitForFunction(() => { const s = window.__watch.last(); return s && s.courses.length && s.sections.some((x) => x.id === 'med' && x.newCount === 3); }, null, { timeout: 6000 }).catch(() => {});
+let snap = await shelf(p, () => window.__watch.last());
+ok(!!snap && snap.v === 1 && snap.sections.map((x) => x.name).join(',') === 'Entertainment,Medicine,Sleep', 'W the watch gets a snapshot with the sections in Home\'s order: ' + (snap && snap.sections.map((x) => x.name).join(',')));
+const med = snap && snap.sections.find((x) => x.id === 'med');
+ok(med && med.newCount === 3 && med.items.length >= 3 && med.items.every((e) => e.key && e.title && e.type) && med.channels.length >= 2, 'W Medicine: 3 new, its items and channels (' + (med && med.channels.map((c) => c.name).join(', ')) + ')');
+ok(snap && snap.courses.length > 0 && snap.courses.every((c) => c.total >= 0 && c.name) && snap.step2 && snap.step2.days === await shelf(p, () => window.__shelf.courses.daysLeft()), 'W courses and the days to Step 2 are there (' + (snap && snap.step2 && snap.step2.days) + ' days)');
+ok(snap && JSON.stringify(snap).length < 60000, 'W the snapshot is small enough for the trip (' + (snap && JSON.stringify(snap).length) + ' bytes)');
+const vid = med.items.find((e) => e.type === 'video');
+let r = await shelf(p, (e) => window.__watch.fire({ cmd: 'play', entry: e }), vid);
+ok(r.ok && r.playing && await shelf(p, () => window.__shelf.current) === vid.key, 'W Play on iPhone from the watch starts the video here: ' + JSON.stringify(r).slice(0, 80));
+await p.waitForTimeout(400);
+let nowMsg = await shelf(p, () => { const n = window.__watch.nows; return n.length ? JSON.parse(n[n.length - 1]) : null; });
+ok(nowMsg && nowMsg.now && nowMsg.now.kind === 'video' && nowMsg.now.key === vid.key && nowMsg.now.playing && nowMsg.now.dur === 600, 'W the watch hears what plays now (live): ' + (nowMsg && JSON.stringify(nowMsg.now).slice(0, 90)));
+r = await shelf(p, () => window.__watch.fire({ cmd: 'toggle' }));
+ok(r.ok && r.now && r.now.playing === false && await shelf(p, () => window.__fake.getPlayerState()) === 2, 'W toggle from the watch pauses it');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'toggle' }));
+ok(r.ok && r.now && r.now.playing === true, 'W and plays it again');
+const t1 = await shelf(p, () => window.__fake.getCurrentTime());
+r = await shelf(p, () => window.__watch.fire({ cmd: 'seek', by: 15 }));
+ok(r.ok && r.now.t >= t1 + 14, 'W +15 from the watch: ' + Math.round(t1) + ' s → ' + Math.round(r.now.t) + ' s');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'rate', r: 1.5 }));
+ok(r.ok && r.now.rate === 1.5 && await shelf(p, () => window.__fake.getPlaybackRate()) === 1.5, 'W speed 1.5× from the watch');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'timer', m: 30 }));
+ok(r.ok && r.now.timer && r.now.timer.minutes === 30 && await shelf(p, () => window.__shelf.vTimer && window.__shelf.vTimer.minutes) === 30, 'W a 30-minute sleep timer from the watch');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'timer', m: 30 }));
+ok(r.ok && r.now.timer && r.now.timer.minutes === 30, 'W sending the same timer again keeps it (no toggling off by accident)');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'timer', m: 'off' }));
+ok(r.ok && r.now.timer === null && await shelf(p, () => window.__shelf.vTimer) === null, 'W and Off turns it off');
+const marks0 = await shelf(p, () => window.__shelf.marks.list().length);
+r = await shelf(p, () => window.__watch.fire({ cmd: 'mark', t: 17 }));
+ok(r.ok && r.t === 17 && await shelf(p, () => window.__shelf.marks.list().length) === marks0 + 1 && await shelf(p, () => Math.round(window.__shelf.marks.list().slice(-1)[0].t)) === 17, 'W Mark from the watch saves a Mark at the second the watch showed (' + r.t + ' s)');
+// A course: Up next on the watch, play it, Next, tick
+const cwith = snap.courses.find((c) => c.next);
+r = await shelf(p, (e) => window.__watch.fire({ cmd: 'play', entry: e }), cwith.next);
+ok(r.ok && await shelf(p, () => window.__shelf.current) === cwith.next.key, 'W a course\'s next episode plays on the phone from the watch (' + cwith.name + ' ' + cwith.next.label + ')');
+await p.waitForTimeout(200);
+nowMsg = await shelf(p, () => { const n = window.__watch.nows; return JSON.parse(n[n.length - 1]); });
+ok(nowMsg.now.next && nowMsg.now.next.key && /OF/i.test(nowMsg.now.tag), 'W now shows the course tag and what\'s next: ' + nowMsg.now.tag + ' → ' + (nowMsg.now.next && nowMsg.now.next.label));
+const nextKey = nowMsg.now.next.key;
+r = await shelf(p, () => window.__watch.fire({ cmd: 'next' }));
+ok(r.ok && await shelf(p, () => window.__shelf.current) === nextKey, 'W Next from the watch plays the next episode');
+const done0 = await shelf(p, (id) => window.__shelf.courses.progress(id).done, cwith.id);
+r = await shelf(p, (a) => window.__watch.fire({ cmd: 'tick', course: a.c, key: a.k, on: true }), { c: cwith.id, k: nextKey });
+ok(r.ok && r.done === done0 + 1 && await shelf(p, (a) => window.__shelf.courses.isDone(a.c, a.k), { c: cwith.id, k: nextKey }), 'W Tick from the watch ticks it on the phone (' + done0 + ' → ' + r.done + ')');
+r = await shelf(p, (a) => window.__watch.fire({ cmd: 'tick', course: a.c, key: a.k, on: false }), { c: cwith.id, k: nextKey });
+ok(r.ok && r.done === done0, 'W and Undo unticks it');
+r = await shelf(p, (id) => window.__watch.fire({ cmd: 'course', id: id }), cwith.id);
+ok(r.ok && r.items.length > 0 && r.items.length <= 8 && r.items.every((e) => e.course === cwith.id && e.label) && r.count === cwith.total && r.from <= r.notch, 'W a course opened on the watch lists the episodes around your place (' + r.items.length + ')');
+r = await shelf(p, (id) => window.__watch.fire({ cmd: 'course', id: id, from: 0, n: 5 }), cwith.id);
+ok(r.ok && r.from === 0 && r.items.length === 5 && r.items[0].done, 'W ▲ earlier on the watch loads the first five');
+ok(cwith.ticks.length === cwith.total && cwith.ticks.split('').filter((x) => x === '1').length === cwith.done && cwith.notch >= 0, 'W each course carries its ticks for the watch\'s ruler');
+ok(/^\d{4}-\d\d-\d\d$/.test(snap.step2.date), 'W the exam date comes too (' + snap.step2.date + ')');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'stop' }));
+ok(r.ok && await shelf(p, () => window.__shelf.current) === null, 'W Stop from the watch closes the video');
+// Channels and sections load on demand
+r = await shelf(p, (id) => window.__watch.fire({ cmd: 'channel', id: id }), med.channels[0].id);
+ok(r.ok && r.items.length > 0 && r.items.every((e) => e.key && e.title), 'W a channel opened on the watch lists its videos (' + r.items.length + ' from ' + med.channels[0].name + ')');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'section', id: 'ent' }));
+ok(r.ok && r.items.length > 0 && r.items.length <= 20, 'W a whole section loads on the watch (' + r.items.length + ')');
+// A podcast: plays on the phone from the watch, and the remote works on it
+const sleep = snap.sections.find((x) => x.id === 'sleep'), pod = sleep && sleep.items.find((e) => e.type === 'audio');
+ok(!!pod && !!pod.url, 'W Sleep episodes carry their audio link, so the watch can play them itself');
+r = await shelf(p, (e) => window.__watch.fire({ cmd: 'play', entry: e }), pod);
+ok(r.ok && await shelf(p, () => window.__shelf.engine.state().episode && window.__shelf.engine.state().episode.guid) === pod.key, 'W a podcast plays on the phone from the watch: ' + JSON.stringify(r).slice(0, 60));
+r = await shelf(p, () => window.__watch.fire({ cmd: 'timer', m: 15 }));
+ok(r.ok && r.now.kind === 'audio' && r.now.timer && r.now.timer.minutes === 15, 'W the podcast\'s sleep timer from the watch');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'rate', r: 1.25 }));
+ok(r.ok && r.now.rate === 1.25, 'W the podcast\'s speed from the watch');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'pause' }));
+ok(r.ok && r.now.playing === false, 'W Pause from the watch pauses the podcast');
+// A podcast played on the watch: its spot comes back to the phone
+r = await shelf(p, (g) => window.__watch.fire({ cmd: 'audioSpot', guid: g, t: 734, dur: 3600, done: false, updated: Date.now() + 1000 }), pod.key);
+ok(r.ok && await shelf(p, (g) => window.__shelf.audio[g].t, pod.key) === 734, 'W a spot from the watch\'s own playback lands on the phone (12:14)');
+r = await shelf(p, (g) => window.__watch.fire({ cmd: 'audioSpot', guid: g, t: 5, dur: 3600, done: false, updated: 1 }), pod.key);
+ok(r.ok && r.kept && await shelf(p, (g) => window.__shelf.audio[g].t, pod.key) === 734, 'W an older spot never overwrites a newer one');
+// Shelf in the background: a video can't start (YouTube), so the phone says so and the shell notifies
+await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); });
+r = await shelf(p, (e) => window.__watch.fire({ cmd: 'play', entry: e }), vid);
+ok(r.ok === false && r.why === 'hidden', 'W with Shelf in the background, a video says "hidden" (the iPhone gets a tap-to-play notification)');
+await p.evaluate(() => { delete document.visibilityState; });
+// The shell keeps that play in its inbox (and so do commands that arrived while the page was asleep); it runs when Shelf is back
+const hid = await shelf(p, () => 'w' + window.__watch.n);
+await p.evaluate(([e, id]) => { window.__watch.inbox.push({ id: id, json: JSON.stringify({ cmd: 'play', entry: e, at: Date.now() - 60000 }) }); document.dispatchEvent(new Event('visibilitychange')); }, [vid, hid]);
+await p.waitForFunction((id) => window.__watch.replies[id].ok, hid, { timeout: 5000 }).catch(() => {});
+ok(await shelf(p, (id) => window.__watch.replies[id].ok, hid) && await shelf(p, () => window.__shelf.current) === vid.key, 'W the play that waited (tap the notification) starts when Shelf opens');
+await p.evaluate((e) => { window.__watch.inbox.push({ id: 'old1', json: JSON.stringify({ cmd: 'play', entry: e, at: Date.now() - 20 * 60000 }) }); document.dispatchEvent(new Event('visibilitychange')); }, pod);
+await p.waitForFunction(() => window.__watch.replies.old1, null, { timeout: 5000 }).catch(() => {});
+ok(await shelf(p, () => window.__watch.replies.old1 && window.__watch.replies.old1.why) === 'old', 'W one older than 15 minutes is dropped, not played out of the blue');
+const dup = await shelf(p, () => { const before = Object.keys(window.__watch.replies).length; (window.__watch.listeners.command || []).forEach((f) => f({ id: 'w' + window.__watch.n, json: '{"cmd":"stop"}' })); return Object.keys(window.__watch.replies).length === before && !!window.__shelf.current; });
+ok(dup, 'W the same command twice runs once');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'nonsense' }));
+ok(r.ok === false && r.why === 'unknown', 'W an unknown command gets a plain "unknown", never silence');
+const wline = await shelf(p, () => (window.__shelf.checks().find((x) => /^Apple Watch/.test(x.text)) || {}).text || '');
+ok(/^Apple Watch: connected now · sent .+ · last tap /.test(wline), 'W the self-check has an Apple Watch line: ' + wline);
+// The watch's Swift code is tested against these real messages (ios/ShelfWatchKit/Tests): SHELF_FIXTURES=1 records them again
+if (process.env.SHELF_FIXTURES) {
+  const fx = root + 'ios/ShelfWatchKit/Tests/ShelfWatchKitTests/Fixtures/', W = await shelf(p, () => ({ snaps: window.__watch.snaps, nows: window.__watch.nows, replies: window.__watch.replies }));
+  const richest = W.snaps.map((x) => JSON.parse(x)).sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0];
+  fs.writeFileSync(fx + 'snapshot.json', JSON.stringify(richest, null, 1));
+  fs.writeFileSync(fx + 'nows.json', JSON.stringify(W.nows.map((x) => JSON.parse(x)), null, 1));
+  fs.writeFileSync(fx + 'replies.json', JSON.stringify(W.replies, null, 1));
+  console.log('  (recorded the watch fixtures)');
+}
 await ctx.close();
 
 console.log('\n== Mac browser (no app)');

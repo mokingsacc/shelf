@@ -146,6 +146,24 @@ export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: 
       statusBar: async (o) => { window.__devCalls.push('statusBar:' + o.style); return o; }, locate: async () => { window.__devCalls.push('locate'); return { lat: 53.4808, lon: -2.2426 }; },
       // Watch history: window.__hist = { signedIn, html } (or a list, one per call)
       youtubeGet: async (o) => { window.__devCalls.push('youtubeGet:' + o.url); if (o.url.includes('/feed/channels') && window.__subs) return { status: 200, data: window.__subs, signedIn: true }; if (o.url.includes('/feed/playlists') && window.__mypls) return window.__mypls === 'out' ? { status: 200, data: '', signedIn: false } : { status: 200, data: window.__mypls, signedIn: true }; const pm = o.url.indexOf('/playlist?list=') >= 0 ? o.url.split('list=')[1] : ''; if (pm) return window.__privpl && window.__privpl[pm] ? { status: 200, data: window.__privpl[pm], signedIn: true } : { status: 404, data: '', signedIn: true }; const h = Array.isArray(window.__hist) ? (window.__hist.length > 1 ? window.__hist.shift() : window.__hist[0]) : window.__hist; return h ? { status: 200, data: h.html || '', signedIn: h.signedIn !== false } : { status: 200, data: '', signedIn: false }; } };
+    // shell.watch: a shell with Shelf's Apple Watch link (ShelfWatch). window.__watch holds what the page sent
+    // (snaps, nows, replies by id) and fire(cmd) sends a command as the watch would; its reply settles the promise.
+    if (${!!shell.watch}) {
+      var W = window.__watch = { snaps: [], nows: [], replies: {}, inbox: [], listeners: {}, status: { activated: true, paired: true, installed: true, reachable: true }, n: 0, waiters: {} };
+      W.fire = function (cmd) { var id = 'w' + (++W.n); var item = { id: id, json: JSON.stringify(Object.assign({ at: Date.now() }, cmd)) };
+        return new Promise(function (res) { W.waiters[id] = res; (W.listeners.command || []).forEach(function (f) { f(item); }); }); };
+      W.reach = function (on) { W.status.reachable = on; (W.listeners.reach || []).forEach(function (f) { f({ reachable: on, paired: true, installed: true }); }); };
+      W.last = function () { return W.snaps.length ? JSON.parse(W.snaps[W.snaps.length - 1]) : null; };
+      (window.Capacitor.PluginHeaders = window.Capacitor.PluginHeaders || []).push({ name: 'ShelfWatch', methods: ['status', 'send', 'now', 'reply', 'inbox'].map((n) => ({ name: n, rtype: 'promise' })) });
+      window.Capacitor.Plugins.ShelfWatch = {
+        status: async () => Object.assign({}, W.status),
+        send: async (o) => { W.snaps.push(o.json); return {}; },
+        now: async (o) => { W.nows.push(o.json); return {}; },
+        reply: async (o) => { W.replies[o.id] = JSON.parse(o.json); if (W.waiters[o.id]) { W.waiters[o.id](W.replies[o.id]); delete W.waiters[o.id]; } return {}; },
+        inbox: async () => ({ items: W.inbox.splice(0) }),
+        addListener: (ev, f) => { (W.listeners[ev] = W.listeners[ev] || []).push(f); return { remove: () => {} }; }
+      };
+    }
   })();`; };
 
 // opts.fresh: hide the newest item on the first fetch of each feed, so a later refresh shows "new"
