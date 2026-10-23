@@ -8,17 +8,18 @@ struct Step2Page: View {
     private let band = Band.entertainment
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if let s = store.snap?.step2 {
-                    if s.past { done(s) } else { counting(s) }
-                } else {
-                    Cap(text: "Step 2", color: band.fg)
-                    Text("Set your exam date in Shelf on your iPhone.").font(.shelf(14, .regular)).foregroundStyle(band.fg).padding(.top, 6)
-                }
+        // Always fits one screen, so no scroll view: the Crown goes straight on to the next page
+        VStack(alignment: .leading, spacing: 0) {
+            if let s = store.snap?.step2 {
+                if s.past { done(s) } else { counting(s) }
+            } else {
+                Cap(text: "Step 2", color: band.fg)
+                Text("Set your exam date in Shelf on your iPhone.").font(.shelf(14, .regular)).foregroundStyle(band.fg).padding(.top, 6)
             }
-            .padding(.horizontal, Metric.inset)
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Metric.inset)
         .page(band.bg)
     }
 
