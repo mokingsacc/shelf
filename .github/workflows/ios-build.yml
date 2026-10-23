@@ -21,8 +21,9 @@ jobs:
         run: cd ios/ShelfWatchKit && swift test 2>&1 | tail -25
       - name: Build the app (with its watch app) for the simulator
         run: |
+          # No -sdk here: it would build the watch app with the iPhone's SDK; each target keeps its own
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 && code=0 || code=$?
           tail -40 build.log
           # Compile errors as annotations too, so they show on the check without opening the log

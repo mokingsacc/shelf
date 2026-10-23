@@ -67,6 +67,7 @@ watch.build_configurations.each do |c|
   s['INFOPLIST_FILE'] = 'ShelfWatch/Info.plist'
   s['GENERATE_INFOPLIST_FILE'] = 'NO'
   s['SDKROOT'] = 'watchos'
+  s['SUPPORTED_PLATFORMS'] = 'watchos watchsimulator'
   s['WATCHOS_DEPLOYMENT_TARGET'] = '10.0'
   s['TARGETED_DEVICE_FAMILY'] = '4'
   s['SWIFT_VERSION'] = '5.0'
