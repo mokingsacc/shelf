@@ -88,14 +88,21 @@ final class WatchPlayer: ObservableObject {
 
         saveSpot()  // the one before, if another was playing
         stopObserving()
-        let p = AVPlayer(url: url)
+        let pi = AVPlayerItem(url: url)
+        let p = AVPlayer(playerItem: pi)
         p.automaticallyWaitsToMinimizeStalling = true
         player = p
         item = it
         dur = it.dur
         rate = savedRate(it.podcast)
         t = max(0, start)
-        if t > 0 { _ = await p.seek(to: CMTime(seconds: t, preferredTimescale: 600)) }
+        if t > 0 {
+            // A seek only works once the episode has loaded (up to 15 s on a slow connection)
+            for _ in 0..<60 where pi.status == .unknown { try? await Task.sleep(nanoseconds: 250_000_000) }
+            guard player === p else { return false }       // something else was started meanwhile
+            guard pi.status == .readyToPlay else { problem = "noaudio"; stop(); return false }
+            _ = await p.seek(to: CMTime(seconds: t, preferredTimescale: 600))
+        }
         p.defaultRate = Float(rate)
         p.playImmediately(atRate: Float(rate))
         playing = true

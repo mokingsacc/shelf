@@ -1201,6 +1201,9 @@ ok(await shelf(p, (id) => window.__watch.replies[id].ok, hid) && await shelf(p, 
 await p.evaluate((e) => { window.__watch.inbox.push({ id: 'old1', json: JSON.stringify({ cmd: 'play', entry: e, at: Date.now() - 20 * 60000 }) }); document.dispatchEvent(new Event('visibilitychange')); }, pod);
 await p.waitForFunction(() => window.__watch.replies.old1, null, { timeout: 5000 }).catch(() => {});
 ok(await shelf(p, () => window.__watch.replies.old1 && window.__watch.replies.old1.why) === 'old', 'W one older than 15 minutes is dropped, not played out of the blue');
+await p.evaluate(() => { window.__watch.inbox.push({ id: 'old2', json: JSON.stringify({ cmd: 'toggle', at: Date.now() - 15000 }) }); document.dispatchEvent(new Event('visibilitychange')); });
+await p.waitForFunction(() => window.__watch.replies.old2, null, { timeout: 5000 }).catch(() => {});
+ok(await shelf(p, () => window.__watch.replies.old2 && window.__watch.replies.old2.why) === 'old', 'W a remote tap that waited over 10 s is dropped (no pause out of the blue)');
 const dup = await shelf(p, () => { const before = Object.keys(window.__watch.replies).length; (window.__watch.listeners.command || []).forEach((f) => f({ id: 'w' + window.__watch.n, json: '{"cmd":"stop"}' })); return Object.keys(window.__watch.replies).length === before && !!window.__shelf.current; });
 ok(dup, 'W the same command twice runs once');
 r = await shelf(p, () => window.__watch.fire({ cmd: 'nonsense' }));

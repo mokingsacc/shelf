@@ -73,8 +73,9 @@ public struct Command: Sendable {
     public static func life(_ name: String) -> TimeInterval {
         switch name {
         case "play": return 15 * 60
+        case "next": return 5 * 60
         case "tick", "audioSpot": return 7 * 86400
-        default: return 60
+        default: return 10
         }
     }
 

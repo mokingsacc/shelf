@@ -82,6 +82,12 @@ watch.build_configurations.each do |c|
   s.delete('IPHONEOS_DEPLOYMENT_TARGET')
 end
 link_kit(p, watch, pkg)
+# new_target links Foundation by a path inside one SDK version; the system links it anyway
+watch.frameworks_build_phase.files.select { |f| f.file_ref && f.file_ref.path.to_s.end_with?('Foundation.framework') }.each do |f|
+  ref = f.file_ref
+  f.remove_from_project
+  ref.remove_from_project if ref.referrers.none? { |r| r.is_a?(Xcodeproj::Project::Object::PBXBuildFile) }
+end
 
 # Embedded in the iPhone app, built with it
 app.add_dependency(watch) unless app.dependencies.any? { |d| d.target == watch }

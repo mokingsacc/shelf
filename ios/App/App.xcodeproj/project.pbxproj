@@ -30,7 +30,6 @@
 		8CF3134047881BCEABE0F957 /* PhoneLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05D0426BD07496145CF2C29 /* PhoneLink.swift */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		983B92A3874D6D2254773019 /* ShelfWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 1FCA57D34837C62BD3776860 /* ShelfWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		99C47BCF3C5A6B911E122053 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C03AB77556EF624A4DC04ED3 /* Foundation.framework */; };
 		9CB922A3D6DD7B8D0F7DBE2D /* PlayOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD599849C646D75D7A11F74 /* PlayOnView.swift */; };
 		9DF040E3E6BF692226774D45 /* SectionsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C5E9C1BE5051CED53E29FFB /* SectionsPage.swift */; };
 		AAF592255DFF4FFA43250582 /* ShelfWatchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1C1101797D428A4A39517D87 /* ShelfWatchKit */; };
@@ -93,7 +92,6 @@
 		97E76459681D40C67259EDB1 /* WatchPlayer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchPlayer.swift; sourceTree = "<group>"; };
 		A05D0426BD07496145CF2C29 /* PhoneLink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PhoneLink.swift; sourceTree = "<group>"; };
 		A189937455BDFB7347B67E95 /* ShelfWatch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShelfWatch.swift; sourceTree = "<group>"; };
-		C03AB77556EF624A4DC04ED3 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		DE2F79A5EC106AED0B30E1FF /* NowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NowView.swift; sourceTree = "<group>"; };
 		DE6E2DBA059E121DCC0CDA99 /* CoursesPage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CoursesPage.swift; sourceTree = "<group>"; };
 		E11EFC8F7972A822F055CA76 /* Actions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Actions.swift; sourceTree = "<group>"; };
@@ -104,7 +102,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				99C47BCF3C5A6B911E122053 /* Foundation.framework in Frameworks */,
 				AAF592255DFF4FFA43250582 /* ShelfWatchKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -187,7 +184,6 @@
 		585FF297B2B6DD716462C0EB /* watchOS */ = {
 			isa = PBXGroup;
 			children = (
-				C03AB77556EF624A4DC04ED3 /* Foundation.framework */,
 			);
 			name = watchOS;
 			sourceTree = "<group>";

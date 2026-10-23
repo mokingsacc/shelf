@@ -20,6 +20,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     weak var plugin: ShelfWatchPlugin?
     private let queue = DispatchQueue(label: "shelf.watch")
     private var waiting: [String: DispatchWorkItem] = [:]
+    private var tasks: [String: UIBackgroundTaskIdentifier] = [:]   // main thread only: time to answer while in the background
     private var session: WCSession? { WCSession.isSupported() ? WCSession.default : nil }
 
     /// Started at launch (a background launch too, so a tap from the watch is never lost)
@@ -69,8 +70,9 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         let r = Reply.decode(data)
         queue.async {
             self.waiting.removeValue(forKey: id)?.cancel()
+            defer { self.endTask(id) }
             guard let item = self.item(id) else { self.answer(id, data); return }
-            if r?.why == "hidden" {
+            if r?.why == "hidden" && Self.waits(Command.name(of: Data(item.json.utf8))) {
                 // Shelf is in the background: the play waits for a tap on the notification
                 self.notify(item)
             } else {
@@ -98,26 +100,55 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         }
     }
 
+    /// Taps that wait for Shelf to open (behind "Tap to play"), rather than being dropped when the page can't act now
+    static func waits(_ name: String) -> Bool { name == "play" || name == "next" }
+
     private func receive(id: String, json: Data) {
         let name = Command.name(of: json)
+        let text = String(decoding: json, as: UTF8.self)
         queue.async {
             var list = self.readInbox()
             guard !list.contains(where: { $0.id == id }) else { return }
-            list.append(Item(id: id, json: String(decoding: json, as: UTF8.self), got: Date().timeIntervalSince1970, notified: nil))
-            self.writeInbox(Array(list.suffix(200)))
-            DispatchQueue.main.async { self.plugin?.command(id: id, json: String(decoding: json, as: UTF8.self)) }
-            // No answer from the page in time: tell the watch plainly, and keep what should wait
-            let work = DispatchWorkItem { [weak self] in self?.noAnswer(id: id, name: name) }
-            self.waiting[id] = work
-            self.queue.asyncAfter(deadline: .now() + max(2.5, Command.patience(name) - 1.5), execute: work)
+            // A podcast spot replaces the older spots of the same episode (the newest wins anyway)
+            if name == "audioSpot", let g = Self.guid(json) { list.removeAll { Command.name(of: Data($0.json.utf8)) == "audioSpot" && Self.guid(Data($0.json.utf8)) == g } }
+            list.append(Item(id: id, json: text, got: Date().timeIntervalSince1970, notified: nil))
+            // Never more than 200 kept: the oldest go first, ticks last
+            while list.count > 200 {
+                if let i = list.firstIndex(where: { Command.name(of: Data($0.json.utf8)) != "tick" }) { list.remove(at: i) } else { list.removeFirst() }
+            }
+            self.writeInbox(list)
+            DispatchQueue.main.async {
+                // Shelf may have been woken in the background just for this: ask iOS for the seconds to answer it
+                let app = UIApplication.shared
+                let task = app.beginBackgroundTask(withName: "shelf-watch") { [weak self] in self?.endTask(id) }
+                if task != .invalid { self.tasks[id] = task }
+                let page = self.plugin
+                page?.command(id: id, json: text)
+                // No answer from the page in time (or no page at all: Shelf isn't open): tell the watch plainly, and keep what should wait
+                self.queue.async {
+                    let work = DispatchWorkItem { [weak self] in self?.noAnswer(id: id, name: name) }
+                    self.waiting[id] = work
+                    self.queue.asyncAfter(deadline: .now() + (page == nil ? 0 : max(2.5, Command.patience(name) - 1.5)), execute: work)
+                }
+            }
         }
+    }
+
+    private static func guid(_ json: Data) -> String? {
+        (try? JSONSerialization.jsonObject(with: json) as? [String: Any])?["guid"] as? String
+    }
+
+    private func endTask(_ id: String) {
+        let end = { if let t = self.tasks.removeValue(forKey: id) { UIApplication.shared.endBackgroundTask(t) } }
+        if Thread.isMainThread { end() } else { DispatchQueue.main.async(execute: end) }
     }
 
     private func noAnswer(id: String, name: String) {
         waiting.removeValue(forKey: id)
+        defer { endTask(id) }
         guard let item = item(id) else { return }
-        let keep = name == "play" || Command.durable(name)
-        if name == "play" { notify(item) }
+        let keep = Self.waits(name) || Command.durable(name)
+        if Self.waits(name) { notify(item) }
         if !keep { remove(id) }
         let r: [String: Any] = ["ok": false, "why": "asleep", "queued": keep]
         if let d = try? JSONSerialization.data(withJSONObject: r) { answer(id, d) }

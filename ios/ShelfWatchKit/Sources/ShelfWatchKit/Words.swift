@@ -73,7 +73,7 @@ public enum Words {
     /// Why a tap didn't work, said plainly and with what to do
     public static func why(_ code: String, msg: String? = nil) -> String {
         switch code {
-        case "hidden": return "Shelf is in the background on your iPhone. Tap its notification there and it plays."
+        case "hidden": return "Shelf is in the background on your iPhone. Open it there (a play you chose starts then)."
         case "stalled": return "It didn't start on your iPhone. Open Shelf there and try again."
         case "asleep": return "Open Shelf on your iPhone to control it from here."
         case "unreachable": return "Your iPhone isn't in reach. Bring it closer, or play a podcast on the watch."

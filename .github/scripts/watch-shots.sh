@@ -48,6 +48,7 @@ shot step2 -screen step2
 shot check -screen check
 shot away -away -screen today
 shot now-away -away -playing -screen now
+shot now-next -playing -ended -screen now
 shot check-away -away -screen check
 # Crash reports, if any screen crashed
 ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i shelf && echo "::warning::The watch app crashed on a screen (see DiagnosticReports)"

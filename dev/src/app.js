@@ -2287,12 +2287,12 @@
     watch.done[id] = Date.now(); watch.heard = Date.now();
     var c; try { c = JSON.parse(item.json || '{}'); } catch (e) { c = {}; }
     // A command that waited for Shelf to open: a play stays good for 15 minutes (tap the iPhone's notification), a tick
-    // or a podcast spot for a week; a remote tap (pause, seek…) only for a minute, so nothing starts out of the blue later
-    var life = c.cmd === 'play' ? 15 * 60000 : c.cmd === 'tick' || c.cmd === 'audioSpot' ? 7 * 864e5 : 60000;
+    // or a podcast spot for a week, Next for 5 minutes; a remote tap (pause, seek…) only for 10 s, so nothing moves out of the blue later
+    var life = c.cmd === 'play' ? 15 * 60000 : c.cmd === 'tick' || c.cmd === 'audioSpot' ? 7 * 864e5 : c.cmd === 'next' ? 5 * 60000 : 10000;
     if (c.at && Date.now() - c.at > life) { Native.watchReply(id, { ok: false, why: 'old' }); return; }
     Promise.resolve().then(function () { return watchDo(c); }).then(function (r) {
-      // Shelf is in the background: the iPhone keeps the play and shows "Tap to play"; it comes back here when Shelf opens
-      if (r && r.why === 'hidden') delete watch.done[id];
+      // Shelf is in the background: the iPhone keeps a play (or Next) and shows "Tap to play"; it comes back here when Shelf opens
+      if (r && r.why === 'hidden' && (c.cmd === 'play' || c.cmd === 'next')) delete watch.done[id];
       Native.watchReply(id, r || { ok: true });
     }, function (e) { Native.watchReply(id, { ok: false, why: 'error', msg: String((e && e.message) || e) }); })
       .then(function () { watchNowSoon(true); watchSoon(); });
@@ -2462,6 +2462,8 @@
     Native.watchListen('reach', function (e) { watch.reachable = !!(e && e.reachable); watch.installed = e && e.installed != null ? !!(e.paired && e.installed) : watch.installed; if (watch.reachable) { watchPush(); watchNowSoon(true); } });
     watchStatus().then(function () { return Native.watchInbox(); }).then(function (items) { (items || []).forEach(watchCmd); });
     document.addEventListener('visibilitychange', function () {
+      // Going to the background: tell the watch at once (the page may be paused before a timer fires), so it shows "open Shelf"
+      if (document.visibilityState !== 'visible') { clearTimeout(watch.snapT); watchPush(); }
       watchStatus(); watchNowSoon(true); watchSoon();
       if (document.visibilityState === 'visible') Native.watchInbox().then(function (items) { (items || []).forEach(watchCmd); });
     });

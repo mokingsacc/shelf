@@ -48,27 +48,34 @@ struct NowView: View {
         let pal = Palette.of(audio: !s.isVideo)
         let away = !s.onWatch && !store.live
         let step: Double = s.dur > 3600 ? 60 : 15
+        let ending = target == nil && s.ended && !s.onWatch
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
                 if let target {
                     scrubHead(s, pal, target)
-                } else if s.ended, !s.onWatch {
-                    nextUp(s, pal)
+                } else if ending {
+                    nextHead(s, pal)
                 } else {
                     tag(s, pal, away)
-                    Text(s.title).font(.shelf(15, .heavy)).kerning(-0.2).lineLimit(2).foregroundStyle(pal.hi).fixedSize(horizontal: false, vertical: true)
+                    // The only flexible line: two lines when there's room, one before anything else moves
+                    Text(s.title).font(.shelf(15, .heavy)).kerning(-0.2).lineLimit(2).foregroundStyle(pal.hi)
                         .layoutPriority(-1)
-                    if !s.message.isEmpty && !s.onWatch {
-                        Text(s.message).font(.shelf(13, .regular)).foregroundStyle(Ink.wait).lineLimit(2)
+                    if let problem {
+                        Text(problem).font(.shelf(12, .semibold)).foregroundStyle(Ink.wait).lineLimit(2)
+                    } else if !s.message.isEmpty && !s.onWatch {
+                        Text(s.message).font(.shelf(13, .regular)).foregroundStyle(Ink.wait).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    if let problem { Text(problem).font(.shelf(12, .semibold)).foregroundStyle(Ink.wait).lineLimit(3).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 2)
-                timeRow(s, pal)
-                controls(s, pal).opacity(away ? 0.4 : 1)
+                if ending {
+                    nextControls(s, pal)
+                } else {
+                    timeRow(s, pal)
+                    controls(s, pal).opacity(away ? 0.4 : 1)
+                }
             }
             .padding(.horizontal, Metric.inset)
-            .padding(.top, 12)                      // below the system Back button, which floats over a screen that doesn't scroll
+            .padding(.top, 20)                      // below the system Back button, which floats over a screen that doesn't scroll
             .padding(.bottom, 6)
             transport(s, pal).opacity(away ? 0.4 : 1)
         }
@@ -81,7 +88,7 @@ struct NowView: View {
 
     private func tag(_ s: Showing, _ pal: Palette, _ away: Bool) -> some View {
         let color = away ? Ink.wait : (pal.night ? pal.mute : pal.accent)
-        let text = away ? "Open Shelf on your iPhone" : (s.onWatch && s.message == "NO AIRPODS" ? "Paused · no AirPods" : (s.playing ? "" : "Paused · ") + s.tag)
+        let text = away ? "Open Shelf on iPhone" : (s.onWatch && s.message == "NO AIRPODS" ? "Paused · no AirPods" : (s.playing ? "" : "Paused · ") + s.tag)
         return HStack(spacing: 3) {
             Image(systemName: s.onWatch ? "applewatch" : "iphone").font(.system(size: 10, weight: .heavy))
             Cap(text: text, color: color, size: 11)
@@ -214,11 +221,21 @@ struct NowView: View {
 
     // MARK: Next up (the phone's end-of-video card)
 
-    @ViewBuilder private func nextUp(_ s: Showing, _ pal: Palette) -> some View {
+    @ViewBuilder private func nextHead(_ s: Showing, _ pal: Palette) -> some View {
         if let n = s.next {
-            Cap(text: "Next up · " + s.tag, color: pal.night ? pal.mute : pal.accent)
-            Text(n.label + " · " + n.title).font(.shelf(15, .heavy)).lineLimit(2).foregroundStyle(pal.hi)
-            Meta(text: s.autoNext ? "Plays in 5 s" : "Ended", color: pal.mute)
+            Cap(text: "Next up · " + s.tag, color: pal.night ? pal.mute : pal.accent).frame(height: 13)
+            Text(n.label + " · " + n.title).font(.shelf(15, .heavy)).lineLimit(2).foregroundStyle(pal.hi).layoutPriority(-1)
+        } else {
+            Cap(text: s.tag, color: pal.mute).frame(height: 13)
+            Text("End of the playlist").font(.shelf(15, .heavy)).lineLimit(2).foregroundStyle(pal.hi).layoutPriority(-1)
+        }
+        if let problem { Text(problem).font(.shelf(12, .semibold)).foregroundStyle(Ink.wait).lineLimit(2) }
+    }
+
+    /// In place of the time row and the control row: the countdown, then Play next and Stop (or Done at the end of a list)
+    @ViewBuilder private func nextControls(_ s: Showing, _ pal: Palette) -> some View {
+        if s.next != nil {
+            Meta(text: s.autoNext ? "Plays in 5 s" : "Ended", color: pal.mute).frame(height: 16)
             HStack(spacing: Metric.gap) {
                 Button { Task { problem = await Act.next() } } label: { Cell(fill: pal.accent, outline: nil) { ButtonText(text: "Play next", color: .black, size: 12) } }.buttonStyle(Press())
                 Button { Task { await Act.stop(s) } } label: { Cell(outline: Ink.dim) { ButtonText(text: "Stop", color: pal.text, size: 12) } }.buttonStyle(Press())
@@ -226,8 +243,7 @@ struct NowView: View {
             }
             .frame(height: Metric.tap)
         } else {
-            Cap(text: s.tag, color: pal.mute)
-            Text("End of the playlist").font(.shelf(15, .heavy)).foregroundStyle(pal.hi)
+            Meta(text: "Ended", color: pal.mute).frame(height: 16)
             Button { store.path = []; store.tab = 0 } label: { Cell(outline: Ink.dim) { ButtonText(text: "Done", color: pal.text) } }.buttonStyle(Press())
                 .frame(height: Metric.tap)
         }

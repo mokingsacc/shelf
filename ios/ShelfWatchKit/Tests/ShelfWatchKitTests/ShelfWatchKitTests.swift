@@ -97,7 +97,8 @@ final class ShelfWatchKitTests: XCTestCase {
         XCTAssertFalse(c.durable)
         XCTAssertTrue(Command("tick").durable)
         XCTAssertEqual(Command.life("play"), 900)
-        XCTAssertEqual(Command.life("toggle"), 60)
+        XCTAssertEqual(Command.life("toggle"), 10)
+        XCTAssertEqual(Command.life("next"), 300)
         XCTAssertNotEqual(Command.newID(), Command.newID())
     }
 

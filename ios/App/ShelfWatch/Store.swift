@@ -138,8 +138,9 @@ final class Store: ObservableObject {
 
     // MARK: What the screens ask
 
-    /// The iPhone can be controlled now: in reach, and Shelf's page answers
-    var live: Bool { reachable && page }
+    /// The iPhone can be controlled now: in reach, Shelf's page answers, and it's on screen (YouTube stops videos in the
+    /// background; a podcast carries on there, so it stays controllable)
+    var live: Bool { reachable && page && (snap?.visible != false || phoneNow?.kind == "audio") }
 
     var stale: String { live ? "" : (snap.map { "Showing " + Self.clock($0.date) } ?? "") }
 
@@ -174,6 +175,7 @@ final class Store: ObservableObject {
             phoneNow = NowState(kind: "video", key: e.key, title: e.title, tag: e.srcName, t: 252, dur: 724, playing: true, rate: 1.5,
                                 next: NextUp(label: "1109", title: "Pediatrics", key: "x"), notes: true, at: Date().timeIntervalSince1970 * 1000)
         }
+        if args.contains("-ended"), var n = phoneNow { n.ended = true; n.autoNext = true; n.playing = false; n.t = n.dur; n.tag = "Paeds · 92 of 130"; phoneNow = n }
     }
 
     /// Changes the demo's state (screenshots only)
