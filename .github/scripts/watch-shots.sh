@@ -51,6 +51,10 @@ shot now-away -away -playing -screen now
 shot now-next -playing -ended -screen now
 shot now-message -playing -message -screen now
 shot check-away -away -screen check
+shot closed -closed -screen today
+shot now-closed -closed -playing -screen now
+shot playon-closed -closed -screen playon
+shot check-closed -closed -screen check
 # Crash reports, if any screen crashed
 ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i shelf && echo "::warning::The watch app crashed on a screen (see DiagnosticReports)"
 # To the ci-shots branch, so they can be fetched without the artifact API

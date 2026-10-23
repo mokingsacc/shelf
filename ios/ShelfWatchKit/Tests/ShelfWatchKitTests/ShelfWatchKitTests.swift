@@ -144,7 +144,7 @@ final class ShelfWatchKitTests: XCTestCase {
         XCTAssertEqual(Words.days(Step2(goal: "Step 2 CK", days: 60)), "60 days to Step 2 CK")
         XCTAssertEqual(Words.days(Step2(goal: "Step 2 CK", days: 1)), "1 day to Step 2 CK")
         XCTAssertEqual(Words.days(Step2(goal: "Step 2 CK", days: 0, past: true)), "Step 2 CK is done")
-        for code in ["hidden", "stalled", "asleep", "unreachable", "timeout", "old", "nothing", "end", "missing", "nourl", "noai", "unknown", "noroute"] {
+        for code in ["hidden", "stalled", "asleep", "waits", "unreachable", "timeout", "old", "nothing", "end", "missing", "nourl", "noai", "unknown", "noroute"] {
             XCTAssertFalse(Words.why(code).contains("went wrong"), code + " has its own words")
         }
         XCTAssertTrue(Words.why("error", msg: "boom").contains("boom"))

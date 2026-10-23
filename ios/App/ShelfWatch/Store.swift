@@ -84,7 +84,7 @@ final class Store: ObservableObject {
     /// The iPhone's answer to a tap (from the link)
     func answer(id: String, _ r: Reply) {
         heardAt = Date()
-        page = r.why != "asleep" && r.why != "notified"
+        page = r.why != "asleep" && r.why != "notified" && r.why != "waits"
         if r.hasNow {
             if let n = r.now { if n.at >= (phoneNow?.at ?? 0) { phoneNow = n } } else { phoneNow = nil }
         }
@@ -142,6 +142,10 @@ final class Store: ObservableObject {
     /// background; a podcast carries on there, so it stays controllable)
     var live: Bool { reachable && page && (snap?.visible != false || phoneNow?.kind == "audio") }
 
+    /// In reach, but Shelf can't answer there (closed, or asleep in the background). Play still works from the watch: a podcast
+    /// plays on the iPhone by itself, a video starts with one tap on the iPhone's "Tap to play"
+    var closed: Bool { reachable && !live }
+
     var stale: String { live ? "" : (snap.map { "Showing " + Self.clock($0.date) } ?? "") }
 
     func section(_ id: String) -> ShelfWatchKit.Section? { snap?.sections.first { $0.id == id } }
@@ -171,6 +175,7 @@ final class Store: ObservableObject {
         reachable = true
         heardAt = Date()
         if args.contains("-away") { reachable = false; page = false; s.at -= 600_000; snap = s }
+        if args.contains("-closed") { page = false }   // in reach, Shelf closed on the iPhone
         if args.contains("-playing"), let e = s.sections.first(where: { $0.id == "med" })?.items.first {
             phoneNow = NowState(kind: "video", key: e.key, title: e.title, tag: e.srcName, t: 252, dur: 724, playing: true, rate: 1.5,
                                 next: NextUp(label: "1109", title: "Pediatrics", key: "x"), notes: true, at: Date().timeIntervalSince1970 * 1000)

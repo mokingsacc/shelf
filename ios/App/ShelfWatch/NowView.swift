@@ -45,7 +45,7 @@ struct NowView: View {
 
     private func remote(_ s: Showing) -> some View {
         let pal = Palette.of(audio: !s.isVideo)
-        let away = !s.onWatch && !store.live
+        let away = !s.onWatch && !store.reachable
         let step: Double = s.dur > 3600 ? 60 : 15
         let ending = target == nil && s.ended && !s.onWatch
         return VStack(spacing: 0) {
@@ -91,7 +91,7 @@ struct NowView: View {
 
     private func tag(_ s: Showing, _ pal: Palette, _ away: Bool) -> some View {
         let color = away ? Ink.wait : (pal.night ? pal.mute : pal.accent)
-        let text = away ? "Open Shelf on iPhone" : (s.onWatch && s.message == "NO AIRPODS" ? "Paused · no AirPods" : (s.playing ? "" : "Paused · ") + s.tag)
+        let text = away ? "iPhone out of reach" : (s.onWatch && s.message == "NO AIRPODS" ? "Paused · no AirPods" : (s.playing ? "" : "Paused · ") + s.tag)
         return HStack(spacing: 3) {
             Image(systemName: s.onWatch ? "applewatch" : "iphone").font(.system(size: 10, weight: .heavy))
             Cap(text: text, color: color, size: 11)
@@ -202,7 +202,7 @@ struct NowView: View {
     }
 
     private func centre(_ s: Showing, _ pal: Palette) -> some View {
-        Button { Task { await Act.toggle(s) } } label: {
+        Button { Task { problem = await Act.toggle(s) } } label: {
             ZStack {
                 if pal.night {
                     Color.black
@@ -512,7 +512,7 @@ struct NotesView: View {
         case "loading": return "Loading from your iPhone…"
         case "working": return "Writing the notes on your iPhone…"
         case "noai": return Words.why("noai")
-        case "away": return Words.why("asleep")
+        case "away": return "Open Shelf on your iPhone to load the notes."
         default: return "No notes for this video yet."
         }
     }

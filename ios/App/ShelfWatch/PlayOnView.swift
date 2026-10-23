@@ -62,7 +62,7 @@ struct PlayOnView: View {
     @ViewBuilder private func choice(_ b: Band) -> some View {
         if watchItem != nil {
             HStack(spacing: Metric.gap) {
-                square(b, icon: "iphone", name: "iPhone", sub: store.live ? (entry.isAudio ? "episode" : "video") : "open Shelf first", which: "phone", dim: !store.live) { await playPhone() }
+                square(b, icon: "iphone", name: "iPhone", sub: !store.reachable ? "out of reach" : entry.isAudio ? "episode" : store.live ? "video" : "tap iPhone to start", which: "phone", dim: !store.reachable) { await playPhone() }
                 square(b, icon: "applewatch", name: "Watch", sub: watchSub, which: "watch", dim: false) { await playWatch() }
             }
         } else {

@@ -43,7 +43,7 @@ enum Act {
         }
         guard let n = store.phoneNow else { return nil }
         // The phone's clock runs on from its last word only while it can be heard; otherwise it stays where it was
-        return Showing(onWatch: false, kind: n.kind, key: n.key, title: n.title, tag: n.tag, t: store.live ? n.position(at: date) : n.t, dur: n.dur, playing: n.playing,
+        return Showing(onWatch: false, kind: n.kind, key: n.key, title: n.title, tag: n.tag, t: store.live ? n.position(at: date) : n.t, dur: n.dur, playing: n.playing && !store.closed,
                        rate: n.rate, timer: n.timer, next: n.next, notes: n.notes, ended: n.ended, autoNext: n.autoNext, message: n.message)
     }
 
@@ -92,10 +92,13 @@ enum Act {
 
     // MARK: The remote: the same taps for the watch's playback and the iPhone's
 
-    static func toggle(_ s: Showing) async {
-        if s.onWatch { s.playing ? Haptic.stop() : Haptic.start(); WatchPlayer.shared.toggle(); return }
+    /// Play/pause; nil when it worked, else what to say. With Shelf closed on the iPhone, a play starts what it last showed
+    static func toggle(_ s: Showing) async -> String? {
+        if s.onWatch { s.playing ? Haptic.stop() : Haptic.start(); WatchPlayer.shared.toggle(); return nil }
         let r = await Store.shared.send("toggle")
-        if r.ok { (r.now?.playing ?? false) ? Haptic.start() : Haptic.stop() } else { Haptic.warn() }
+        if r.ok { (r.now?.playing ?? false) ? Haptic.start() : Haptic.stop(); return nil }
+        Haptic.warn()
+        return r.problem
     }
 
     static func skip(_ s: Showing, by: Double) async {
