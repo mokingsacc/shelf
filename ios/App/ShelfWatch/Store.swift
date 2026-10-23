@@ -175,6 +175,7 @@ final class Store: ObservableObject {
             phoneNow = NowState(kind: "video", key: e.key, title: e.title, tag: e.srcName, t: 252, dur: 724, playing: true, rate: 1.5,
                                 next: NextUp(label: "1109", title: "Pediatrics", key: "x"), notes: true, at: Date().timeIntervalSince1970 * 1000)
         }
+        if args.contains("-message"), var n = phoneNow { n.message = "YouTube stopped it while Shelf was in the background"; phoneNow = n }
         if args.contains("-ended"), var n = phoneNow { n.ended = true; n.autoNext = true; n.playing = false; n.t = n.dur; n.tag = "Paeds · 92 of 130"; phoneNow = n }
     }
 

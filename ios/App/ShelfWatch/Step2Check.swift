@@ -26,11 +26,11 @@ struct Step2Page: View {
         VStack(alignment: .leading, spacing: 0) {
             Cap(text: "Days to " + s.goal, color: band.fg.opacity(0.8))
             HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text("\(max(0, s.days))").font(.shelf(56, .medium)).fontWidth(.expanded).kerning(-2).monospacedDigit().foregroundStyle(band.fg).lineLimit(1).minimumScaleFactor(0.6)
+                Text("\(max(0, s.days))").font(.shelf(54, .medium)).fontWidth(.expanded).kerning(-2).monospacedDigit().foregroundStyle(band.fg).lineLimit(1).minimumScaleFactor(0.6)
                 Spacer(minLength: 0)
                 Cap(text: dateText(s.date), color: band.fg).padding(.bottom, 8)
             }
-            Rule(color: band.fg).padding(.bottom, 6)
+            Rule(color: band.fg).padding(.bottom, 4)
             (Text("Today ").font(.shelf(13, .medium)) + Text("\(s.today)").font(.shelf(13, .semibold)) + Text(" · ").font(.shelf(13, .medium))
                 + Text("\(s.todayMins) min").font(.shelf(13, .semibold)))
                 .monospacedDigit().foregroundStyle(band.fg)
@@ -38,8 +38,8 @@ struct Step2Page: View {
                 (Text(String(format: "%g", s.perDay)).font(.shelf(13, .semibold)) + Text(" a day to finish").font(.shelf(13, .medium)))
                     .monospacedDigit().foregroundStyle(band.fg)
             }
-            Week(week: s.week, fg: band.fg).padding(.top, 8)
-            Meta(text: "This week \(s.week.reduce(0, +))", color: band.fg.opacity(0.8)).padding(.top, 3)
+            Week(week: s.week, fg: band.fg).padding(.top, 5)
+            Meta(text: "This week \(s.week.reduce(0, +))", color: band.fg.opacity(0.8)).padding(.top, 2)
         }
     }
 

@@ -42,7 +42,8 @@ enum Act {
                            message: player.problem == "noairpods" ? "NO AIRPODS" : "")
         }
         guard let n = store.phoneNow else { return nil }
-        return Showing(onWatch: false, kind: n.kind, key: n.key, title: n.title, tag: n.tag, t: n.position(at: date), dur: n.dur, playing: n.playing,
+        // The phone's clock runs on from its last word only while it can be heard; otherwise it stays where it was
+        return Showing(onWatch: false, kind: n.kind, key: n.key, title: n.title, tag: n.tag, t: store.live ? n.position(at: date) : n.t, dur: n.dur, playing: n.playing,
                        rate: n.rate, timer: n.timer, next: n.next, notes: n.notes, ended: n.ended, autoNext: n.autoNext, message: n.message)
     }
 

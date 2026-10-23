@@ -13,7 +13,6 @@ struct NowView: View {
     @State private var marked: Double?              // Mark's frozen second, for 2 s
     @State private var problem: String?
     @State private var going = false
-    @State private var resetting = false            // the Crown's value is being put back, not turned
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
@@ -57,13 +56,14 @@ struct NowView: View {
                     nextHead(s, pal)
                 } else {
                     tag(s, pal, away)
-                    // The only flexible line: two lines when there's room, one before anything else moves
-                    Text(s.title).font(.shelf(15, .heavy)).kerning(-0.2).lineLimit(2).foregroundStyle(pal.hi)
-                        .layoutPriority(-1)
-                    if let problem {
-                        Text(problem).font(.shelf(12, .semibold)).foregroundStyle(Ink.wait).lineLimit(2)
-                    } else if !s.message.isEmpty && !s.onWatch {
-                        Text(s.message).font(.shelf(13, .regular)).foregroundStyle(Ink.wait).lineLimit(1).minimumScaleFactor(0.8)
+                    // The only flexible line: two lines when there's room, one before anything else moves.
+                    // A problem, or the phone's message, takes the title's place for a moment (design.md §4)
+                    if let note = problem ?? (s.message.isEmpty || s.onWatch ? nil : s.message) {
+                        Text(note).font(.shelf(13, .semibold)).foregroundStyle(Ink.wait).lineLimit(2).minimumScaleFactor(0.8)
+                            .layoutPriority(-1)
+                    } else {
+                        Text(s.title).font(.shelf(15, .heavy)).kerning(-0.2).lineLimit(2).foregroundStyle(pal.hi)
+                            .layoutPriority(-1)
                     }
                 }
                 Spacer(minLength: 2)
@@ -83,7 +83,10 @@ struct NowView: View {
         .focusable(s.dur > 0)
         .digitalCrownRotation($crown, from: -1_000_000, through: 1_000_000, by: step, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
         .onChange(of: crown) { old, v in crowned(v - old, s) }
-        .onAppear { recentre() }
+        .onChange(of: problem) { _, p in
+            guard let p else { return }
+            Task { try? await Task.sleep(nanoseconds: 4_000_000_000); if problem == p { withAnimation { problem = nil } } }
+        }
     }
 
     private func tag(_ s: Showing, _ pal: Palette, _ away: Bool) -> some View {
@@ -222,20 +225,22 @@ struct NowView: View {
     // MARK: Next up (the phone's end-of-video card)
 
     @ViewBuilder private func nextHead(_ s: Showing, _ pal: Palette) -> some View {
-        if let n = s.next {
-            Cap(text: "Next up · " + s.tag, color: pal.night ? pal.mute : pal.accent).frame(height: 13)
+        // The tag's place ("92 of 130") is the one that ended, so only the course or channel is kept
+        let from = s.tag.components(separatedBy: " · ").first ?? s.tag
+        Cap(text: s.next != nil ? "Next up · " + from : s.tag, color: s.next != nil ? (pal.night ? pal.mute : pal.accent) : pal.mute).frame(height: 13)
+        if let problem {
+            Text(problem).font(.shelf(13, .semibold)).foregroundStyle(Ink.wait).lineLimit(2).minimumScaleFactor(0.8).layoutPriority(-1)
+        } else if let n = s.next {
             Text(n.label + " · " + n.title).font(.shelf(15, .heavy)).lineLimit(2).foregroundStyle(pal.hi).layoutPriority(-1)
         } else {
-            Cap(text: s.tag, color: pal.mute).frame(height: 13)
             Text("End of the playlist").font(.shelf(15, .heavy)).lineLimit(2).foregroundStyle(pal.hi).layoutPriority(-1)
         }
-        if let problem { Text(problem).font(.shelf(12, .semibold)).foregroundStyle(Ink.wait).lineLimit(2) }
     }
 
     /// In place of the time row and the control row: the countdown, then Play next and Stop (or Done at the end of a list)
     @ViewBuilder private func nextControls(_ s: Showing, _ pal: Palette) -> some View {
         if s.next != nil {
-            Meta(text: s.autoNext ? "Plays in 5 s" : "Ended", color: pal.mute).frame(height: 16)
+            Meta(text: s.autoNext ? Self.countdown(store.phoneNow?.at) : "Ended", color: pal.mute).frame(height: 16)
             HStack(spacing: Metric.gap) {
                 Button { Task { problem = await Act.next() } } label: { Cell(fill: pal.accent, outline: nil) { ButtonText(text: "Play next", color: .black, size: 12) } }.buttonStyle(Press())
                 Button { Task { await Act.stop(s) } } label: { Cell(outline: Ink.dim) { ButtonText(text: "Stop", color: pal.text, size: 12) } }.buttonStyle(Press())
@@ -247,6 +252,13 @@ struct NowView: View {
             Button { store.path = []; store.tab = 0 } label: { Cell(outline: Ink.dim) { ButtonText(text: "Done", color: pal.text) } }.buttonStyle(Press())
                 .frame(height: Metric.tap)
         }
+    }
+
+    /// The phone plays the next one 5 s after the end (Now redraws every half second)
+    static func countdown(_ at: Double?, now: Date = Date()) -> String {
+        guard let at else { return "Plays in 5 s" }
+        let left = Int((5 - (now.timeIntervalSince1970 * 1000 - at) / 1000).rounded(.up))
+        return left > 0 ? "Plays in \(min(5, left)) s" : "Starting…"
     }
 
     // MARK: Scrubbing with the Crown
@@ -264,7 +276,7 @@ struct NowView: View {
 
     /// Each detent moves the target from where it plays now; nothing moves until GO
     private func crowned(_ delta: Double, _ s: Showing) {
-        guard delta != 0, !resetting else { return }
+        guard delta != 0 else { return }   // only turns count: the Crown's value is never put back, so nothing reads as a turn
         let from = target ?? s.t
         withAnimation(.easeOut(duration: 0.15)) { target = max(0, min(s.dur, from + delta)) }
         scrubT += 1
@@ -277,14 +289,6 @@ struct NowView: View {
 
     private func cancelScrub(_ s: Showing) {
         withAnimation(.easeOut(duration: 0.15)) { target = nil }
-        recentre()
-    }
-
-    /// The Crown sits in the middle of its range again, so it turns both ways
-    private func recentre() {
-        resetting = true
-        crown = 0
-        DispatchQueue.main.async { resetting = false }
     }
 
     private func go(_ s: Showing) async {
@@ -293,7 +297,6 @@ struct NowView: View {
         _ = await Act.seek(s, to: to)
         going = false
         withAnimation(.easeOut(duration: 0.15)) { target = nil }
-        recentre()
     }
 
     private func mark(_ s: Showing) async {

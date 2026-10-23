@@ -1188,6 +1188,11 @@ r = await shelf(p, (g) => window.__watch.fire({ cmd: 'audioSpot', guid: g, t: 73
 ok(r.ok && await shelf(p, (g) => window.__shelf.audio[g].t, pod.key) === 734, 'W a spot from the watch\'s own playback lands on the phone (12:14)');
 r = await shelf(p, (g) => window.__watch.fire({ cmd: 'audioSpot', guid: g, t: 5, dur: 3600, done: false, updated: 1 }), pod.key);
 ok(r.ok && r.kept && await shelf(p, (g) => window.__shelf.audio[g].t, pod.key) === 734, 'W an older spot never overwrites a newer one');
+// Last in YouTube (a video the phone hasn't kept) starts on the iPhone from the place the watch showed; its podcast lookup keeps nothing
+r = await shelf(p, () => window.__watch.fire({ cmd: 'twin', key: 'lastYTabc12', entry: { type: 'video', key: 'lastYTabc12', title: 'Somewhere on YouTube', srcName: 'Someone', t: 200 } }));
+ok(r.ok && !(await shelf(p, () => !!window.__shelf.videos.lastYTabc12)), 'W asking for a podcast version of a video the phone hasn\'t kept adds nothing to the phone');
+r = await shelf(p, () => window.__watch.fire({ cmd: 'play', entry: { type: 'video', key: 'lastYTabc12', title: 'Somewhere on YouTube', srcName: 'Someone', t: 200 } }));
+ok(await shelf(p, () => window.__shelf.current) === 'lastYTabc12' && await shelf(p, () => Math.round(window.__shelf.videos.lastYTabc12.t)) >= 190, 'W Last in YouTube played on the iPhone from the watch starts at 3:20, not 0:00');
 // Shelf in the background: a video can't start (YouTube), so the phone says so and the shell notifies
 await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); });
 r = await shelf(p, (e) => window.__watch.fire({ cmd: 'play', entry: e }), vid);

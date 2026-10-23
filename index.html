@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="7c3ba358084e">
+<meta name="build" content="b2eca49431c4">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -5332,7 +5332,9 @@ if (typeof module !== 'undefined') module.exports = AI;
         if (e.type === 'video') {
           if (hidden) return { ok: false, why: 'hidden' };
           var ent = { type: 'video', key: e.key, title: e.title, srcName: e.srcName, src: e.src, section: e.section, dur: e.dur, list: e.list };
-          if (c.from != null) openVideo({ id: e.key, t: c.from, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur, list: e.list }); else play(ent);
+          // A video the phone hasn't kept (Last in YouTube) starts from the place the watch was shown, as the phone's own tap does
+          var from = c.from != null ? c.from : !videos[e.key] && !e.done && e.t > 0 ? e.t : null;
+          if (from != null) openVideo({ id: e.key, t: from, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur, list: e.list }); else play(ent);
           return watchPlaying('video', e.key);
         }
         if (!e.url && arec[e.key]) e.url = arec[e.key].url;
@@ -5420,7 +5422,7 @@ if (typeof module !== 'undefined') module.exports = AI;
         return { ok: true, items: arr.slice(from, from + cn).map(function (x, j) { return watchCourseEntry(co, x, from + j); }), from: from, count: arr.length, notch: pr2.notch, done: pr2.done, total: pr2.total };
       }
       case 'twin': {
-        var v = videos[c.key] || (c.entry ? ensureTwinVideo(c.entry) : null);
+        var v = videos[c.key] || (c.entry ? twinVideo(c.entry) : null);
         if (!v) return { ok: false, why: 'missing' };
         var tw = twinLook(v);
         if (!tw) return { ok: true, twin: null, why: 'nochannel' };
@@ -5462,8 +5464,8 @@ if (typeof module !== 'undefined') module.exports = AI;
     }
     return { ok: false, why: 'unknown' };
   }
-  // A video tapped on the watch that the phone hasn't seen yet (from a channel's list)
-  function ensureTwinVideo(e) { var v = ensureVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur }); saveVideos(); return v; }
+  // A video on the watch that the phone hasn't kept (a channel's list, Last in YouTube): looked up as is, not added to the phone's videos
+  function twinVideo(e) { return { id: e.key, title: e.title || '', author: e.srcName || '', channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur || 0, t: e.done ? 0 : e.t || 0, done: false }; }
   function watchStatus() {
     return Native.watchStatus().then(function (st) {
       if (!st) return;

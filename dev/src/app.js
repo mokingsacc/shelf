@@ -2315,7 +2315,9 @@
         if (e.type === 'video') {
           if (hidden) return { ok: false, why: 'hidden' };
           var ent = { type: 'video', key: e.key, title: e.title, srcName: e.srcName, src: e.src, section: e.section, dur: e.dur, list: e.list };
-          if (c.from != null) openVideo({ id: e.key, t: c.from, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur, list: e.list }); else play(ent);
+          // A video the phone hasn't kept (Last in YouTube) starts from the place the watch was shown, as the phone's own tap does
+          var from = c.from != null ? c.from : !videos[e.key] && !e.done && e.t > 0 ? e.t : null;
+          if (from != null) openVideo({ id: e.key, t: from, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur, list: e.list }); else play(ent);
           return watchPlaying('video', e.key);
         }
         if (!e.url && arec[e.key]) e.url = arec[e.key].url;
@@ -2403,7 +2405,7 @@
         return { ok: true, items: arr.slice(from, from + cn).map(function (x, j) { return watchCourseEntry(co, x, from + j); }), from: from, count: arr.length, notch: pr2.notch, done: pr2.done, total: pr2.total };
       }
       case 'twin': {
-        var v = videos[c.key] || (c.entry ? ensureTwinVideo(c.entry) : null);
+        var v = videos[c.key] || (c.entry ? twinVideo(c.entry) : null);
         if (!v) return { ok: false, why: 'missing' };
         var tw = twinLook(v);
         if (!tw) return { ok: true, twin: null, why: 'nochannel' };
@@ -2445,8 +2447,8 @@
     }
     return { ok: false, why: 'unknown' };
   }
-  // A video tapped on the watch that the phone hasn't seen yet (from a channel's list)
-  function ensureTwinVideo(e) { var v = ensureVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur }); saveVideos(); return v; }
+  // A video on the watch that the phone hasn't kept (a channel's list, Last in YouTube): looked up as is, not added to the phone's videos
+  function twinVideo(e) { return { id: e.key, title: e.title || '', author: e.srcName || '', channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur || 0, t: e.done ? 0 : e.t || 0, done: false }; }
   function watchStatus() {
     return Native.watchStatus().then(function (st) {
       if (!st) return;
