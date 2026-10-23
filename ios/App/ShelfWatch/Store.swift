@@ -139,7 +139,7 @@ final class Store: ObservableObject {
     // MARK: What the screens ask
 
     /// The iPhone can be controlled now: in reach, and Shelf's page answers
-    var live: Bool { demo || (reachable && page) }
+    var live: Bool { reachable && page }
 
     var stale: String { live ? "" : (snap.map { "Showing " + Self.clock($0.date) } ?? "") }
 

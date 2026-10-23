@@ -47,6 +47,8 @@ shot allcourses -screen allcourses
 shot step2 -screen step2
 shot check -screen check
 shot away -away -screen today
+shot now-away -away -playing -screen now
+shot check-away -away -screen check
 # Crash reports, if any screen crashed
 ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i shelf && echo "::warning::The watch app crashed on a screen (see DiagnosticReports)"
 # To the ci-shots branch, so they can be fetched without the artifact API

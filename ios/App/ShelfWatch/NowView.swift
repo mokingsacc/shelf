@@ -68,6 +68,7 @@ struct NowView: View {
                 controls(s, pal).opacity(away ? 0.4 : 1)
             }
             .padding(.horizontal, Metric.inset)
+            .padding(.top, 12)                      // below the system Back button, which floats over a screen that doesn't scroll
             .padding(.bottom, 6)
             transport(s, pal).opacity(away ? 0.4 : 1)
         }
