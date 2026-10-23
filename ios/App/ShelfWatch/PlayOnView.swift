@@ -77,7 +77,7 @@ struct PlayOnView: View {
             }
             .buttonStyle(Press())
             .disabled(busy != nil)
-            Meta(text: looking ? "Looking for a podcast version…" : "Phone only", color: b.fg.opacity(0.6)).frame(maxWidth: .infinity).padding(.top, 4)
+            Meta(text: looking ? "Looking for a podcast version…" : store.closed && entry.isVideo ? "Then one tap on your iPhone" : "Phone only", color: b.fg.opacity(0.6)).frame(maxWidth: .infinity).padding(.top, 4)
         }
     }
 
