@@ -315,7 +315,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         let c = UNMutableNotificationContent()
         c.title = "Tap to play"
         c.body = (title.isEmpty ? "What you chose on your watch" : "“" + title + "”") + " plays in Shelf when it opens."
-        c.sound = nil
+        c.sound = .default
         c.threadIdentifier = "shelf-watch"
         if #available(iOS 15.0, *) { c.interruptionLevel = .timeSensitive }
         let req = UNNotificationRequest(identifier: "watch-" + item.id, content: c, trigger: nil)
