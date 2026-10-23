@@ -1,19 +1,25 @@
-# Checks that the iPhone shell still compiles whenever its native code changes, so a reinstall on Mo's Mac
-# never stops at a build error. Builds for the simulator with signing off; nothing is installed or uploaded.
+# Checks that the iPhone shell and the Apple Watch app still compile whenever native code changes, so a TestFlight
+# build or a reinstall never stops at a build error. Simulator builds with signing off; nothing is installed or uploaded.
+# It also tests ShelfWatchKit (the shapes both apps share) and takes screenshots of the watch app in a 42 mm Series 11
+# simulator, pushed to the ci-shots branch (watch/*.png) so the design can be checked by eye.
 name: iPhone shell builds
 on:
   push:
-    paths: ['ios/**', '.github/workflows/ios-build.yml']
+    paths: ['ios/**', '.github/workflows/ios-build.yml', '.github/scripts/watch-shots.sh']
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
-    runs-on: macos-latest
-    timeout-minutes: 30
+    runs-on: macos-26
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Xcode version
         run: xcodebuild -version
-      - name: Build the app for the simulator
+      - name: Test the shared watch code (ShelfWatchKit)
+        run: cd ios/ShelfWatchKit && swift test 2>&1 | tail -25
+      - name: Build the app (with its watch app) for the simulator
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
@@ -21,6 +27,18 @@ jobs:
           tail -40 build.log
           # Compile errors as annotations too, so they show on the check without opening the log
           if [ "$code" != 0 ]; then
-            { grep -iE "error|failed" build.log || tail -5 build.log; } | grep -v "^\s*$" | sort -u | head -12 | while IFS= read -r l; do echo "::error::${l#*/ios/}"; done
+            { grep -E "error:" build.log || grep -iE "error|failed" build.log || tail -5 build.log; } | grep -v "^\s*$" | sort -u | head -25 | while IFS= read -r l; do echo "::error::${l#*/ios/}"; done
           fi
           exit $code
+      - name: Watch screenshots (42 mm Series 11)
+        if: success()
+        run: bash .github/scripts/watch-shots.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-shots
+          path: shots/
+          if-no-files-found: ignore

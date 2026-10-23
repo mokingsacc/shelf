@@ -20,6 +20,6 @@ fs.writeFileSync(pkg, s);
 const cfg = `${root}ios/App/App/capacitor.config.json`, c = JSON.parse(fs.readFileSync(cfg, 'utf8'));
 c.packageClassList = c.packageClassList || [];
 let changed = false;
-for (const k of ['ShelfSignInPlugin', 'ShelfDevicePlugin']) if (!c.packageClassList.includes(k)) { c.packageClassList.push(k); changed = true; }
+for (const k of ['ShelfSignInPlugin', 'ShelfDevicePlugin', 'ShelfWatchPlugin']) if (!c.packageClassList.includes(k)) { c.packageClassList.push(k); changed = true; }
 if (changed) fs.writeFileSync(cfg, JSON.stringify(c, null, '\t') + '\n');
-console.log('vendored', plugins.join(', '), '+ ShelfSignInPlugin, ShelfDevicePlugin registered');
+console.log('vendored', plugins.join(', '), '+ ShelfSignInPlugin, ShelfDevicePlugin, ShelfWatchPlugin registered');

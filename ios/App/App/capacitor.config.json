@@ -21,6 +21,7 @@
 		"ClipboardPlugin",
 		"PreferencesPlugin",
 		"ShelfSignInPlugin",
-		"ShelfDevicePlugin"
+		"ShelfDevicePlugin",
+		"ShelfWatchPlugin"
 	]
 }

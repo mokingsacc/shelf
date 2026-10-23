@@ -191,6 +191,8 @@ public struct NowState: Codable, Hashable, Sendable {
     public var next: NextUp?
     public var notes: Bool
     public var message: String
+    public var url: String?          // a podcast's sound (so it can move to the watch)
+    public var image: String?
     public var at: Double            // ms since 1970, when the page read t
 
     public var isVideo: Bool { kind == "video" }
@@ -201,12 +203,12 @@ public struct NowState: Codable, Hashable, Sendable {
         return dur > 0 ? min(dur, t + gone) : t + gone
     }
 
-    enum K: String, CodingKey { case kind, key, title, tag, t, dur, playing, buffering, ended, autoNext, rate, timer, next, notes, message, at }
+    enum K: String, CodingKey { case kind, key, title, tag, t, dur, playing, buffering, ended, autoNext, rate, timer, next, notes, message, url, image, at }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         kind = c.v(.kind, "video"); key = c.v(.key, ""); title = c.v(.title, ""); tag = c.v(.tag, ""); t = c.num(.t); dur = c.num(.dur)
         playing = c.v(.playing, false); buffering = c.v(.buffering, false); ended = c.v(.ended, false); autoNext = c.v(.autoNext, true); rate = c.num(.rate); if rate <= 0 { rate = 1 }
-        timer = c.o(.timer); next = c.o(.next); notes = c.v(.notes, false); message = c.v(.message, ""); at = c.num(.at)
+        timer = c.o(.timer); next = c.o(.next); notes = c.v(.notes, false); message = c.v(.message, ""); url = c.o(.url); image = c.o(.image); at = c.num(.at)
     }
     public init(kind: String, key: String, title: String, tag: String = "", t: Double = 0, dur: Double = 0, playing: Bool = false, buffering: Bool = false,
                 ended: Bool = false, autoNext: Bool = true, rate: Double = 1, timer: SleepState? = nil, next: NextUp? = nil, notes: Bool = false, message: String = "", at: Double = 0) {
@@ -329,12 +331,15 @@ public struct Reply: Codable, Sendable {
     public var queued: Bool?
     public var t: Double?
     public var snap: Snapshot?
+    /// The answer says what plays now (null: nothing), not just leaves it out
+    public var hasNow = false
 
     enum K: String, CodingKey { case ok, why, msg, playing, now, items, done, total, from, count, notch, twin, none, offline, summary, working, error, kept, queued, t, snap }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         ok = c.v(.ok, false); why = c.o(.why); msg = c.o(.msg); playing = c.o(.playing); now = c.o(.now); items = c.o(.items)
         done = c.o(.done); total = c.o(.total); from = c.o(.from); count = c.o(.count); notch = c.o(.notch); twin = c.o(.twin); none = c.o(.none); offline = c.o(.offline); summary = c.o(.summary)
+        hasNow = c.contains(.now)
         working = c.o(.working); error = c.o(.error); kept = c.o(.kept); queued = c.o(.queued); t = c.o(.t); snap = c.o(.snap)
     }
     public init(ok: Bool, why: String? = nil, queued: Bool? = nil) { self.ok = ok; self.why = why; self.queued = queued }

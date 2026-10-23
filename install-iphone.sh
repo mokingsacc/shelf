@@ -80,13 +80,28 @@ build() {
   xcodebuild -project "$DIR/repo/ios/App/App.xcodeproj" -scheme App -configuration Debug \
     -destination "id=$UDID" -derivedDataPath "$DERIVED" \
     -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
-    DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic PRODUCT_BUNDLE_IDENTIFIER="$1" build >>"$LOG" 2>&1
+    DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic SHELF_BUNDLE_ID="$1" build >>"$LOG" 2>&1
+}
+# Without the Apple Watch app (it comes through TestFlight): if signing the watch part is what stops the build
+drop_watch() {
+  /usr/bin/python3 - "$DIR/repo/ios/App/App.xcodeproj/project.pbxproj" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s = re.sub(r"\n\s*\w+ /\* ShelfWatch\.app in Embed Watch Content \*/,", "", s)
+s = re.sub(r"(dependencies = \(\n)(\s*\w+ /\* PBXTargetDependency \*/,\n)", r"\1", s, count=1)
+open(p, "w").write(s)
+PY
 }
 if ! build "$BUNDLE"; then
   if grep -qiE "not available|cannot be registered|already in use" "$LOG"; then
     BUNDLE="$BUNDLE.$(echo "$TEAM" | tr 'A-Z' 'a-z')"; echo "--- retry with $BUNDLE" >>"$LOG"
     build "$BUNDLE" || BUILD_FAILED=1
   else BUILD_FAILED=1; fi
+fi
+if [ -n "$BUILD_FAILED" ] && grep -qiE "watchkitapp|ShelfWatch" "$LOG"; then
+  echo "--- retry without the watch app" >>"$LOG"
+  drop_watch && unset BUILD_FAILED && { build "$BUNDLE" || BUILD_FAILED=1; }
+  [ -z "$BUILD_FAILED" ] && WATCH_SKIPPED=1
 fi
 if [ -n "$BUILD_FAILED" ]; then
   if grep -qi "Developer Mode" "$LOG"; then fail "Developer Mode is off on your iPhone." "On the iPhone: Settings > Privacy & Security > Developer Mode > On. It restarts; unlock it, then run this again."; fi
@@ -114,5 +129,6 @@ else
   printf '  Settings > General > VPN & Device Management > tap your Apple ID > Trust.\n'
   printf '  Then open Shelf from the Home Screen.\n'
 fi
+[ -n "$WATCH_SKIPPED" ] && printf '\n  The Apple Watch app was left out this time; it comes through TestFlight.\n'
 say "Done. Updates arrive by themselves from now on."
 printf '  With a free Apple ID, run the same command again every 7 days.\n\n'

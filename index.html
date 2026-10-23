@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="c119772cabb1">
+<meta name="build" content="8482253a2490">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -5271,7 +5271,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     }
     var es = engine && engine.state(), ep = es && es.episode;
     if (ep) return { kind: 'audio', key: ep.guid, title: ep.title || 'Episode', tag: ep.podcast || '', t: Math.round(es.t * 10) / 10, dur: Math.round(es.dur || 0), playing: es.playing,
-      buffering: false, rate: es.rate, timer: watchTimer(es.timer), next: null, notes: false, message: es.message || '', at: Date.now() };
+      buffering: false, rate: es.rate, timer: watchTimer(es.timer), next: null, notes: false, message: es.message || '', url: ep.url || '', image: ep.image || '', at: Date.now() };
     return null;
   }
   function watchTimer(t) { return t ? (t.mode === 'end' ? { mode: 'end' } : { mode: 'min', minutes: t.minutes, endsAt: t.endsAt }) : null; }

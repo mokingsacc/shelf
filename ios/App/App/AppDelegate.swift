@@ -14,6 +14,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         } catch {
             print("Shelf: could not set up background audio: \(error)")
         }
+        // The link to Shelf on the Apple Watch, from launch (a tap on the watch can wake Shelf in the background)
+        WatchLink.shared.start()
         return true
     }
 

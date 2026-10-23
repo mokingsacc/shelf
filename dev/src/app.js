@@ -2254,7 +2254,7 @@
     }
     var es = engine && engine.state(), ep = es && es.episode;
     if (ep) return { kind: 'audio', key: ep.guid, title: ep.title || 'Episode', tag: ep.podcast || '', t: Math.round(es.t * 10) / 10, dur: Math.round(es.dur || 0), playing: es.playing,
-      buffering: false, rate: es.rate, timer: watchTimer(es.timer), next: null, notes: false, message: es.message || '', at: Date.now() };
+      buffering: false, rate: es.rate, timer: watchTimer(es.timer), next: null, notes: false, message: es.message || '', url: ep.url || '', image: ep.image || '', at: Date.now() };
     return null;
   }
   function watchTimer(t) { return t ? (t.mode === 'end' ? { mode: 'end' } : { mode: 'min', minutes: t.minutes, endsAt: t.endsAt }) : null; }

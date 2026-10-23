@@ -7,21 +7,71 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0826EC6C49279B3485DE80AB /* ShelfWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65011E55060C6329B4E706C0 /* ShelfWatchApp.swift */; };
+		13D891930D8B0A8D20110B7F /* WatchPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E76459681D40C67259EDB1 /* WatchPlayer.swift */; };
+		14BE1A5B351AF6A9BF6FA671 /* demo.json in Resources */ = {isa = PBXBuildFile; fileRef = 0E7E5FB530EF669179C85095 /* demo.json */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
+		38798ADF0C98F3B47F2F6B45 /* TodayPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B819A51141FBF5D2F7EEAA /* TodayPage.swift */; };
+		3F5971EC46D64D296811447D /* CoursesPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6E2DBA059E121DCC0CDA99 /* CoursesPage.swift */; };
+		4CAEA22C63B512E810754C16 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 43BDD7181A541F08300BF39E /* Assets.xcassets */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
+		4E342BA69765F68C7006116E /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85650A4801239B6084106194 /* Store.swift */; };
+		4FDCCB00A9F1C3AF2EB7F06E /* Step2Check.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E51B553B56FE9007BC852D9 /* Step2Check.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
-		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		5A3E1F0D2E0B000100C0FFEE /* ShelfSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3E1F0C2E0B000100C0FFEE /* ShelfSignIn.swift */; };
 		5A3E1F102E0B000100C0FFEE /* ShelfDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A3E1F0F2E0B000100C0FFEE /* ShelfDevice.swift */; };
+		622CF9279EBE413DDE95132F /* Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11EFC8F7972A822F055CA76 /* Actions.swift */; };
+		888CE45911B1F07F8B5F6233 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582F86737F5337D426095131 /* Theme.swift */; };
+		8CF3134047881BCEABE0F957 /* PhoneLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05D0426BD07496145CF2C29 /* PhoneLink.swift */; };
+		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		983B92A3874D6D2254773019 /* ShelfWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 1FCA57D34837C62BD3776860 /* ShelfWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		99C47BCF3C5A6B911E122053 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C03AB77556EF624A4DC04ED3 /* Foundation.framework */; };
+		9CB922A3D6DD7B8D0F7DBE2D /* PlayOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BD599849C646D75D7A11F74 /* PlayOnView.swift */; };
+		9DF040E3E6BF692226774D45 /* SectionsPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C5E9C1BE5051CED53E29FFB /* SectionsPage.swift */; };
+		AAF592255DFF4FFA43250582 /* ShelfWatchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1C1101797D428A4A39517D87 /* ShelfWatchKit */; };
+		AC70B45DB09E2E21C76B59B8 /* NowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2F79A5EC106AED0B30E1FF /* NowView.swift */; };
+		B85ACF26C33B25B47FA5437F /* Demo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F8F3D904C4A317877ED379A /* Demo.swift */; };
+		CC3F5DEB57ABF1AC9C1BF55A /* ShelfWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A189937455BDFB7347B67E95 /* ShelfWatch.swift */; };
+		DF5B67A372B24C178E98FEAC /* ShelfWatchKit in Frameworks */ = {isa = PBXBuildFile; productRef = DDF38C99D81FF1B4085AC26D /* ShelfWatchKit */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		2A3D37AA2B2F0AADFBB11759 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A98BD2420C877EFB526446A3;
+			remoteInfo = ShelfWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8B3D346037D4AE7127A84641 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				983B92A3874D6D2254773019 /* ShelfWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		0E7E5FB530EF669179C85095 /* demo.json */ = {isa = PBXFileReference; includeInIndex = 1; name = demo.json; path = Resources/demo.json; sourceTree = "<group>"; };
+		1FCA57D34837C62BD3776860 /* ShelfWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShelfWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2BD599849C646D75D7A11F74 /* PlayOnView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlayOnView.swift; sourceTree = "<group>"; };
+		2CDFD6D5520AE4AC9BFB5F6E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
+		3C5E9C1BE5051CED53E29FFB /* SectionsPage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SectionsPage.swift; sourceTree = "<group>"; };
+		43BDD7181A541F08300BF39E /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -30,30 +80,79 @@
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
-		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		582F86737F5337D426095131 /* Theme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		5A3E1F0C2E0B000100C0FFEE /* ShelfSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfSignIn.swift; sourceTree = "<group>"; };
 		5A3E1F0F2E0B000100C0FFEE /* ShelfDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfDevice.swift; sourceTree = "<group>"; };
+		5E51B553B56FE9007BC852D9 /* Step2Check.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Step2Check.swift; sourceTree = "<group>"; };
+		65011E55060C6329B4E706C0 /* ShelfWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShelfWatchApp.swift; sourceTree = "<group>"; };
+		85650A4801239B6084106194 /* Store.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
+		8F8F3D904C4A317877ED379A /* Demo.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Demo.swift; sourceTree = "<group>"; };
+		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		95B819A51141FBF5D2F7EEAA /* TodayPage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayPage.swift; sourceTree = "<group>"; };
+		97E76459681D40C67259EDB1 /* WatchPlayer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchPlayer.swift; sourceTree = "<group>"; };
+		A05D0426BD07496145CF2C29 /* PhoneLink.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PhoneLink.swift; sourceTree = "<group>"; };
+		A189937455BDFB7347B67E95 /* ShelfWatch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShelfWatch.swift; sourceTree = "<group>"; };
+		C03AB77556EF624A4DC04ED3 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		DE2F79A5EC106AED0B30E1FF /* NowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NowView.swift; sourceTree = "<group>"; };
+		DE6E2DBA059E121DCC0CDA99 /* CoursesPage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CoursesPage.swift; sourceTree = "<group>"; };
+		E11EFC8F7972A822F055CA76 /* Actions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Actions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		3FDECE17537920236D26632E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				99C47BCF3C5A6B911E122053 /* Foundation.framework in Frameworks */,
+				AAF592255DFF4FFA43250582 /* ShelfWatchKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		504EC3011FED79650016851F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				DF5B67A372B24C178E98FEAC /* ShelfWatchKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		20447680679A442E9E1D5BDF /* ShelfWatch */ = {
+			isa = PBXGroup;
+			children = (
+				E11EFC8F7972A822F055CA76 /* Actions.swift */,
+				DE6E2DBA059E121DCC0CDA99 /* CoursesPage.swift */,
+				8F8F3D904C4A317877ED379A /* Demo.swift */,
+				DE2F79A5EC106AED0B30E1FF /* NowView.swift */,
+				A05D0426BD07496145CF2C29 /* PhoneLink.swift */,
+				2BD599849C646D75D7A11F74 /* PlayOnView.swift */,
+				3C5E9C1BE5051CED53E29FFB /* SectionsPage.swift */,
+				65011E55060C6329B4E706C0 /* ShelfWatchApp.swift */,
+				5E51B553B56FE9007BC852D9 /* Step2Check.swift */,
+				85650A4801239B6084106194 /* Store.swift */,
+				582F86737F5337D426095131 /* Theme.swift */,
+				95B819A51141FBF5D2F7EEAA /* TodayPage.swift */,
+				97E76459681D40C67259EDB1 /* WatchPlayer.swift */,
+				43BDD7181A541F08300BF39E /* Assets.xcassets */,
+				0E7E5FB530EF669179C85095 /* demo.json */,
+				2CDFD6D5520AE4AC9BFB5F6E /* Info.plist */,
+			);
+			name = ShelfWatch;
+			path = ShelfWatch;
+			sourceTree = "<group>";
+		};
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
+				E83CF43338CB7AF5BDE79489 /* Frameworks */,
+				20447680679A442E9E1D5BDF /* ShelfWatch */,
 			);
 			sourceTree = "<group>";
 		};
@@ -61,6 +160,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				1FCA57D34837C62BD3776860 /* ShelfWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -79,8 +179,25 @@
 				504EC3131FED79650016851F /* Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
+				A189937455BDFB7347B67E95 /* ShelfWatch.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		585FF297B2B6DD716462C0EB /* watchOS */ = {
+			isa = PBXGroup;
+			children = (
+				C03AB77556EF624A4DC04ED3 /* Foundation.framework */,
+			);
+			name = watchOS;
+			sourceTree = "<group>";
+		};
+		E83CF43338CB7AF5BDE79489 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				585FF297B2B6DD716462C0EB /* watchOS */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -93,17 +210,40 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				8B3D346037D4AE7127A84641 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1697562C15DBD72FF3636B9 /* PBXTargetDependency */,
+			);
+			name = App;
+			packageProductDependencies = (
+				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				DDF38C99D81FF1B4085AC26D /* ShelfWatchKit */,
+			);
+			productName = App;
+			productReference = 504EC3041FED79650016851F /* App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A98BD2420C877EFB526446A3 /* ShelfWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96A00A2A99076F91DEDDE04C /* Build configuration list for PBXNativeTarget "ShelfWatch" */;
+			buildPhases = (
+				F259707782A6B6BF868180C1 /* Sources */,
+				3FDECE17537920236D26632E /* Frameworks */,
+				E0B68EF89C53567716F9B694 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = App;
+			name = ShelfWatch;
 			packageProductDependencies = (
-				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
+				1C1101797D428A4A39517D87 /* ShelfWatchKit */,
 			);
-			productName = App;
-			productReference = 504EC3041FED79650016851F /* App.app */;
+			productName = ShelfWatch;
+			productReference = 1FCA57D34837C62BD3776860 /* ShelfWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -133,12 +273,14 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
+				77B5715DF649C14677EDFCD0 /* XCLocalSwiftPackageReference "ShelfWatchKit" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				A98BD2420C877EFB526446A3 /* ShelfWatch */,
 			);
 		};
 /* End PBXProject section */
@@ -157,6 +299,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E0B68EF89C53567716F9B694 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4CAEA22C63B512E810754C16 /* Assets.xcassets in Resources */,
+				14BE1A5B351AF6A9BF6FA671 /* demo.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -168,10 +319,40 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				5A3E1F0D2E0B000100C0FFEE /* ShelfSignIn.swift in Sources */,
 				5A3E1F102E0B000100C0FFEE /* ShelfDevice.swift in Sources */,
+				CC3F5DEB57ABF1AC9C1BF55A /* ShelfWatch.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F259707782A6B6BF868180C1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				622CF9279EBE413DDE95132F /* Actions.swift in Sources */,
+				3F5971EC46D64D296811447D /* CoursesPage.swift in Sources */,
+				B85ACF26C33B25B47FA5437F /* Demo.swift in Sources */,
+				AC70B45DB09E2E21C76B59B8 /* NowView.swift in Sources */,
+				8CF3134047881BCEABE0F957 /* PhoneLink.swift in Sources */,
+				9CB922A3D6DD7B8D0F7DBE2D /* PlayOnView.swift in Sources */,
+				9DF040E3E6BF692226774D45 /* SectionsPage.swift in Sources */,
+				0826EC6C49279B3485DE80AB /* ShelfWatchApp.swift in Sources */,
+				4FDCCB00A9F1C3AF2EB7F06E /* Step2Check.swift in Sources */,
+				4E342BA69765F68C7006116E /* Store.swift in Sources */,
+				888CE45911B1F07F8B5F6233 /* Theme.swift in Sources */,
+				38798ADF0C98F3B47F2F6B45 /* TodayPage.swift in Sources */,
+				13D891930D8B0A8D20110B7F /* WatchPlayer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1697562C15DBD72FF3636B9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ShelfWatch;
+			target = A98BD2420C877EFB526446A3 /* ShelfWatch */;
+			targetProxy = 2A3D37AA2B2F0AADFBB11759 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -193,6 +374,32 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		494E6692F69FAB20E53225CC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShelfWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SHELF_BUNDLE_ID).watchkitapp";
+				PRODUCT_NAME = ShelfWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 		504EC3141FED79650016851F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
@@ -246,6 +453,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				SHELF_BUNDLE_ID = com.mokingsacc.shelf;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -296,6 +504,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
+				SHELF_BUNDLE_ID = com.mokingsacc.shelf;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VALIDATE_PRODUCT = YES;
@@ -317,7 +526,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
-				PRODUCT_BUNDLE_IDENTIFIER = com.mokingsacc.shelf;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SHELF_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_VERSION = 5.0;
@@ -338,13 +547,38 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mokingsacc.shelf;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SHELF_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		74B451A2493CFB97CFBE222B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ShelfWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SHELF_BUNDLE_ID).watchkitapp";
+				PRODUCT_NAME = ShelfWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
@@ -367,9 +601,22 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		96A00A2A99076F91DEDDE04C /* Build configuration list for PBXNativeTarget "ShelfWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				494E6692F69FAB20E53225CC /* Release */,
+				74B451A2493CFB97CFBE222B /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		77B5715DF649C14677EDFCD0 /* XCLocalSwiftPackageReference "ShelfWatchKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ShelfWatchKit;
+		};
 		D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "CapApp-SPM";
@@ -377,10 +624,20 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1C1101797D428A4A39517D87 /* ShelfWatchKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 77B5715DF649C14677EDFCD0 /* XCLocalSwiftPackageReference "ShelfWatchKit" */;
+			productName = ShelfWatchKit;
+		};
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
 			productName = "CapApp-SPM";
+		};
+		DDF38C99D81FF1B4085AC26D /* ShelfWatchKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 77B5715DF649C14677EDFCD0 /* XCLocalSwiftPackageReference "ShelfWatchKit" */;
+			productName = ShelfWatchKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
