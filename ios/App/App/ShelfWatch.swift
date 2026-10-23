@@ -54,14 +54,38 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
 
     /// What the watch shows, kept on disk too so the watch's hello is answered even before the page has loaded
     func send(snapshot json: String) {
-        var data = Data(json.utf8)
-        // While the iPhone plays a podcast for the watch, that is what plays now, whatever the page last knew
-        if let p = pocketNow(), let n = p, var o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
-            o["now"] = n
-            if let d = try? JSONSerialization.data(withJSONObject: o) { data = d }
+        let data = Data(json.utf8)
+        try? data.write(to: Self.file("watch-snapshot.json"), options: .atomic)   // the page's own, so nothing stale outlives the iPhone's player
+        push(withPocket(data))
+    }
+
+    /// The page's snapshot again (the iPhone's player stopped: the watch shouldn't keep its "now")
+    func repush() { push(lastSnapshot()) }
+
+    /// While the iPhone plays a podcast for the watch, that is what plays now, whatever the page last knew
+    private func withPocket(_ data: Data) -> Data {
+        guard let p = pocketNow(), let n = p, var o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return data }
+        o["now"] = n
+        return (try? JSONSerialization.data(withJSONObject: o)) ?? data
+    }
+
+    /// The newest place for an episode waiting in the inbox (the watch's or the iPhone player's), for where the iPhone starts it
+    func newestSpot(_ guid: String) -> Double? {
+        queue.sync {
+            readInbox().compactMap { it -> (Double, Double)? in
+                guard let o = (try? JSONSerialization.jsonObject(with: Data(it.json.utf8))) as? [String: Any], o["cmd"] as? String == "audioSpot",
+                      o["guid"] as? String == guid else { return nil }
+                if (o["done"] as? Bool) == true { return (PocketPlayer.num(o["updated"]) ?? 0, 0) }
+                return (PocketPlayer.num(o["updated"]) ?? 0, PocketPlayer.num(o["t"]) ?? 0)
+            }.max { $0.0 < $1.0 }?.1
         }
-        try? data.write(to: Self.file("watch-snapshot.json"), options: .atomic)
-        push(data)
+    }
+
+    /// A play or Next from the watch waiting for Shelf to open, newer than this moment
+    func playWaiting(since: Date) -> Bool {
+        queue.sync {
+            readInbox().contains { Self.waits(Command.name(of: Data($0.json.utf8))) && !$0.id.hasPrefix("pocket-") && $0.got >= since.timeIntervalSince1970 }
+        }
     }
 
     private func push(_ json: Data?) {
@@ -422,6 +446,8 @@ final class PocketPlayer: NSObject {
     private var guid = "", title = "", podcast = "", url = "", image = ""
     private var dur: Double = 0
     private var rate: Double = 1
+    private var armed = false              // playback really started where it should; until then its place isn't kept
+    private var startedAt = Date()
     private var timerEnds: Date?
     private var timerEnd = false
     private var timerMin: Int?
@@ -429,18 +455,21 @@ final class PocketPlayer: NSObject {
     private var lastNow = Date.distantPast
     private var clock: Timer?
     private var endObs: Any?
+    private var statusObs: NSKeyValueObservation?
     private var remote: [Any] = []
 
     var active: Bool { player != nil }
     private var playing: Bool { guard let p = player else { return false }; return p.timeControlStatus != .paused }
     private var t: Double { let s = player?.currentTime().seconds ?? 0; return s.isFinite ? max(0, s) : 0 }
 
-    /// The commands it answers itself (whatever plays here); nil leaves the command to the page
+    /// The commands it answers itself; false leaves the command to the page
     func take(_ name: String, _ c: [String: Any], answer: @escaping ([String: Any]) -> Void) -> Bool {
         switch name {
         case "play":
             guard let e = c["entry"] as? [String: Any], (e["type"] as? String) == "audio", let u = e["url"] as? String, !u.isEmpty else { return false }
-            play(e, from: Self.num(c["from"])) { ok in answer(ok ? ["ok": true, "playing": true, "now": self.nowState().map { $0 as Any } ?? NSNull()] : ["ok": false, "why": "stalled"]) }
+            play(e, from: Self.num(c["from"])) { ok in
+                answer(ok ? ["ok": true, "playing": true, "now": self.nowState().map { $0 as Any } ?? NSNull()] : ["ok": false, "why": "stalled"])
+            }
             return true
         case "toggle", "pause", "resume", "seek", "seekTo", "rate", "timer", "stop":
             guard active else { return false }
@@ -459,34 +488,56 @@ final class PocketPlayer: NSObject {
     // MARK: Playing
 
     private func play(_ e: [String: Any], from: Double?, done: @escaping (Bool) -> Void) {
-        if active { finish(keepPlace: true) }
+        let key = e["key"] as? String ?? ""
+        // Where it starts: the watch's own choice, else where this player is in it, else the newest place waiting for Shelf, else Shelf's
+        let start = from ?? (active && guid == key ? t : nil) ?? WatchLink.shared.newestSpot(key) ?? ((e["done"] as? Bool) == true ? 0 : Self.num(e["t"]) ?? 0)
+        if active { finish(keepPlace: true, quiet: true) }
         entry = e
-        guid = e["key"] as? String ?? ""; title = e["title"] as? String ?? "Episode"; podcast = e["srcName"] as? String ?? ""
+        guid = key; title = e["title"] as? String ?? "Episode"; podcast = e["srcName"] as? String ?? ""
         url = e["url"] as? String ?? ""; image = e["image"] as? String ?? ""; dur = Self.num(e["dur"]) ?? 0
         rate = Self.num(e["rate"]).flatMap { $0 > 0 ? $0 : nil } ?? 1
-        let start = from ?? ((e["done"] as? Bool) == true ? 0 : Self.num(e["t"]) ?? 0)
         guard let u = URL(string: url) else { done(false); return }
+        // In the background the iPhone only lets an app start sound that mixes with others (so the lock screen may not show it;
+        // the watch is the remote). On screen it never gets here: the page plays it.
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .spokenAudio, options: [])
-        try? session.setActive(true)
+        do {
+            try session.setCategory(.playback, mode: .spokenAudio, options: UIApplication.shared.applicationState == .active ? [] : [.mixWithOthers])
+            try session.setActive(true)
+        } catch {
+            done(false); return
+        }
         let item = AVPlayerItem(url: u)
         let p = AVPlayer(playerItem: item)
         p.automaticallyWaitsToMinimizeStalling = true
         player = p
+        armed = false
+        startedAt = Date()
         timerEnds = nil; timerEnd = false; timerMin = nil
         if Self.late() { setTimer(45) }   // a podcast started at bedtime gets the 45-minute timer, as in Shelf
-        endObs = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
-            self?.ended()
+        endObs = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in self?.ended() }
+        // Calls, Siri, alarms and AirPods coming out pause it: the place is kept and the watch hears at once
+        statusObs = p.observe(\.timeControlStatus) { [weak self] pl, _ in
+            DispatchQueue.main.async {
+                guard let self, self.player === pl, self.armed else { return }
+                if pl.timeControlStatus == .paused { self.keepSpot() }
+                self.nowPlaying(); self.sendNow()
+            }
         }
-        listenToLockScreen()
-        // Seek once the episode has loaded, then play; give up after 15 s (no network, a dead link)
+        // Seek once the episode has loaded, then play. The watch waits 8 s, so loading gets 5 s and starting 2 s
         var tries = 0
         func wait() {
             guard player === p else { done(false); return }
             if item.status == .readyToPlay {
-                let go = { p.playImmediately(atRate: Float(self.rate)); self.started(); self.confirm(p, done) }
+                let go = {
+                    guard self.player === p else { done(false); return }
+                    p.playImmediately(atRate: Float(self.rate))
+                    self.confirm(p) { ok in
+                        if ok { self.armed = true; self.started() } else { self.finish(keepPlace: false) }
+                        done(ok)
+                    }
+                }
                 if start > 1 { p.seek(to: CMTime(seconds: start, preferredTimescale: 600)) { _ in DispatchQueue.main.async(execute: go) } } else { go() }
-            } else if item.status == .failed || tries > 60 {
+            } else if item.status == .failed || tries >= 20 {
                 finish(keepPlace: false); done(false)
             } else {
                 tries += 1
@@ -496,25 +547,27 @@ final class PocketPlayer: NSObject {
         wait()
     }
 
-    private func confirm(_ p: AVPlayer, _ done: @escaping (Bool) -> Void, tries: Int = 0) {
+    private func confirm(_ p: AVPlayer, tries: Int = 0, _ done: @escaping (Bool) -> Void) {
         guard player === p else { done(false); return }
-        if p.timeControlStatus == .playing || tries > 16 { done(p.timeControlStatus != .paused); return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.confirm(p, done, tries: tries + 1) }
+        if p.timeControlStatus == .playing { done(true); return }
+        if tries >= 8 { done(p.timeControlStatus == .waitingToPlayAtSpecifiedRate && p.currentItem?.status != .failed); return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.confirm(p, tries: tries + 1, done) }
     }
 
     private func started() {
         clock?.invalidate()
         clock = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.second() }
+        listenToLockScreen()
         nowPlaying()
         sendNow()
     }
 
     private func second() {
-        guard let p = player else { return }
+        guard let p = player, armed else { return }
         if let ends = timerEnds {
             let left = ends.timeIntervalSinceNow
             p.volume = Float(max(0, min(1, left / 60)))   // fades over the last minute
-            if left <= 0 { pause(); timerEnds = nil; timerMin = nil; p.volume = 1 }
+            if left <= 0 { timerEnds = nil; timerMin = nil; pause(); p.volume = 1 }
         }
         if playing && Date().timeIntervalSince(lastSpot) >= 30 { keepSpot() }
         if playing && Date().timeIntervalSince(lastNow) >= 5 { sendNow() }
@@ -531,7 +584,11 @@ final class PocketPlayer: NSObject {
         case "rate":
             if let r = Self.num(c["r"]), r > 0 { rate = r; if playing { p.rate = Float(r) } }
         case "timer":
-            if let m = c["m"] as? String { m == "end" ? setTimerEnd() : setTimer(nil) } else if let m = Self.num(c["m"]) { setTimer(Int(m)) } else { setTimer(nil) }
+            // As on the page: a number or "end" sets it (the same again keeps it); "off" turns it off
+            if let m = c["m"] as? String { if m == "end" { timerEnd = true; timerMin = nil; timerEnds = nil } else { timerOff() } }
+            else if let m = Self.num(c["m"]), m > 0 { if timerMin != Int(m) { setTimer(Int(m)) } }
+            else { timerOff() }
+            p.volume = 1
         case "stop": finish(keepPlace: true)
         default: break
         }
@@ -539,63 +596,75 @@ final class PocketPlayer: NSObject {
         sendNow()
     }
 
-    private func pause() { player?.pause(); keepSpot(); nowPlaying(); sendNow() }
+    private func pause() {
+        guard let p = player else { return }
+        p.pause()
+        if !armed { return }       // still starting: it simply won't start
+        keepSpot(); nowPlaying(); sendNow()
+    }
 
     private func resume() {
+        guard let p = player else { return }
         try? AVAudioSession.sharedInstance().setActive(true)
-        player?.volume = 1
-        player?.playImmediately(atRate: Float(rate))
+        p.volume = 1
+        p.playImmediately(atRate: Float(rate))
         nowPlaying(); sendNow()
     }
 
     private func seek(to s: Double) {
+        guard armed else { return }
         let to = max(0, dur > 0 ? min(dur - 1, s) : s)
-        player?.seek(to: CMTime(seconds: to, preferredTimescale: 600)) { _ in DispatchQueue.main.async { self.nowPlaying(); self.sendNow() } }
+        player?.seek(to: CMTime(seconds: to, preferredTimescale: 600)) { _ in DispatchQueue.main.async { self.keepSpot(); self.nowPlaying(); self.sendNow() } }
     }
 
-    /// 15, 30, 45, 60 minutes; a timer that is already set to the same goes off (as in Shelf)
-    private func setTimer(_ m: Int?) {
-        if let m, m > 0, timerMin != m { timerMin = m; timerEnd = false; timerEnds = Date().addingTimeInterval(Double(m) * 60) } else { timerMin = nil; timerEnds = nil; timerEnd = false }
-        player?.volume = 1
-    }
-
-    private func setTimerEnd() { timerEnd.toggle(); timerMin = nil; timerEnds = nil; player?.volume = 1 }
+    private func setTimer(_ m: Int) { timerMin = m; timerEnd = false; timerEnds = Date().addingTimeInterval(Double(m) * 60) }
+    private func timerOff() { timerMin = nil; timerEnds = nil; timerEnd = false }
 
     private func ended() {
         keepSpot(done: true)
         finish(keepPlace: false)
     }
 
-    /// Stops and lets go of everything; with keepPlace, the place goes to Shelf first
-    private func finish(keepPlace: Bool) {
-        if keepPlace { keepSpot() }
+    /// Stops and lets go of everything; with keepPlace, a place that is playing goes to Shelf first (a paused one already did)
+    private func finish(keepPlace: Bool, quiet: Bool = false) {
+        if keepPlace && playing { keepSpot() }
+        statusObs?.invalidate(); statusObs = nil
         player?.pause()
         clock?.invalidate(); clock = nil
         if let endObs { NotificationCenter.default.removeObserver(endObs) }
         endObs = nil
         player = nil
+        armed = false
         stopListeningToLockScreen()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        sendNow()
+        if !quiet {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [])   // Shelf's own setting again
+            sendNow()
+            WatchLink.shared.repush()
+        }
     }
 
-    /// Shelf came on screen: the page carries on from here
+    /// Shelf came on screen: the page carries on from here (unless the watch has chosen something else that waits for it)
     func handOver() {
         guard active else { return }
-        let was = playing
+        let was = playing && armed
         let at = t
+        let since = startedAt
+        let r = rate
         finish(keepPlace: true)
-        guard was else { return }
+        guard was, !WatchLink.shared.playWaiting(since: since) else { return }
         var e = entry
         e["t"] = at; e["done"] = false
-        WatchLink.shared.keep(["cmd": "play", "entry": e, "at": Self.ms()], id: "pocket-play-" + String(Int(Self.ms())))
+        let now = Self.ms()
+        WatchLink.shared.keep(["cmd": "play", "entry": e, "at": now], id: "pocket-play-" + String(Int(now)))
+        WatchLink.shared.keep(["cmd": "rate", "r": r, "at": now], id: "pocket-rate-" + String(Int(now)))   // a speed set from the watch stays
     }
 
     // MARK: What Shelf and the watch hear
 
     private func keepSpot(done: Bool = false) {
-        guard !guid.isEmpty, player != nil else { return }
+        guard !guid.isEmpty, player != nil, armed else { return }
         lastSpot = Date()
         let updated = Self.ms()
         let c: [String: Any] = ["cmd": "audioSpot", "guid": guid, "t": done ? dur : t.rounded(), "dur": dur, "done": done, "updated": updated,

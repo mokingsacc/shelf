@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="3de0def82372">
+<meta name="build" content="ad926c12febc">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -4614,7 +4614,12 @@ if (typeof module !== 'undefined') module.exports = AI;
     nightOpen = true; openSheet('#nsheet');
     var st = engine.state(), same = st.episode && st.episode.guid === e.key;
     if (!same) engine.play({ guid: e.key, url: e.url, title: e.title, podcast: e.srcName, image: e.image, duration: e.dur });
-    else if (!st.playing) engine.toggle();
+    else if (!st.playing) {
+      // Paused here, but played on since (on the watch, or by the iPhone for the watch): carry on from that newer place
+      var r = arec[e.key];
+      if (r && !r.done && Math.abs((r.t || 0) - (st.t || 0)) > 5) engine.seek(Core.resumeAt(r));
+      engine.toggle();
+    }
     engine.setRate(podRate(e.key));
     // At night a podcast starts with a 45-minute sleep timer, so it never has to be remembered half asleep
     if (!same && isNight() && !engine.state().timer) { engine.setTimer(45); setTimeout(function () { toast('45-minute sleep timer on. Tap a number to change it.'); }, 400); }
@@ -5457,7 +5462,7 @@ if (typeof module !== 'undefined') module.exports = AI;
         var old = arec[g] || {};
         if ((old.updated || 0) > (c.updated || 0)) return { ok: true, kept: true };
         arec[g] = Object.assign({}, old, { t: +c.t || 0, dur: +c.dur || old.dur || 0, done: !!c.done, updated: +c.updated || Date.now(), url: c.url || old.url, title: c.title || old.title, podcast: c.podcast || old.podcast, image: c.image || old.image || '' },
-          c.video ? { video: c.video } : {}, c.source ? { source: c.source } : {});
+          c.video ? { video: c.video } : {}, c.source && c.source !== 'watch' ? { source: c.source } : {});   // 'watch' says where it came from, not the podcast
         syncTwin(arec[g]); saveAudio(); renderSoon();
         return { ok: true };
       }
