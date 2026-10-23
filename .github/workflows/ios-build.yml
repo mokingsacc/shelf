@@ -7,11 +7,15 @@ on:
   push:
     paths: ['ios/**', '.github/workflows/ios-build.yml', '.github/scripts/watch-shots.sh']
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Mac to build on (another one when GitHub has no macos-26 free)
+        default: macos-26
 permissions:
   contents: write
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
