@@ -84,7 +84,7 @@ public struct Command: Sendable {
         switch name {
         case "twin": return 16
         case "channel", "section": return 10
-        case "play", "next": return 8
+        case "play", "next", "resume", "pause", "toggle": return 8
         case "notes": return 6
         default: return 5
         }

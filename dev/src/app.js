@@ -1593,7 +1593,8 @@
   }
   function openAudio(e) {
     if (current) closeVideo(true);
-    aMeta[e.key] = { source: e.src, image: e.image || '', published: e.published || 0, podcast: e.srcName };
+    var had = arec[e.key] || {};   // what Shelf knows stays when the entry comes without it (from the watch, or the iPhone's own player)
+    aMeta[e.key] = { source: e.src || had.source || '', image: e.image || had.image || '', published: e.published || had.published || 0, podcast: e.srcName || had.podcast || '' };
     nightOpen = true; openSheet('#nsheet');
     var st = engine.state(), same = st.episode && st.episode.guid === e.key;
     if (!same) engine.play({ guid: e.key, url: e.url, title: e.title, podcast: e.srcName, image: e.image, duration: e.dur });

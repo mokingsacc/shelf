@@ -93,7 +93,15 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         try? s.updateApplicationContext([LinkKey.snapshot: LinkData.pack(json), LinkKey.sentAt: Date().timeIntervalSince1970])
     }
 
-    private func lastSnapshot() -> Data? { try? Data(contentsOf: Self.file("watch-snapshot.json")) }
+    /// The page's last snapshot. With Shelf closed nothing of its own plays, whatever it last said
+    private func lastSnapshot() -> Data? {
+        guard let d = try? Data(contentsOf: Self.file("watch-snapshot.json")) else { return nil }
+        guard plugin == nil, var o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any], var n = o["now"] as? [String: Any],
+              (n["playing"] as? Bool) == true else { return d }
+        n["playing"] = false
+        o["now"] = n
+        return (try? JSONSerialization.data(withJSONObject: o)) ?? d
+    }
 
     /// What plays now, while the watch app is open (the page's word gives way while the iPhone plays a podcast for the watch)
     func now(_ json: String, pocket: Bool = false) {
@@ -155,7 +163,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
             // A podcast while Shelf isn't on screen, and the remote while one plays: the iPhone plays it itself
             let app = UIApplication.shared
             let away = app.applicationState != .active
-            // Play on what Shelf last showed, while Shelf can't resume it (closed, or asleep in the background): a play of it from its place
+            // Play on something paused, while Shelf can't resume it (closed, or asleep in the background): a play of it from its place
             let json = away && !PocketPlayer.shared.active ? self.asPlay(raw) ?? raw : raw
             let name = Command.name(of: json)
             let text = String(decoding: json, as: UTF8.self)
@@ -182,20 +190,12 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         }
     }
 
-    /// A play or resume from the watch on Shelf's last "now" (a paused podcast or video), as a play of that entry; nil if it isn't one.
-    /// With no page at all (Shelf closed) nothing of Shelf's plays, whatever it last said. Main thread.
+    /// The watch's play on something paused (it sends the entry with it), as a play of that entry; nil for anything else
     private func asPlay(_ json: Data) -> Data? {
-        let name = Command.name(of: json)
-        guard name == "toggle" || name == "resume", var c = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any],
-              let d = lastSnapshot(), let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any], let n = o["now"] as? [String: Any],
-              let key = n["key"] as? String, !key.isEmpty, (n["playing"] as? Bool) != true || plugin == nil else { return nil }
-        let audio = n["kind"] as? String == "audio"
-        if audio && (n["url"] as? String ?? "").isEmpty { return nil }
-        var e: [String: Any] = ["type": audio ? "audio" : "video", "key": key, "title": n["title"] as? String ?? "", "srcName": n["tag"] as? String ?? "",
-                                "src": "", "section": "", "dur": n["dur"] ?? 0, "t": n["t"] ?? 0, "done": false, "isNew": false]
-        if audio { e["url"] = n["url"]; e["image"] = n["image"] as? String ?? ""; e["rate"] = n["rate"] ?? 1 }
+        guard Command.name(of: json) == "resume", var c = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any],
+              let e = c["entry"] as? [String: Any], (e["key"] as? String ?? "") != "" else { return nil }
         c["cmd"] = "play"
-        c["entry"] = e
+        c.removeValue(forKey: "key")
         return try? JSONSerialization.data(withJSONObject: c, options: [.sortedKeys])
     }
 

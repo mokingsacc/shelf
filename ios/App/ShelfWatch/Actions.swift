@@ -75,6 +75,20 @@ enum Act {
         return nil
     }
 
+    /// What the iPhone shows as playing, as an entry from where it is (Shelf's own when the snapshot has it)
+    static func entry(_ s: Showing) -> Entry? {
+        let store = Store.shared, n = store.phoneNow
+        let known = (store.snap?.pick ?? []).map(\.entry) + (store.snap?.sections ?? []).flatMap(\.items)
+        if var e = known.first(where: { $0.key == s.key && $0.type == s.kind }) {
+            e.t = s.t; e.done = false
+            if e.isAudio { e.rate = s.rate; if (e.url ?? "").isEmpty { e.url = n?.url } }
+            return e.isAudio && (e.url ?? "").isEmpty ? nil : e
+        }
+        guard s.isVideo || !(n?.url ?? "").isEmpty else { return nil }
+        return Entry(type: s.kind, key: s.key, title: s.title, srcName: s.tag, dur: s.dur, t: s.t, url: s.isVideo ? nil : n?.url, image: n?.image,
+                     rate: s.isVideo ? nil : s.rate)
+    }
+
     static func watchItem(_ e: Entry) -> WatchItem? {
         guard e.isAudio, let url = e.url, !url.isEmpty else { return nil }
         return WatchItem(guid: e.key, url: url, title: e.title, podcast: e.srcName, image: e.image ?? "", dur: e.dur, video: nil, videoTitle: nil)
@@ -92,10 +106,12 @@ enum Act {
 
     // MARK: The remote: the same taps for the watch's playback and the iPhone's
 
-    /// Play/pause; nil when it worked, else what to say. With Shelf closed on the iPhone, a play starts what it last showed
+    /// Play/pause; nil when it worked, else what to say. A play carries what it plays, so the iPhone can start it even with Shelf closed
     static func toggle(_ s: Showing) async -> String? {
         if s.onWatch { s.playing ? Haptic.stop() : Haptic.start(); WatchPlayer.shared.toggle(); return nil }
-        let r = await Store.shared.send("toggle")
+        var f: [String: Any] = ["key": s.key]
+        if !s.playing, let e = entry(s) { f["entry"] = Command.fields(e) }
+        let r = await Store.shared.send(s.playing ? "pause" : "resume", f)
         if r.ok { (r.now?.playing ?? false) ? Haptic.start() : Haptic.stop(); return nil }
         Haptic.warn()
         return r.problem
