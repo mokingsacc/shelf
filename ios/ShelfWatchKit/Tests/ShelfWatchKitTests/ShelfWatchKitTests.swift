@@ -71,6 +71,11 @@ final class ShelfWatchKitTests: XCTestCase {
         XCTAssertEqual(snap.now?.rate, 1)
         XCTAssertEqual(snap.rates, .standard)
         XCTAssertNil(Snapshot.decode(Data("nonsense".utf8)))
+        // An episode's speed rides along to the iPhone's own player (and back in the play command's entry)
+        let ep = try XCTUnwrap(Snapshot.decode(Data(#"{"sections":[{"id":"s","items":[{"type":"audio","key":"g","url":"https://x/a.mp3","rate":1.5}]}]}"#.utf8)))
+        XCTAssertEqual(ep.sections[0].items[0].rate, 1.5)
+        XCTAssertEqual(Command.fields(ep.sections[0].items[0])["rate"] as? Double, 1.5)
+        XCTAssertTrue(Words.why("notified").contains("Tap to play"))
     }
 
     func testPackRoundTrip() throws {

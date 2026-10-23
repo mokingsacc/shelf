@@ -76,6 +76,7 @@ public enum Words {
         case "hidden": return "Shelf is in the background on your iPhone. Open it there (a play you chose starts then)."
         case "stalled": return "It didn't start on your iPhone. Open Shelf there and try again."
         case "asleep": return "Open Shelf on your iPhone to control it from here."
+        case "notified": return "On your iPhone, tap “Tap to play” and it starts."
         case "unreachable": return "Your iPhone isn't in reach. Bring it closer, or play a podcast on the watch."
         case "timeout": return "Your iPhone didn't answer. Open Shelf on it and try again."
         case "old": return "That waited too long, so it was skipped. Tap it again."

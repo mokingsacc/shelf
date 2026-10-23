@@ -2202,7 +2202,7 @@
     if (!e) return null;
     var p = prog(e) || {}, out = { type: e.type, key: e.key, title: e.title || (e.type === 'video' ? 'YouTube video' : 'Episode'), srcName: e.srcName || '', src: e.src || '',
       dur: Math.round(p.dur || e.dur || 0), t: Math.round(p.t || 0), done: !!p.done, isNew: isNew(e), section: e.section || '' };
-    if (e.type === 'audio') { out.url = e.url || (arec[e.key] && arec[e.key].url) || ''; out.image = e.image || (arec[e.key] && arec[e.key].image) || ''; }
+    if (e.type === 'audio') { out.url = e.url || (arec[e.key] && arec[e.key].url) || ''; out.image = e.image || (arec[e.key] && arec[e.key].image) || ''; out.rate = podRate(e.key); }
     if (e.list) out.list = e.list;
     return Object.assign(out, extra || {});
   }

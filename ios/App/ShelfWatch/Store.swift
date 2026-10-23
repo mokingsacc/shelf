@@ -84,7 +84,7 @@ final class Store: ObservableObject {
     /// The iPhone's answer to a tap (from the link)
     func answer(id: String, _ r: Reply) {
         heardAt = Date()
-        page = r.why != "asleep"
+        page = r.why != "asleep" && r.why != "notified"
         if r.hasNow {
             if let n = r.now { if n.at >= (phoneNow?.at ?? 0) { phoneNow = n } } else { phoneNow = nil }
         }

@@ -29,6 +29,7 @@ public struct Entry: Codable, Hashable, Identifiable, Sendable {
     public var label: String?        // the course episode's number, "1115"
     public var short: String?        // its short title, "Pediatrics"
     public var about: Bool?          // the place is only roughly known (Last in YouTube)
+    public var rate: Double?         // an episode's speed, as Shelf on the iPhone remembers it for its podcast
 
     public var id: String { (course ?? "") + "|" + key }
     public var isVideo: Bool { type == "video" }
@@ -37,19 +38,19 @@ public struct Entry: Codable, Hashable, Identifiable, Sendable {
 
     public init(type: String, key: String, title: String, srcName: String = "", src: String = "", dur: Double = 0, t: Double = 0, done: Bool = false,
                 isNew: Bool = false, section: String = "", url: String? = nil, image: String? = nil, list: String? = nil, course: String? = nil,
-                label: String? = nil, short: String? = nil, about: Bool? = nil) {
+                label: String? = nil, short: String? = nil, about: Bool? = nil, rate: Double? = nil) {
         self.type = type; self.key = key; self.title = title; self.srcName = srcName; self.src = src; self.dur = dur; self.t = t; self.done = done
         self.isNew = isNew; self.section = section; self.url = url; self.image = image; self.list = list; self.course = course
-        self.label = label; self.short = short; self.about = about
+        self.label = label; self.short = short; self.about = about; self.rate = rate
     }
 
-    enum K: String, CodingKey { case type, key, title, srcName, src, dur, t, done, isNew, section, url, image, list, course, label, short, about }
+    enum K: String, CodingKey { case type, key, title, srcName, src, dur, t, done, isNew, section, url, image, list, course, label, short, about, rate }
     public init(from d: Decoder) throws {
         let c = try d.container(keyedBy: K.self)
         type = c.v(.type, "video"); key = try c.decode(String.self, forKey: .key); title = c.v(.title, "")
         srcName = c.v(.srcName, ""); src = c.v(.src, ""); dur = c.num(.dur); t = c.num(.t); done = c.v(.done, false)
         isNew = c.v(.isNew, false); section = c.v(.section, ""); url = c.o(.url); image = c.o(.image); list = c.o(.list)
-        course = c.o(.course); label = c.o(.label); short = c.o(.short); about = c.o(.about)
+        course = c.o(.course); label = c.o(.label); short = c.o(.short); about = c.o(.about); rate = c.o(.rate)
         if url?.isEmpty == true { url = nil }
         if image?.isEmpty == true { image = nil }
     }

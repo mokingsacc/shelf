@@ -170,9 +170,9 @@ enum Act {
     /// A podcast on the watch moves to the iPhone: its spot first (newest wins there), then play
     static func moveToPhone() async -> String? {
         guard let it = WatchPlayer.shared.item else { return nil }
-        let t = WatchPlayer.shared.t
+        let t = WatchPlayer.shared.t, rate = WatchPlayer.shared.rate
         WatchPlayer.shared.stop()
-        let e = Entry(type: "audio", key: it.guid, title: it.title, srcName: it.podcast, dur: it.dur, t: t, url: it.url, image: it.image)
+        let e = Entry(type: "audio", key: it.guid, title: it.title, srcName: it.podcast, dur: it.dur, t: t, url: it.url, image: it.image, rate: rate)
         return await onPhone(e)
     }
 }
