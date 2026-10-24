@@ -1,18 +1,21 @@
 import SwiftUI
+import WatchKit
 import ShelfWatchKit
 
 /// Now, the remote (design.md §3.6): the same for the iPhone's playback and the watch's own, in the player or night palette.
-/// The Crown scrubs to a target and nothing moves until GO, so a brushed Crown never makes it jump.
+/// The Crown is the volume of whatever plays (the iPhone's, or the watch's own). Holding −15 or +15 runs the time
+/// back or on, faster the longer it's held, and it jumps there on letting go; a tap skips once.
 struct NowView: View {
     @EnvironmentObject var store: Store
     @EnvironmentObject var player: WatchPlayer
 
-    @State private var crown: Double = 0
-    @State private var target: Double?              // scrubbing to here
-    @State private var scrubT = 0                   // restarts the 5 s cancel
+    @State private var target: Double?              // holding a skip: it jumps here on letting go
+    @State private var pressed: Double?             // the skip being pressed
+    @State private var holding = false              // held past holdAfter: letting go jumps instead of skipping
+    @State private var holdT = 0                    // each press's number, so an old press's timer does nothing
+    @State private var shown = false                // on screen, so the Crown is ours
     @State private var marked: Double?              // Mark's frozen second, for 2 s
     @State private var problem: String?
-    @State private var going = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
@@ -46,26 +49,36 @@ struct NowView: View {
     private func remote(_ s: Showing) -> some View {
         let pal = Palette.of(audio: !s.isVideo)
         let away = !s.onWatch && !store.reachable
-        let step: Double = s.dur > 3600 ? 60 : 15
         let ending = target == nil && s.ended && !s.onWatch
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
-                if let target {
-                    scrubHead(s, pal, target)
-                } else if ending {
-                    nextHead(s, pal)
-                } else {
-                    tag(s, pal, away)
-                    // The only flexible line: two lines when there's room, one before anything else moves.
-                    // A problem, or the phone's message, takes the title's place for a moment (design.md §4)
-                    if let note = problem ?? (s.message.isEmpty || s.onWatch ? nil : s.message) {
-                        Text(note).font(.shelf(13, .semibold)).foregroundStyle(Ink.wait).lineLimit(2).minimumScaleFactor(0.8)
-                            .layoutPriority(-1)
-                    } else {
-                        Text(s.title).font(.shelf(15, .heavy)).kerning(-0.2).lineLimit(2).foregroundStyle(pal.hi)
-                            .layoutPriority(-1)
+                HStack(alignment: .top, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        if let target {
+                            holdHead(s, pal, target)
+                        } else if ending {
+                            nextHead(s, pal)
+                        } else {
+                            tag(s, pal, away)
+                            // The only flexible line: two lines when there's room, one before anything else moves.
+                            // A problem, or the phone's message, takes the title's place for a moment (design.md §4)
+                            if let note = problem ?? (s.message.isEmpty || s.onWatch ? nil : s.message) {
+                                Text(note).font(.shelf(13, .semibold)).foregroundStyle(Ink.wait).lineLimit(2).minimumScaleFactor(0.8)
+                                    .layoutPriority(-1)
+                            } else {
+                                Text(s.title).font(.shelf(15, .heavy)).kerning(-0.2).lineLimit(2).foregroundStyle(pal.hi)
+                                    .layoutPriority(-1)
+                            }
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // The Crown turns this: the iPhone's volume, or the watch's own while it plays here
+                    Volume(phone: !s.onWatch, tint: pal.accent, active: shown)
+                        .id(s.onWatch)
+                        .frame(width: 30, height: 30)
+                        .accessibilityLabel(s.onWatch ? "Watch volume" : "iPhone volume")
                 }
+                .layoutPriority(-1)
                 Spacer(minLength: 2)
                 if ending {
                     nextControls(s, pal)
@@ -80,9 +93,12 @@ struct NowView: View {
             transport(s, pal).opacity(away ? 0.4 : 1)
         }
         .ignoresSafeArea(edges: .bottom)
-        .focusable(s.dur > 0)
-        .digitalCrownRotation($crown, from: -1_000_000, through: 1_000_000, by: step, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
-        .onChange(of: crown) { old, v in crowned(v - old, s) }
+        .onAppear {
+            shown = true
+            // Demo screenshot of a hold (-holding): 2 min 15 back
+            if store.demo, ProcessInfo.processInfo.arguments.contains("-holding") { pressed = -15; holding = true; target = max(0, s.t - 135) }
+        }
+        .onDisappear { shown = false; endHold() }
         .onChange(of: problem) { _, p in
             guard let p else { return }
             Task { try? await Task.sleep(nanoseconds: 4_000_000_000); if problem == p { withAnimation { problem = nil } } }
@@ -120,52 +136,43 @@ struct NowView: View {
         .frame(height: 16)
     }
 
-    @ViewBuilder private func controls(_ s: Showing, _ pal: Palette) -> some View {
+    private func controls(_ s: Showing, _ pal: Palette) -> some View {
         let outline = pal.night ? pal.rule : Ink.dim
-        if target != nil {
-            HStack(spacing: Metric.gap) {
-                Button { cancelScrub(s) } label: { Cell(outline: outline) { ButtonText(text: "Cancel", color: pal.text, size: 11) } }.buttonStyle(Press())
-                    .frame(width: Metric.third)
-                Button { Task { await go(s) } } label: { Cell(fill: pal.accent, outline: nil) { ButtonText(text: "Go", color: .black) } }.buttonStyle(Press())
-            }
-            .frame(height: Metric.tap)
-        } else {
-            HStack(spacing: Metric.gap) {
-                if s.isVideo && !s.onWatch {
-                    Button { Task { await mark(s) } } label: {
-                        Cell(outline: outline) {
-                            VStack(spacing: 0) {
-                                if marked != nil {
-                                    Image(systemName: "checkmark").font(.system(size: 10, weight: .black)).foregroundStyle(pal.accent)
-                                } else { Cap(text: "Mark", color: pal.mute, size: 10) }
-                                Meta(text: Words.clock(marked ?? s.t), color: marked != nil ? pal.accent : pal.text, size: 11, weight: .semibold)
-                            }
+        return HStack(spacing: Metric.gap) {
+            if s.isVideo && !s.onWatch {
+                Button { Task { await mark(s) } } label: {
+                    Cell(outline: outline) {
+                        VStack(spacing: 0) {
+                            if marked != nil {
+                                Image(systemName: "checkmark").font(.system(size: 10, weight: .black)).foregroundStyle(pal.accent)
+                            } else { Cap(text: "Mark", color: pal.mute, size: 10) }
+                            Meta(text: Words.clock(marked ?? s.t), color: marked != nil ? pal.accent : pal.text, size: 11, weight: .semibold)
                         }
                     }
-                    .buttonStyle(Press())
-                } else {
-                    Button { store.go(.sleep) } label: {
-                        Cell(outline: outline) {
-                            VStack(spacing: 0) {
-                                Cap(text: "Timer", color: pal.mute, size: 10)
-                                Meta(text: timerText(s), color: s.timer == nil ? pal.mute : pal.text, size: 11, weight: .semibold)
-                            }
+                }
+                .buttonStyle(Press())
+            } else {
+                Button { store.go(.sleep) } label: {
+                    Cell(outline: outline) {
+                        VStack(spacing: 0) {
+                            Cap(text: "Timer", color: pal.mute, size: 10)
+                            Meta(text: timerText(s), color: s.timer == nil ? pal.mute : pal.text, size: 11, weight: .semibold)
                         }
                     }
-                    .buttonStyle(Press())
-                }
-                Button { store.go(.speed) } label: {
-                    Cell(outline: outline) { Text(Words.rate(s.rate)).font(.shelf(17, .semibold)).monospacedDigit().foregroundStyle(pal.text).minimumScaleFactor(0.7) }
                 }
                 .buttonStyle(Press())
-                Button { store.go(.more) } label: {
-                    Cell(outline: outline) { Image(systemName: "ellipsis").font(.system(size: 17, weight: .bold)).foregroundStyle(pal.text) }
-                }
-                .buttonStyle(Press())
-                .accessibilityLabel("More")
             }
-            .frame(height: Metric.tap)
+            Button { store.go(.speed) } label: {
+                Cell(outline: outline) { Text(Words.rate(s.rate)).font(.shelf(17, .semibold)).monospacedDigit().foregroundStyle(pal.text).minimumScaleFactor(0.7) }
+            }
+            .buttonStyle(Press())
+            Button { store.go(.more) } label: {
+                Cell(outline: outline) { Image(systemName: "ellipsis").font(.system(size: 17, weight: .bold)).foregroundStyle(pal.text) }
+            }
+            .buttonStyle(Press())
+            .accessibilityLabel("More")
         }
+        .frame(height: Metric.tap)
     }
 
     private func timerText(_ s: Showing) -> String {
@@ -192,13 +199,19 @@ struct NowView: View {
         .frame(height: 60)
     }
 
+    /// A tap skips once; held, it runs the time back or on and jumps there on letting go
     private func skipCell(_ text: String, _ s: Showing, _ by: Double, _ pal: Palette) -> some View {
-        Button { Task { await Act.skip(s, by: by) } } label: {
-            Text(text).font(.shelf(20, .semibold)).monospacedDigit().foregroundStyle(pal.night ? pal.text : Ink.ink)
-                .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
-        }
-        .buttonStyle(Press())
-        .accessibilityLabel(by < 0 ? "Back 15 seconds" : "Forward \(Int(by)) seconds")
+        Text(text).font(.shelf(20, .semibold)).monospacedDigit().foregroundStyle(pal.night ? pal.text : Ink.ink)
+            .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
+            .opacity(pressed == by ? 0.6 : 1)
+            // Touch down and lift (a long-press gesture ends when it's recognised, not when the finger lifts)
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in press(s, by: by) }
+                .onEnded { _ in lift(s, by: by) })
+            .accessibilityElement()
+            .accessibilityLabel(by < 0 ? "Back 15 seconds" : "Forward \(Int(by)) seconds")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { Task { await Act.skip(s, by: by) } }
     }
 
     private func centre(_ s: Showing, _ pal: Palette) -> some View {
@@ -261,42 +274,78 @@ struct NowView: View {
         return left > 0 ? "Plays in \(min(5, left)) s" : "Starting…"
     }
 
-    // MARK: Scrubbing with the Crown
+    // MARK: Holding a skip
 
-    private func scrubHead(_ s: Showing, _ pal: Palette, _ to: Double) -> some View {
+    static let holdAfter = 0.4
+
+    private func holdHead(_ s: Showing, _ pal: Palette, _ to: Double) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Cap(text: "Go to", color: pal.accent)
+            Cap(text: holding ? "Let go to jump" : "Jumping", color: pal.accent)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Words.clock(to)).font(.shelf(34, .semibold)).monospacedDigit().foregroundStyle(pal.hi).minimumScaleFactor(0.6).lineLimit(1)
+                Text(Words.clock(to)).font(.shelf(30, .semibold)).monospacedDigit().foregroundStyle(pal.hi).minimumScaleFactor(0.6).lineLimit(1)
                 let d = to - s.t
                 Meta(text: (d < 0 ? "−" : "+") + Words.clock(abs(d)), color: pal.mute)
             }
         }
     }
 
-    /// Each detent moves the target from where it plays now; nothing moves until GO
-    private func crowned(_ delta: Double, _ s: Showing) {
-        guard delta != 0 else { return }   // only turns count: the Crown's value is never put back, so nothing reads as a turn
-        let from = target ?? s.t
-        withAnimation(.easeOut(duration: 0.15)) { target = max(0, min(s.dur, from + delta)) }
-        scrubT += 1
-        let mine = scrubT
-        Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if mine == scrubT, target != nil { cancelScrub(s) }
+    private func press(_ s: Showing, by: Double) {
+        guard pressed == nil else { return }        // onChanged runs on every move; only the touch down counts
+        pressed = by
+        holding = false
+        holdT += 1
+        let mine = holdT
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(Self.holdAfter * 1_000_000_000))
+            guard mine == holdT, pressed == by else { return }
+            startHold(s, by: by, mine)
         }
     }
 
-    private func cancelScrub(_ s: Showing) {
-        withAnimation(.easeOut(duration: 0.15)) { target = nil }
+    private func startHold(_ s: Showing, by: Double, _ mine: Int) {
+        guard s.dur > 0 else { return }             // nothing to run along: letting go is a plain skip
+        holding = true
+        let began = Date()
+        withAnimation(.easeOut(duration: 0.15)) { target = Rules.holdMove(s.t, by: by, dur: s.dur) }
+        Haptic.select()
+        Task { @MainActor in
+            while true {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard mine == holdT, holding, let from = target else { return }
+                let step = Rules.holdStep(abs(by), held: Date().timeIntervalSince(began), dur: s.dur)
+                let to = Rules.holdMove(from, by: by < 0 ? -step : step, dur: s.dur)
+                if to == from { continue }          // at the start or the end: it waits there
+                target = to
+                Haptic.select()
+            }
+        }
     }
 
-    private func go(_ s: Showing) async {
-        guard let to = target, !going else { return }
-        going = true
+    private func lift(_ s: Showing, by: Double) {
+        guard pressed == by else { return }
+        let held = holding, to = target
+        pressed = nil
+        holding = false
+        holdT += 1
+        if held, let to {
+            Task { await jump(s, to: to) }
+        } else {
+            Task { await Act.skip(s, by: by) }
+        }
+    }
+
+    /// Ends a press without skipping or jumping (leaving the screen)
+    private func endHold() {
+        holdT += 1
+        pressed = nil
+        holding = false
+        target = nil
+    }
+
+    private func jump(_ s: Showing, to: Double) async {
         _ = await Act.seek(s, to: to)
-        going = false
-        withAnimation(.easeOut(duration: 0.15)) { target = nil }
+        // A new hold may have started while the phone answered; that one keeps its target
+        if !holding, target == to { withAnimation(.easeOut(duration: 0.15)) { target = nil } }
     }
 
     private func mark(_ s: Showing) async {
@@ -545,5 +594,42 @@ struct NotesView: View {
             if state != "working" { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
         }
+    }
+}
+
+/// The Crown's volume (the system's own control, as in Now Playing): the iPhone's while it plays there, else the watch's.
+/// SwiftUI takes the Crown back after a tap, so while Now is on screen the control asks for it again every 0.3 s.
+struct Volume: WKInterfaceObjectRepresentable {
+    typealias WKInterfaceObjectType = WKInterfaceVolumeControl
+    var phone: Bool
+    var tint: Color
+    var active: Bool
+
+    final class Keeper {
+        var active = false
+        var timer: Timer?
+        deinit { timer?.invalidate() }
+    }
+
+    func makeCoordinator() -> Keeper { Keeper() }
+
+    func makeWKInterfaceObject(context: WKInterfaceObjectRepresentableContext<Volume>) -> WKInterfaceVolumeControl {
+        let v = WKInterfaceVolumeControl(origin: phone ? .companion : .local)
+        v.setTintColor(UIColor(tint))
+        let keeper = context.coordinator
+        keeper.active = active
+        keeper.timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak v, weak keeper] t in
+            guard let v, let keeper else { t.invalidate(); return }
+            if keeper.active { v.focus() }
+        }
+        DispatchQueue.main.async { [weak v] in if active { v?.focus() } }
+        return v
+    }
+
+    func updateWKInterfaceObject(_ v: WKInterfaceVolumeControl, context: WKInterfaceObjectRepresentableContext<Volume>) {
+        v.setTintColor(UIColor(tint))
+        let was = context.coordinator.active
+        context.coordinator.active = active
+        if active && !was { v.focus() } else if !active && was { v.resignFocus() }
     }
 }
