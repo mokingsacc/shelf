@@ -8,11 +8,14 @@ import ShelfWatchKit
 struct NowView: View {
     @EnvironmentObject var store: Store
     @EnvironmentObject var player: WatchPlayer
+    @Environment(\.scenePhase) private var phase
 
+    @GestureState private var touching = false      // false again when the touch ends, cancelled ones included
     @State private var target: Double?              // holding a skip: it jumps here on letting go
     @State private var pressed: Double?             // the skip being pressed
     @State private var holding = false              // held past holdAfter: letting go jumps instead of skipping
     @State private var holdT = 0                    // each press's number, so an old press's timer does nothing
+    @State private var jumping = false              // a jump's seek is on its way
     @State private var shown = false                // on screen, so the Crown is ours
     @State private var marked: Double?              // Mark's frozen second, for 2 s
     @State private var problem: String?
@@ -50,6 +53,8 @@ struct NowView: View {
         let pal = Palette.of(audio: !s.isVideo)
         let away = !s.onWatch && !store.reachable
         let ending = target == nil && s.ended && !s.onWatch
+        // A message needs the full width: the volume ring steps out of sight (it keeps the Crown)
+        let wide = away || problem != nil || (!s.message.isEmpty && !s.onWatch)
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .top, spacing: 4) {
@@ -73,9 +78,10 @@ struct NowView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // The Crown turns this: the iPhone's volume, or the watch's own while it plays here
-                    Volume(phone: !s.onWatch, tint: pal.accent, active: shown)
+                    Volume(phone: !s.onWatch, tint: pal.accent, active: shown && phase == .active && store.path.last == .now)
                         .id(s.onWatch)
-                        .frame(width: 30, height: 30)
+                        .frame(width: wide ? 1 : 40, height: wide ? 1 : 40)
+                        .opacity(wide ? 0.001 : 1)
                         .accessibilityLabel(s.onWatch ? "Watch volume" : "iPhone volume")
                 }
                 .layoutPriority(-1)
@@ -99,6 +105,12 @@ struct NowView: View {
             if store.demo, ProcessInfo.processInfo.arguments.contains("-holding") { pressed = -15; holding = true; target = max(0, s.t - 135) }
         }
         .onDisappear { shown = false; endHold() }
+        .onChange(of: phase) { _, p in if p != .active { endHold() } }
+        .onChange(of: touching) { _, down in
+            // A touch the system took away (wrist down, a notification, a swipe) never reaches onEnded: drop it then
+            guard !down else { return }
+            DispatchQueue.main.async { if pressed != nil { endHold() } }
+        }
         .onChange(of: problem) { _, p in
             guard let p else { return }
             Task { try? await Task.sleep(nanoseconds: 4_000_000_000); if problem == p { withAnimation { problem = nil } } }
@@ -124,7 +136,7 @@ struct NowView: View {
                     Rectangle().fill(Ink.dim)
                     Rectangle().fill(pal.accent).frame(width: g.size.width * CGFloat(s.dur > 0 ? min(1, s.t / s.dur) : 0))
                     if let target, s.dur > 0 {
-                        Rectangle().fill(pal.accent).frame(width: 4, height: 12).offset(x: g.size.width * CGFloat(min(1, target / s.dur)) - 2)
+                        Rectangle().fill(pal.hi).frame(width: 4, height: 12).offset(x: g.size.width * CGFloat(min(1, target / s.dur)) - 2)
                     }
                 }
                 .frame(height: 4)
@@ -206,8 +218,9 @@ struct NowView: View {
             .opacity(pressed == by ? 0.6 : 1)
             // Touch down and lift (a long-press gesture ends when it's recognised, not when the finger lifts)
             .gesture(DragGesture(minimumDistance: 0)
+                .updating($touching) { _, t, _ in t = true }
                 .onChanged { _ in press(s, by: by) }
-                .onEnded { _ in lift(s, by: by) })
+                .onEnded { v in lift(s, by: by, moved: hypot(v.translation.width, v.translation.height)) })
             .accessibilityElement()
             .accessibilityLabel(by < 0 ? "Back 15 seconds" : "Forward \(Int(by)) seconds")
             .accessibilityAddTraits(.isButton)
@@ -306,7 +319,8 @@ struct NowView: View {
         guard s.dur > 0 else { return }             // nothing to run along: letting go is a plain skip
         holding = true
         let began = Date()
-        withAnimation(.easeOut(duration: 0.15)) { target = Rules.holdMove(s.t, by: by, dur: s.dur) }
+        // From the last jump's spot while the phone is still getting there, else from where it plays
+        withAnimation(.easeOut(duration: 0.15)) { target = Rules.holdMove(target ?? s.t, by: by, dur: s.dur) }
         Haptic.select()
         Task { @MainActor in
             while true {
@@ -321,7 +335,7 @@ struct NowView: View {
         }
     }
 
-    private func lift(_ s: Showing, by: Double) {
+    private func lift(_ s: Showing, by: Double, moved: CGFloat) {
         guard pressed == by else { return }
         let held = holding, to = target
         pressed = nil
@@ -329,8 +343,10 @@ struct NowView: View {
         holdT += 1
         if held, let to {
             Task { await jump(s, to: to) }
-        } else {
+        } else if moved <= 12 {                     // a swipe that began here is not a tap
             Task { await Act.skip(s, by: by) }
+        } else if target != nil, !jumping {
+            withAnimation(.easeOut(duration: 0.15)) { target = nil }
         }
     }
 
@@ -343,7 +359,9 @@ struct NowView: View {
     }
 
     private func jump(_ s: Showing, to: Double) async {
+        jumping = true
         _ = await Act.seek(s, to: to)
+        jumping = false
         // A new hold may have started while the phone answered; that one keeps its target
         if !holding, target == to { withAnimation(.easeOut(duration: 0.15)) { target = nil } }
     }
@@ -622,7 +640,11 @@ struct Volume: WKInterfaceObjectRepresentable {
             guard let v, let keeper else { t.invalidate(); return }
             if keeper.active { v.focus() }
         }
-        DispatchQueue.main.async { [weak v] in if active { v?.focus() } }
+        // The first focus waits for the control to be on screen
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak v, weak keeper] in
+            guard let v, keeper?.active == true else { return }
+            v.resignFocus(); v.focus()
+        }
         return v
     }
 
