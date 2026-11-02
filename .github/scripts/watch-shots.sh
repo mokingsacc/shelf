@@ -53,6 +53,8 @@ shot now-message -playing -message -screen now
 shot check-away -away -screen check
 shot closed -closed -screen today
 shot now-closed -closed -playing -screen now
+shot now-hold -playing -holding -screen now
+shot now-watch-hold -holding -screen now-watch
 shot playon-closed -closed -screen playon
 shot check-closed -closed -screen check
 # Crash reports, if any screen crashed

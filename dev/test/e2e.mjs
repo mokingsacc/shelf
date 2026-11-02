@@ -45,6 +45,8 @@ ok(await shelf(p, () => window.__shelf.lib.sources().length) === 7, '1 all seven
 await p.waitForFunction(() => document.querySelector('#statusDot').classList.contains('good'), null, { timeout: 6000 }).catch(() => {});
 ok(await p.locator('#statusDot.good').count() === 1 && (await p.locator('#statusText').textContent()) === 'All good', '1 corner says All good');
 ok(await p.locator('.band .nw').count() === 0, '1 nothing marked new on the very first run');
+const ytHomeHref = await p.evaluate(() => { const a = document.querySelector('#ytHome'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
+ok(await p.locator('#ytHome').isVisible() && /^youtube:\/\/www\.youtube\.com\/$/.test(ytHomeHref), '1 Today has a YouTube button that opens the YouTube app: ' + ytHomeHref);
 const calls = await shelf(p, () => window.__httpCalls);
 ok(calls.some((c) => /youtube\.com\/@/.test(c.url) && /SOCS=/.test(c.headers.Cookie) && /Macintosh/.test(c.headers['User-Agent'])), '1 channel pages are read natively, with the consent cookie and a desktop identity (the phone page is shaped differently)');
 
@@ -138,6 +140,27 @@ ok(await p.evaluate(() => !document.querySelector('#audio').paused), '6 episode 
 ok(await p.evaluate(() => navigator.mediaSession && navigator.mediaSession.metadata && navigator.mediaSession.metadata.title) === 'Rome: The Fall of the Western Empire', '6 lock screen shows the episode title');
 await p.locator('#nSeg [data-m="15"]').click();
 ok(/1[45]:\d\d/.test(await p.locator('#nCd').textContent()), '6 "lights out in" countdown shows');
+// YouTube ↗ in the podcast player: the episode's own video at this spot when Shelf knows it, else YouTube's search for it
+ok(await p.locator('#nYt').isVisible() && /locked too/.test(await p.locator('#nKeep').textContent()), '6 the podcast player has a YouTube button, and still says it plays locked');
+await p.waitForFunction(() => { const g = window.__shelf.engine.state().episode.guid, c = window.__shelf.podYt[g]; return c && !c.busy; }, null, { timeout: 5000 }).catch(() => {});
+const nyt = async () => p.evaluate(() => { const a = document.querySelector('#nYt'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
+let pyt = await nyt();
+ok(/^youtube:\/\/www\.youtube\.com\/results\?search_query=Fall%20of%20Civilizations%20Podcast%20Rome/.test(pyt) && await p.evaluate(() => document.querySelector('#audio').paused) && await shelf(p, () => localStorage.getItem('shelf.handoff')) === 'null',
+  '6 no video found for the episode: YouTube ↗ opens YouTube\'s search for it and pauses the podcast: ' + pyt.slice(0, 90));
+await p.locator('#nPlay').click(); await p.waitForTimeout(300);
+await shelf(p, () => { const st = window.__shelf.engine.state(); window.__shelf.engine.seek(20); window.__shelf.podYt[st.episode.guid] = { id: 'abcdefghijk', at: Date.now() }; window.__shelf.engine.setRate(1.5); window.__shelf.engine.setTimer(15); });
+pyt = await nyt();
+const phand = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
+ok(/^youtube:\/\/www\.youtube\.com\/watch\?v=abcdefghijk&t=(19|20|21)s$/.test(pyt) && phand && phand.id === 'abcdefghijk' && phand.ep && Math.abs(phand.t - 20) < 2 && phand.rate === 1 && await shelf(p, () => !window.__shelf.engine.state().timer), '6 with its video known, YouTube ↗ opens it at the spot playing now, remembers the hand-over (at 1×, YouTube\'s own speed) and stops the sleep timer: ' + pyt);
+await shelf(p, () => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; });
+await shelf(p, () => { const h = JSON.parse(localStorage.getItem('shelf.handoff')); h.at -= 40e3; localStorage.setItem('shelf.handoff', JSON.stringify(h)); window.__shelf.catchUp(); });
+await p.waitForTimeout(300);
+const pback = await shelf(p, () => { const st = window.__shelf.engine.state(); return { rec: window.__shelf.audio[st.episode.guid].t, el: document.querySelector('#audio').currentTime, toast: document.querySelector('#toast').textContent }; });
+ok(Math.abs(pback.rec - (phand.t + 40)) < 3 && Math.abs(pback.el - pback.rec) < 5 && /Moved your place/.test(pback.toast), '6 back from YouTube, the podcast moves on by the time away (' + Math.round(phand.t) + ' → ' + Math.round(pback.rec) + ')');
+await p.locator('#toast button', { hasText: 'Undo' }).click(); await p.waitForTimeout(200);
+ok(Math.abs(await shelf(p, () => window.__shelf.audio[window.__shelf.engine.state().episode.guid].t) - phand.t) < 3, '6 Undo puts the podcast back where it was');
+await p.locator('#nPlay').click(); await p.waitForTimeout(300);
+await shelf(p, () => window.__shelf.engine.setRate(1)); await p.locator('#nSeg [data-m="15"]').click();
 await p.locator('[data-act="close-night"]').click();
 await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
 ok(await p.locator('#mini').isVisible() && /to sleep/.test(await p.locator('#miniSub').textContent()), '6 keeps playing with a mini bar after closing: ' + await p.locator('#miniSub').textContent());
@@ -250,7 +273,9 @@ ok(/^shortcuts:\/\/run-shortcut\?name=Shelf%20Play%20Locked&input=text&text=yout
 ok(await p.locator('#ytOpen').isVisible(), 'auto-lock on: a YouTube button sits beside Play locked');
 const yo = await p.evaluate(() => { const a = document.querySelector('#ytOpen'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
 ok(/^shortcuts:\/\/run-shortcut\?name=Shelf%20Play%20Locked&input=text&text=youtube%3A%2F%2Fwww\.youtube\.com%2Fwatch%3Fv%3D.*%26shelf%3Dnolock$/.test(yo) && await shelf(p, () => !!JSON.parse(localStorage.getItem('shelf.handoff'))), 'YouTube ↗ goes through the Shortcut marked "nolock" (no lock, and the YouTube guard lets it through), and still counts the time away: ' + yo);
-const bar = await p.evaluate(() => { const r = document.querySelector('.sh-top').getBoundingClientRect(); return [...document.querySelectorAll('.sh-top .x, .sh-top .lnk:not([hidden])')].every((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left - 1 && b.right <= r.right + 1 && b.height < 60; }); });
+const yh2 = await p.evaluate(() => { const a = document.querySelector('#ytHome'); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); return a.href; });
+ok(/^shortcuts:\/\/run-shortcut\?name=Shelf%20Play%20Locked&input=text&text=youtube%3A%2F%2Fwww\.youtube\.com%2F%3Fshelf%3Dnolock$/.test(yh2), 'auto-lock on: Today\'s YouTube button goes through the Shortcut marked "nolock", so the YouTube guard lets it through: ' + yh2);
+const bar = await p.evaluate(() => [...document.querySelectorAll('.sh-top')].every((top) => { const r = top.getBoundingClientRect(); return [...top.querySelectorAll('.x, .lnk:not([hidden])')].every((e) => { const b = e.getBoundingClientRect(); return b.left >= r.left - 1 && b.right <= r.right + 1 && b.height < 60; }); }));
 ok(bar, 'the top bar fits on a phone with both buttons');
 await shelf(p, () => { window.__shelf.prefs.autoLock = false; localStorage.setItem('shelf.handoff', 'null'); });
 // Locking while it plays in Shelf (no hand-off): back in Shelf, a hint with a Play locked button
