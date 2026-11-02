@@ -18,10 +18,9 @@ struct NowView: View {
     @State private var jumping = false              // a jump's seek is on its way
     @State private var shown = false                // on screen
     @FocusState private var crown: Bool             // the Crown turns the volume while Now is on top
-    @State private var vol: Double = 1              // the Crown's level, 0–1
-    @State private var echo: Double?                // a level set from the iPhone's word, not a turn: not sent back
-    @State private var turnedAt = Date.distantPast  // the last turn: for a moment the iPhone's word doesn't move the ring
-    @State private var ticks = 0
+    @State private var crownAt: Double = 0          // the Crown's own position: only its turns count, never its value
+    @State private var turning: Double?             // the level while turning (the iPhone's word catches up after)
+    @State private var turnedAt = Date.distantPast  // the last turn
     @State private var marked: Double?              // Mark's frozen second, for 2 s
     @State private var problem: String?
 
@@ -34,24 +33,30 @@ struct NowView: View {
             }
         }
         .screen(.black)
-        // The Crown is SwiftUI's own here (Apple's volume control often never gets it): the level goes to whatever plays
-        .focusable(store.path.last == .now)
+        // The Crown is SwiftUI's own here (Apple's volume control often never gets it). Each detent moves the level of
+        // whatever plays by 1/32, from what it really is now, so a turn never jumps to a stale number
+        .focusable(crownable)
         .focused($crown)
-        .digitalCrownRotation($vol, from: 0, through: 1, by: 1.0 / 32, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+        .defaultFocus($crown, true)
+        .digitalCrownRotation($crownAt, from: -1_000_000, through: 1_000_000, by: 1.0 / 32, sensitivity: .medium, isContinuous: true, isHapticFeedbackEnabled: true)
         .focusEffectDisabled()
-        .onChange(of: vol) { _, v in turned(v) }
-        .onAppear { syncVolume(); claimCrown() }
-        .onChange(of: player.active) { _, _ in syncVolume() }
+        .onChange(of: crownAt) { old, new in nudge(new - old) }
+        .onAppear { if !player.active { store.readPhoneVolume() }; claimCrown() }
+        .onChange(of: player.active) { _, _ in turning = nil; if !player.active { store.readPhoneVolume() } }
         .onChange(of: store.path) { _, _ in claimCrown() }
-        .onChange(of: phase) { _, _ in claimCrown(); syncVolume() }
-        .onChange(of: store.phoneVol) { _, v in
-            if let v, !player.active, Date().timeIntervalSince(turnedAt) > 1.5 { show(v) }
-        }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            claimCrown()
-            ticks += 1
-            // The iPhone's buttons may have moved its volume: ask now and then while Now is on top
-            if ticks % 3 == 0, onTop, !player.active, store.phoneNow != nil, Date().timeIntervalSince(turnedAt) > 1.5 { store.readPhoneVolume() }
+        .onChange(of: phase) { _, p in claimCrown(); if p == .active && !player.active { store.readPhoneVolume() } }
+        .task {
+            // Once a second while Now is up: take the Crown back if something took it, let the iPhone's word show again
+            // after a turn, and every 3 s ask the iPhone's volume (its own buttons may have moved it)
+            var n = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                n += 1
+                claimCrown()
+                let idle = Date().timeIntervalSince(turnedAt) > 1.5
+                if idle { turning = nil }
+                if n % 3 == 0, idle, onTop, !player.active, store.phoneNow != nil { store.readPhoneVolume() }
+            }
         }
         .navigationBarBackButtonHidden(false)
     }
@@ -60,27 +65,29 @@ struct NowView: View {
 
     private var onTop: Bool { phase == .active && store.path.last == .now }
 
-    /// Takes the Crown back after a sheet, a page on top, or the wrist coming up
-    private func claimCrown() { if onTop && !crown { crown = true } }
+    /// The Crown is Now's only while something plays that it can turn
+    private var crownable: Bool { onTop && (player.active || store.phoneNow != nil) }
 
-    private func turned(_ v: Double) {
-        if let e = echo, abs(e - v) < 0.0001 { echo = nil; return }
-        echo = nil
+    /// Takes the Crown back after a page on top, a sheet, or the wrist coming up
+    private func claimCrown() { if crownable && !crown { crown = true } }
+
+    /// The level the ring shows: the watch player's, or the iPhone's (while turning, the level being sent)
+    private var level: Double? { player.active ? player.gain : (turning ?? store.phoneVol) }
+
+    /// One turn of the Crown (or a VoiceOver swipe): by `d` from the real level now
+    private func nudge(_ d: Double) {
+        guard d.isFinite, abs(d) > 0.0001, abs(d) < 1 else { return }
+        if player.active {
+            turnedAt = Date()
+            player.setGain(player.gain + d)
+            return
+        }
+        // The iPhone's level isn't known yet: ask, and send nothing (never a guess)
+        guard store.phoneNow != nil, let base = turning ?? store.freshPhoneVol else { store.readPhoneVolume(); return }
         turnedAt = Date()
-        if player.active { player.setGain(v) } else if store.phoneNow != nil { store.setPhoneVolume(v) }
-    }
-
-    /// The ring shows a level without sending it anywhere
-    private func show(_ v: Double) {
-        guard abs(vol - v) > 0.001 else { return }
-        echo = v
-        vol = v
-    }
-
-    private func syncVolume() {
-        if player.active { show(player.gain); return }
-        if let v = store.phoneVol { show(v) }
-        store.readPhoneVolume()
+        let v = min(1, max(0, base + d))
+        turning = v
+        store.setPhoneVolume(v)
     }
 
     // MARK: Nothing playing
@@ -130,11 +137,19 @@ struct NowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // What the Crown turns: the iPhone's volume, or the watch's own while it plays here
                     if !wide {
-                        VolRing(level: vol, tint: pal.accent, dim: pal.night ? pal.rule : Ink.dim, number: Date().timeIntervalSince(turnedAt) < 1.5)
+                        VolRing(level: level ?? 0, known: level != nil, tint: pal.accent, dim: pal.night ? pal.rule : Ink.dim,
+                                number: Date().timeIntervalSince(turnedAt) < 1.5, focused: store.demo && crown)
                             .frame(width: 34, height: 34)
                             .accessibilityElement()
                             .accessibilityLabel(s.onWatch ? "Watch volume" : "iPhone volume")
-                            .accessibilityValue("\(Int((vol * 100).rounded())) percent")
+                            .accessibilityValue(level.map { "\(Int(($0 * 100).rounded())) percent" } ?? "unknown")
+                            .accessibilityAdjustableAction { dir in
+                                switch dir {
+                                case .increment: nudge(1.0 / 16)
+                                case .decrement: nudge(-1.0 / 16)
+                                @unknown default: break
+                                }
+                            }
                     }
                 }
                 .layoutPriority(-1)
@@ -671,9 +686,11 @@ struct NotesView: View {
 /// The volume ring by the title: how loud, with the number while the Crown turns
 struct VolRing: View {
     var level: Double
+    var known: Bool         // false: the iPhone hasn't said yet
     var tint: Color
     var dim: Color
     var number: Bool
+    var focused = false     // demo screenshots only: a dot proves the Crown is Now's
 
     var body: some View {
         ZStack {
@@ -681,7 +698,10 @@ struct VolRing: View {
             Circle().trim(from: 0, to: max(0.001, min(1, level)))
                 .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-            if number {
+            if focused { Circle().fill(Color.green).frame(width: 5, height: 5).offset(x: 14, y: -14) }
+            if !known {
+                Image(systemName: "speaker.wave.2.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(dim)
+            } else if number {
                 Text("\(Int((level * 100).rounded()))").font(.shelf(12, .heavy)).monospacedDigit().foregroundStyle(tint).minimumScaleFactor(0.6)
             } else {
                 Image(systemName: level < 0.01 ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(tint)

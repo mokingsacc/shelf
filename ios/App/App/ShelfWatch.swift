@@ -398,8 +398,14 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
             // The watch's Crown: the iPhone's own volume, answered at once with the level (never the page's business)
             let want = ((try? JSONSerialization.jsonObject(with: cmd)) as? [String: Any])?["v"] as? Double
             DispatchQueue.main.async {
-                let now = SystemVolume.shared.set(want)
-                replyHandler([LinkKey.ack: id, "vol": now])
+                // Shelf may have been woken in the background just for this: the seconds to answer
+                let app = UIApplication.shared
+                var task = UIBackgroundTaskIdentifier.invalid
+                task = app.beginBackgroundTask(withName: "shelf-volume") { if task != .invalid { app.endBackgroundTask(task); task = .invalid } }
+                SystemVolume.shared.set(want) { now in
+                    replyHandler([LinkKey.ack: id, "vol": now])
+                    if task != .invalid { app.endBackgroundTask(task); task = .invalid }
+                }
             }
             return
         }
@@ -426,18 +432,48 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
 final class SystemVolume {
     static let shared = SystemVolume()
     private var view: MPVolumeView?
+    private var want: Float?            // the newest level asked for: a late retry never undoes a newer one
+    private var lastUse = Date.distantPast
 
-    /// Sets the volume to `v` (0–1), or only reads it (nil); the level it's at now
-    func set(_ v: Double?) -> Double {
-        let session = AVAudioSession.sharedInstance()
-        guard let v else { return Double(session.outputVolume) }
-        let level = Float(min(1, max(0, v)))
-        guard let slider = slider() else { return Double(session.outputVolume) }
-        let move = { slider.setValue(level, animated: false); slider.sendActions(for: .valueChanged) }
+    /// Sets the volume to `v` (0–1), or only reads it (nil); `done` gets the level it settled at
+    func set(_ v: Double?, done: @escaping (Double) -> Void) {
+        lastUse = Date()
+        let slider = self.slider()
+        guard let v, let slider else {
+            // A read: a slider just put in the window takes a moment to show the system's level
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                done(self?.level(slider) ?? Double(AVAudioSession.sharedInstance().outputVolume))
+                self?.letGo()
+            }
+            return
+        }
+        let target = Float(min(1, max(0, v)))
+        want = target
+        let move = { slider.setValue(target, animated: false); slider.sendActions(for: .valueChanged) }
         move()
-        // A volume view only just made can miss its first move: once more when it has settled
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { if abs(session.outputVolume - level) > 0.01 { move() } }
-        return Double(level)
+        // A volume view only just made can miss its first move: once more if it hasn't taken, unless a newer level came
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            if self?.want == target, abs(slider.value - target) > 0.01 { move() }
+        }
+        // Answer with where it settled (iOS may cap it, e.g. the loud-headphones limit)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            done(self?.level(slider) ?? Double(target))
+            self?.letGo()
+        }
+    }
+
+    /// The slider follows the system volume; the audio session's number goes stale while Shelf's own session is idle
+    private func level(_ slider: UISlider?) -> Double {
+        if let slider, view?.window != nil { return Double(slider.value) }
+        return Double(AVAudioSession.sharedInstance().outputVolume)
+    }
+
+    /// Out of Shelf's window 2 s after the watch's last turn, so the iPhone's own buttons show their volume banner again
+    private func letGo() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) { [weak self] in
+            guard let self, Date().timeIntervalSince(self.lastUse) >= 2 else { return }
+            self.view?.removeFromSuperview()
+        }
     }
 
     private func slider() -> UISlider? {

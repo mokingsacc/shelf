@@ -31,7 +31,8 @@ final class WatchPlayer: ObservableObject {
     @Published private(set) var problem: String?       // "noroute", "noaudio", "noairpods"
     @Published private(set) var lastRoute = ""
     /// The Crown's level for the watch's own playback (0–1, kept between launches): the player's volume, under the system's
-    @Published private(set) var gain: Double = UserDefaults.standard.object(forKey: "shelf.gain") as? Double ?? 1
+    /// (never back below 0.1 at launch, so a podcast never starts silent)
+    @Published private(set) var gain: Double = max(0.1, UserDefaults.standard.object(forKey: "shelf.gain") as? Double ?? 1)
 
     private var player: AVPlayer?
     private var tick: Any?

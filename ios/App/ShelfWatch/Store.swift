@@ -32,16 +32,20 @@ final class Store: ObservableObject {
     @Published var tab = 0
     @Published private(set) var checkedAt = Date()
     @Published private(set) var phoneVol: Double?      // the iPhone's volume (0–1), as it last said
+    private var phoneVolAt = Date.distantPast
+    /// The iPhone's level, if it said it in the last 10 s (a turn starts from nothing older)
+    var freshPhoneVol: Double? { Date().timeIntervalSince(phoneVolAt) < 10 ? phoneVol : nil }
 
     let demo: Bool
     private var pending: [String: CheckedContinuation<Reply, Never>] = [:]
     private var volBusy = false                         // one volume message on its way at a time
     private var volWant: Double?                        // the newest level the Crown asked for, sent when the last one lands
+    private var volSent = 0                             // each volume message's number, so a lost one's watchdog can let the next go
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
         demo = args.contains("-demo")
-        if demo { phoneVol = 0.6 }
+        if demo { phoneVol = 0.6; phoneVolAt = .distantFuture }
         if demo { loadDemo(args) } else if let d = try? Data(contentsOf: Self.file), let s = Snapshot.decode(d) { snap = s; phoneNow = s.now }
     }
 
@@ -103,27 +107,38 @@ final class Store: ObservableObject {
     /// The Crown turned while the iPhone plays: its volume goes there, newest level wins (no queue of old ones)
     func setPhoneVolume(_ v: Double) {
         volWant = min(1, max(0, v))
-        if demo { phoneVol = volWant; volWant = nil; return }
+        if demo { phoneVol = volWant; phoneVolAt = Date(); volWant = nil; return }
         pumpVolume()
     }
 
     /// What the iPhone's volume is now (its buttons may have changed it)
     func readPhoneVolume() {
         guard !demo, !volBusy else { return }
-        volBusy = true
-        PhoneLink.shared.volume(nil) { r in Task { @MainActor in Store.shared.volLanded(r) } }
+        sendVolume(nil)
     }
 
     private func pumpVolume() {
         guard !volBusy, let v = volWant else { return }
         volWant = nil
-        volBusy = true
-        PhoneLink.shared.volume(v) { r in Task { @MainActor in Store.shared.volLanded(r) } }
+        sendVolume(v)
     }
 
-    private func volLanded(_ r: Double?) {
+    private func sendVolume(_ v: Double?) {
+        volBusy = true
+        volSent += 1
+        let n = volSent
+        PhoneLink.shared.volume(v) { r in Task { @MainActor in Store.shared.volLanded(r, n) } }
+        // A reply that never comes (the watch app suspended mid-message) doesn't hold the Crown up for long
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if Store.shared.volBusy && Store.shared.volSent == n { Store.shared.volLanded(nil, n) }
+        }
+    }
+
+    private func volLanded(_ r: Double?, _ n: Int) {
+        guard n == volSent, volBusy else { return }
         volBusy = false
-        if let r, volWant == nil { phoneVol = r }
+        if let r, volWant == nil { phoneVol = r; phoneVolAt = Date() }
         pumpVolume()
     }
 
