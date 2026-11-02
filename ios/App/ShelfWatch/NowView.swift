@@ -3,8 +3,8 @@ import WatchKit
 import ShelfWatchKit
 
 /// Now, the remote (design.md §3.6): the same for the iPhone's playback and the watch's own, in the player or night palette.
-/// The Crown is the volume of whatever plays (the iPhone's, or the watch's own). Holding −15 or +15 runs the time
-/// back or on, faster the longer it's held, and it jumps there on letting go; a tap skips once.
+/// The Crown is the volume of whatever plays: the iPhone's own volume (set there by Shelf), or the watch player's level.
+/// Holding −15 or +15 runs the time back or on, faster the longer it's held, and it jumps there on letting go; a tap skips once.
 struct NowView: View {
     @EnvironmentObject var store: Store
     @EnvironmentObject var player: WatchPlayer
@@ -16,7 +16,12 @@ struct NowView: View {
     @State private var holding = false              // held past holdAfter: letting go jumps instead of skipping
     @State private var holdT = 0                    // each press's number, so an old press's timer does nothing
     @State private var jumping = false              // a jump's seek is on its way
-    @State private var shown = false                // on screen, so the Crown is ours
+    @State private var shown = false                // on screen
+    @FocusState private var crown: Bool             // the Crown turns the volume while Now is on top
+    @State private var vol: Double = 1              // the Crown's level, 0–1
+    @State private var echo: Double?                // a level set from the iPhone's word, not a turn: not sent back
+    @State private var turnedAt = Date.distantPast  // the last turn: for a moment the iPhone's word doesn't move the ring
+    @State private var ticks = 0
     @State private var marked: Double?              // Mark's frozen second, for 2 s
     @State private var problem: String?
 
@@ -29,7 +34,53 @@ struct NowView: View {
             }
         }
         .screen(.black)
+        // The Crown is SwiftUI's own here (Apple's volume control often never gets it): the level goes to whatever plays
+        .focusable(store.path.last == .now)
+        .focused($crown)
+        .digitalCrownRotation($vol, from: 0, through: 1, by: 1.0 / 32, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+        .focusEffectDisabled()
+        .onChange(of: vol) { _, v in turned(v) }
+        .onAppear { syncVolume(); claimCrown() }
+        .onChange(of: player.active) { _, _ in syncVolume() }
+        .onChange(of: store.path) { _, _ in claimCrown() }
+        .onChange(of: phase) { _, _ in claimCrown(); syncVolume() }
+        .onChange(of: store.phoneVol) { _, v in
+            if let v, !player.active, Date().timeIntervalSince(turnedAt) > 1.5 { show(v) }
+        }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            claimCrown()
+            ticks += 1
+            // The iPhone's buttons may have moved its volume: ask now and then while Now is on top
+            if ticks % 3 == 0, onTop, !player.active, store.phoneNow != nil, Date().timeIntervalSince(turnedAt) > 1.5 { store.readPhoneVolume() }
+        }
         .navigationBarBackButtonHidden(false)
+    }
+
+    // MARK: The Crown's volume
+
+    private var onTop: Bool { phase == .active && store.path.last == .now }
+
+    /// Takes the Crown back after a sheet, a page on top, or the wrist coming up
+    private func claimCrown() { if onTop && !crown { crown = true } }
+
+    private func turned(_ v: Double) {
+        if let e = echo, abs(e - v) < 0.0001 { echo = nil; return }
+        echo = nil
+        turnedAt = Date()
+        if player.active { player.setGain(v) } else if store.phoneNow != nil { store.setPhoneVolume(v) }
+    }
+
+    /// The ring shows a level without sending it anywhere
+    private func show(_ v: Double) {
+        guard abs(vol - v) > 0.001 else { return }
+        echo = v
+        vol = v
+    }
+
+    private func syncVolume() {
+        if player.active { show(player.gain); return }
+        if let v = store.phoneVol { show(v) }
+        store.readPhoneVolume()
     }
 
     // MARK: Nothing playing
@@ -77,12 +128,14 @@ struct NowView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    // The Crown turns this: the iPhone's volume, or the watch's own while it plays here
-                    Volume(phone: !s.onWatch, tint: pal.accent, active: shown && phase == .active && store.path.last == .now)
-                        .id(s.onWatch)
-                        .frame(width: wide ? 1 : 40, height: wide ? 1 : 40)
-                        .opacity(wide ? 0.001 : 1)
-                        .accessibilityLabel(s.onWatch ? "Watch volume" : "iPhone volume")
+                    // What the Crown turns: the iPhone's volume, or the watch's own while it plays here
+                    if !wide {
+                        VolRing(level: vol, tint: pal.accent, dim: pal.night ? pal.rule : Ink.dim, number: Date().timeIntervalSince(turnedAt) < 1.5)
+                            .frame(width: 34, height: 34)
+                            .accessibilityElement()
+                            .accessibilityLabel(s.onWatch ? "Watch volume" : "iPhone volume")
+                            .accessibilityValue("\(Int((vol * 100).rounded())) percent")
+                    }
                 }
                 .layoutPriority(-1)
                 Spacer(minLength: 2)
@@ -615,43 +668,25 @@ struct NotesView: View {
     }
 }
 
-/// The Crown's volume (the system's own control, as in Now Playing): the iPhone's while it plays there, else the watch's.
-/// SwiftUI takes the Crown back after a tap, so while Now is on screen the control asks for it again every 0.3 s.
-struct Volume: WKInterfaceObjectRepresentable {
-    typealias WKInterfaceObjectType = WKInterfaceVolumeControl
-    var phone: Bool
+/// The volume ring by the title: how loud, with the number while the Crown turns
+struct VolRing: View {
+    var level: Double
     var tint: Color
-    var active: Bool
+    var dim: Color
+    var number: Bool
 
-    final class Keeper {
-        var active = false
-        var timer: Timer?
-        deinit { timer?.invalidate() }
-    }
-
-    func makeCoordinator() -> Keeper { Keeper() }
-
-    func makeWKInterfaceObject(context: WKInterfaceObjectRepresentableContext<Volume>) -> WKInterfaceVolumeControl {
-        let v = WKInterfaceVolumeControl(origin: phone ? .companion : .local)
-        v.setTintColor(UIColor(tint))
-        let keeper = context.coordinator
-        keeper.active = active
-        keeper.timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak v, weak keeper] t in
-            guard let v, let keeper else { t.invalidate(); return }
-            if keeper.active { v.focus() }
+    var body: some View {
+        ZStack {
+            Circle().stroke(dim, lineWidth: 3)
+            Circle().trim(from: 0, to: max(0.001, min(1, level)))
+                .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            if number {
+                Text("\(Int((level * 100).rounded()))").font(.shelf(12, .heavy)).monospacedDigit().foregroundStyle(tint).minimumScaleFactor(0.6)
+            } else {
+                Image(systemName: level < 0.01 ? "speaker.slash.fill" : "speaker.wave.2.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(tint)
+            }
         }
-        // The first focus waits for the control to be on screen
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak v, weak keeper] in
-            guard let v, keeper?.active == true else { return }
-            v.resignFocus(); v.focus()
-        }
-        return v
-    }
-
-    func updateWKInterfaceObject(_ v: WKInterfaceVolumeControl, context: WKInterfaceObjectRepresentableContext<Volume>) {
-        v.setTintColor(UIColor(tint))
-        let was = context.coordinator.active
-        context.coordinator.active = active
-        if active && !was { v.focus() } else if !active && was { v.resignFocus() }
+        .padding(2)
     }
 }

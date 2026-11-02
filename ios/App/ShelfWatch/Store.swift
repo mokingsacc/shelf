@@ -31,13 +31,17 @@ final class Store: ObservableObject {
     @Published var path: [Route] = []
     @Published var tab = 0
     @Published private(set) var checkedAt = Date()
+    @Published private(set) var phoneVol: Double?      // the iPhone's volume (0–1), as it last said
 
     let demo: Bool
     private var pending: [String: CheckedContinuation<Reply, Never>] = [:]
+    private var volBusy = false                         // one volume message on its way at a time
+    private var volWant: Double?                        // the newest level the Crown asked for, sent when the last one lands
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
         demo = args.contains("-demo")
+        if demo { phoneVol = 0.6 }
         if demo { loadDemo(args) } else if let d = try? Data(contentsOf: Self.file), let s = Snapshot.decode(d) { snap = s; phoneNow = s.now }
     }
 
@@ -95,6 +99,33 @@ final class Store: ObservableObject {
     private func finish(_ id: String, _ r: Reply) { pending.removeValue(forKey: id)?.resume(returning: r) }
 
     // MARK: To the iPhone
+
+    /// The Crown turned while the iPhone plays: its volume goes there, newest level wins (no queue of old ones)
+    func setPhoneVolume(_ v: Double) {
+        volWant = min(1, max(0, v))
+        if demo { phoneVol = volWant; volWant = nil; return }
+        pumpVolume()
+    }
+
+    /// What the iPhone's volume is now (its buttons may have changed it)
+    func readPhoneVolume() {
+        guard !demo, !volBusy else { return }
+        volBusy = true
+        PhoneLink.shared.volume(nil) { r in Task { @MainActor in Store.shared.volLanded(r) } }
+    }
+
+    private func pumpVolume() {
+        guard !volBusy, let v = volWant else { return }
+        volWant = nil
+        volBusy = true
+        PhoneLink.shared.volume(v) { r in Task { @MainActor in Store.shared.volLanded(r) } }
+    }
+
+    private func volLanded(_ r: Double?) {
+        volBusy = false
+        if let r, volWant == nil { phoneVol = r }
+        pumpVolume()
+    }
 
     /// One tap, answered once: the page's answer, or a plain reason (out of reach, Shelf closed, no answer)
     func send(_ name: String, _ fields: [String: Any] = [:]) async -> Reply {

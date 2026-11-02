@@ -394,6 +394,15 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
             DispatchQueue.main.async { if PocketPlayer.shared.active { PocketPlayer.shared.sendNow() } }
             return
         }
+        if Command.name(of: cmd) == "volume" {
+            // The watch's Crown: the iPhone's own volume, answered at once with the level (never the page's business)
+            let want = ((try? JSONSerialization.jsonObject(with: cmd)) as? [String: Any])?["v"] as? Double
+            DispatchQueue.main.async {
+                let now = SystemVolume.shared.set(want)
+                replyHandler([LinkKey.ack: id, "vol": now])
+            }
+            return
+        }
         replyHandler([LinkKey.ack: id, "page": answers])
         receive(id: id, json: cmd)
     }
@@ -409,6 +418,46 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         guard let id = userInfo[LinkKey.id] as? String, let cmd = userInfo[LinkKey.command] as? Data else { return }
         receive(id: id, json: cmd)
+    }
+}
+
+/// The iPhone's volume for the watch's Crown. iOS has no call to set it, so this moves the slider of a system volume view
+/// kept out of sight in Shelf's window (with it there, iOS shows no volume banner over Shelf). Main thread only.
+final class SystemVolume {
+    static let shared = SystemVolume()
+    private var view: MPVolumeView?
+
+    /// Sets the volume to `v` (0–1), or only reads it (nil); the level it's at now
+    func set(_ v: Double?) -> Double {
+        let session = AVAudioSession.sharedInstance()
+        guard let v else { return Double(session.outputVolume) }
+        let level = Float(min(1, max(0, v)))
+        guard let slider = slider() else { return Double(session.outputVolume) }
+        let move = { slider.setValue(level, animated: false); slider.sendActions(for: .valueChanged) }
+        move()
+        // A volume view only just made can miss its first move: once more when it has settled
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { if abs(session.outputVolume - level) > 0.01 { move() } }
+        return Double(level)
+    }
+
+    private func slider() -> UISlider? {
+        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }.first
+        if view == nil {
+            let v = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 120, height: 40))
+            v.alpha = 0.01
+            v.isUserInteractionEnabled = false
+            v.accessibilityElementsHidden = true
+            view = v
+        }
+        if let view, let window, view.window !== window { window.addSubview(view) }
+        view?.layoutIfNeeded()
+        return view.flatMap(Self.findSlider)
+    }
+
+    private static func findSlider(_ v: UIView) -> UISlider? {
+        if let s = v as? UISlider { return s }
+        for sub in v.subviews { if let s = findSlider(sub) { return s } }
+        return nil
     }
 }
 
