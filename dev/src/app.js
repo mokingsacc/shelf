@@ -995,21 +995,24 @@
   // ---------- The other way: a podcast episode's own YouTube video ----------
   // The episode a Listen started knows its video; others are looked up once (YouTube search, matched by title, the
   // channel's name and length), remembered in the episode's record (yt), and a miss is asked again a day later.
-  var podYt = {};
+  // Kept apart from the episode records (localStorage shelf.podyt, { guid: { id, at } }), so a lookup never makes an episode
+  // look started. A match is kept; a miss is asked again after a week; an error after an hour (quota, key) or 5 minutes.
+  var PODYT_KEY = 'shelf.podyt', podYt = {}, podYtSaved = null;
+  function podYtStore() { if (!podYtSaved) { try { podYtSaved = JSON.parse(rawGet(PODYT_KEY) || '{}') || {}; } catch (e) { podYtSaved = {}; } } return podYtSaved; }
   function podYtLook(ep) {
     var r = arec[ep.guid] || {};
     if (r.video) return { id: r.video };
-    if (r.yt) return { id: r.yt };
-    var c = podYt[ep.guid];
-    if (c && (c.busy || Date.now() - c.at < (c.failed ? 60000 : 864e5))) return c;
+    var c = podYt[ep.guid] || podYtStore()[ep.guid];
+    if (c && (c.busy || c.id || Date.now() - c.at < (c.wait || 7 * 864e5))) return c;
     if (!ep.title) return null;
     var podcast = ep.podcast || r.podcast || '', dur = ep.duration || r.dur || 0;
     c = podYt[ep.guid] = { busy: true, at: Date.now() };
     Search.run({ fetchJSON: fetchJSON, fetchText: fetchText }, (podcast + ' ' + ep.title).trim(), prefs.apiKey).then(function (res) {
       var v = Feeds.videoFor({ title: ep.title, duration: dur }, res, podcast);
-      if (v && arec[ep.guid]) { arec[ep.guid].yt = v.id; saveAudio(); }
       c.id = v ? v.id : '';
-    }, function () { c.failed = true; }).then(function () { c.busy = false; c.at = Date.now(); renderAudio(); });
+      var all = podYtStore(); all[ep.guid] = { id: c.id, at: Date.now() }; rawSet(PODYT_KEY, JSON.stringify(all), false);
+    }, function (e) { c.wait = /allowance|key|Data API/i.test(e && e.message || '') ? 3600e3 : 300e3; })
+      .then(function () { c.busy = false; c.at = Date.now(); renderAudio(); });
     return c;
   }
   // Listening moves the video's place along with it, never to the very end (so it is never ticked by the audio;
@@ -1190,7 +1193,7 @@
     var guess = clamp(h.t + away * rate);
     if (guess - h.t >= 5) put(guess);
     // Once: the phone can lock itself after Play locked
-    if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
+    if (!h.ep && prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
     if (!Native.device) { if (guess - h.t >= 5) say(false); return; }
     if (guess - h.t >= 5) say(false);
     var tries = 0;
@@ -1208,8 +1211,9 @@
         if ((!spot || (spot.t != null && Math.abs(spot.t - h.t) < 3)) && tries < 5) return setTimeout(function () { if (mine === catchSeq) look(); }, 2500);
         if (!ok && ytOut) { note({ state: 'out' }); if (guess - h.t >= 5) say(false, 'out'); return; }
         note({ state: !ok ? 'page' : !spot ? 'missing' : 'found', status: r.status, size: page.length, videos: (page.match(/"videoId":"/g) || []).length, spot: spot });
-        var t = spot && spot.t != null ? spot.t : spot && spot.pct != null && v.dur > 0 ? Math.min(Math.max(guess, spot.pct / 100 * v.dur), (spot.pct + 1) / 100 * v.dur) : null;
+        var t = spot && spot.t != null ? spot.t : !h.ep && spot && spot.pct != null && v.dur > 0 ? Math.min(Math.max(guess, spot.pct / 100 * v.dur), (spot.pct + 1) / 100 * v.dur) : null;
         if (t == null) return;
+        if (h.ep && t <= h.t + 2) return; // a podcast takes only a spot further on (an old visit to the video can still show)
         t = clamp(t);
         if (Math.abs(t - at) >= 2) put(t);
         say(true);
@@ -2745,7 +2749,9 @@
     catchSeq++;
     appFallbackTo(web);
     engine.pause();
-    rawSet(HAND_KEY, id ? JSON.stringify({ id: id, ep: ep.guid, t: t, at: Date.now(), rate: st.rate || 1 }) : 'null', false);
+    if (st.timer) engine.setTimer(null); // it runs on the clock: it would stop the podcast as soon as it played again
+    // The YouTube app plays at its own speed, so the time away counts at 1×
+    rawSet(HAND_KEY, id ? JSON.stringify({ id: id, ep: ep.guid, t: t, at: Date.now(), rate: 1 }) : 'null', false);
   });
   function rateTxt(r) { return r + '×'; }
   ['#ytLink', '#ytOpen'].forEach(function (sel) {

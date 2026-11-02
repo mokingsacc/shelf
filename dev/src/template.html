@@ -475,7 +475,9 @@ a.chrow{text-decoration:none;color:inherit}a.chrow *{text-decoration:none}
 .night .grab{background:var(--n-rule)}
 .night .x{border-color:var(--n-dim);color:var(--n-hi)}
 .night .keep{font:400 12px var(--mono);color:var(--n-dim)}
-.night .sh-top>span:first-child{display:inline-flex;align-items:center;gap:10px}
+.night .sh-top>span:first-child{display:inline-flex;align-items:center;gap:10px;min-width:0}
+.night .keep{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.night .sh-top .lnks{flex:none}
 .night .sh-top .lnk{border-color:var(--n-rule);color:var(--n-dim)}
 .night .nb{display:flex;flex-direction:column;padding:10px var(--g) 0;flex:1}
 .night .art{width:120px;height:120px;object-fit:cover;filter:saturate(.5) brightness(.75);margin-bottom:14px;background:var(--n-rule);flex:none}

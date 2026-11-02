@@ -127,14 +127,24 @@ var Feeds = (function () {
     });
     return bs >= (video.published ? 0.75 : 0.9) ? best : null;
   }
+  // A title's part number: "Part 2", "Pt. 3", "Chapter IV", a roman numeral at the end ("… in the East II"); 0 when none
+  var ROMAN = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
+  function partOf(title) {
+    var t = decode(title).toLowerCase(), m = t.match(/\b(?:part|pt|chapter|ch|vol|volume|book)\.?\s*(\d+|[ivx]+)\b/);
+    if (m) return +m[1] || ROMAN[m[1]] || 0;
+    m = t.replace(/[\s|:)\]-]+$/, '').match(/\s([ivx]+)$/);
+    return m && ROMAN[m[1]] || 0;
+  }
   // The YouTube video that is this podcast episode, among YouTube search results: most title words shared, a little
   // easier when the channel has the podcast's name, and never a different length when both are known. null when unsure.
   function videoFor(ep, results, podcast) {
     var drop = {}; words(podcast).forEach(function (w) { drop[w] = 1; });
-    var a = words(ep && ep.title, drop), pk = nameKey(podcast), best = null, bs = 0;
+    var a = words(ep && ep.title, drop), pk = nameKey(podcast), best = null, bs = 0, pa = partOf(ep && ep.title);
     if (a.length < 2) return null;
     (results || []).forEach(function (r) {
       if (!r || r.kind !== 'video' || r.live) return;
+      var pb = partOf(r.title);
+      if (pa !== pb && !(pa === 1 && pb === 0) && !(pa === 0 && pb === 1)) return; // Part 1 is never Part 2 (the words alone can't tell them apart)
       var b = words(r.title, drop);
       var n = a.filter(function (w) { return b.indexOf(w) >= 0; }).length, sc = b.length ? n / Math.min(a.length, b.length) : 0;
       if (n < 2 || n < 0.5 * b.length || n < 0.5 * a.length) return; // a clip or a different episode

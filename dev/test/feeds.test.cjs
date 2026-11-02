@@ -75,6 +75,11 @@ assert.strictEqual(F.videoFor(agin, res.slice(0, 3), 'Fin vs History'), null, 'a
 assert.strictEqual(F.videoFor({ title: 'The War of The Noses | Agincourt (Part 1)' }, [res[3]], 'Fin vs History').id, 'own', 'no length known: the title and channel decide');
 assert.strictEqual(F.videoFor({ title: 'Agincourt', duration: 3185 }, res, 'Fin vs History'), null, 'a one-word title is too thin to match');
 assert.strictEqual(F.videoFor({ title: '3. The Mayan Collapse - Ruins Among the Trees', duration: 3600 * 2 }, [{ kind: 'video', id: 'm', title: 'Fall of Civilizations: 3. The Mayan Collapse - Ruins Among the Trees', channel: 'Fall of Civilizations', dur: 3600 * 2 + 200 }], 'Fall of Civilizations Podcast').id, 'm', 'podcast name with "Podcast" on the end still finds its channel');
+var two = { kind: 'video', id: 'p2', title: 'The War of The Noses | Agincourt (Part 2)', channel: 'Fin vs History', dur: 3300 };
+assert.strictEqual(F.videoFor(agin, [two], 'Fin vs History'), null, 'Part 2 is never Part 1, however alike the titles');
+assert.strictEqual(F.videoFor(agin, [two, res[3]], 'Fin vs History').id, 'own', 'Part 1 finds Part 1 beside Part 2');
+assert.strictEqual(F.videoFor({ title: 'Supernova in the East I', duration: 18000 }, [{ kind: 'video', id: 'e2', title: 'Supernova in the East II', channel: 'Hardcore History', dur: 17000 }], 'Hardcore History'), null, 'roman numerals: I is not II');
+assert.strictEqual(F.videoFor({ title: 'Supernova in the East II', duration: 17000 }, [{ kind: 'video', id: 'e2', title: 'Hardcore History 63 - Supernova in the East II', channel: 'Dan Carlin', dur: 17100 }], 'Hardcore History').id, 'e2', 'roman numerals that agree still match');
 assert.strictEqual(F.videoFor(agin, [{ kind: 'video', id: 'live', live: true, title: agin.title, channel: 'Fin vs History' }], 'Fin vs History'), null, 'a live stream is never it');
 assert.strictEqual(F.episodeFor({ title: 'The Case for Boredom', published: 0 }, eps, 'The Ezra Klein Show').guid, 'b', 'a pasted video (no date) needs a closer title');
 assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck', published: T }, [{ guid: 'n', title: 'Ep. 212: Why the Housing Market Is Stuck', published: T }], 'x').guid, 'n', 'episode numbers are ignored');

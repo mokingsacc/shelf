@@ -148,10 +148,10 @@ let pyt = await nyt();
 ok(/^youtube:\/\/www\.youtube\.com\/results\?search_query=Fall%20of%20Civilizations%20Podcast%20Rome/.test(pyt) && await p.evaluate(() => document.querySelector('#audio').paused) && await shelf(p, () => localStorage.getItem('shelf.handoff')) === 'null',
   '6 no video found for the episode: YouTube ↗ opens YouTube\'s search for it and pauses the podcast: ' + pyt.slice(0, 90));
 await p.locator('#nPlay').click(); await p.waitForTimeout(300);
-await shelf(p, () => { const st = window.__shelf.engine.state(); window.__shelf.engine.seek(20); window.__shelf.audio[st.episode.guid].yt = 'abcdefghijk'; });
+await shelf(p, () => { const st = window.__shelf.engine.state(); window.__shelf.engine.seek(20); window.__shelf.podYt[st.episode.guid] = { id: 'abcdefghijk', at: Date.now() }; window.__shelf.engine.setRate(1.5); window.__shelf.engine.setTimer(15); });
 pyt = await nyt();
 const phand = await shelf(p, () => JSON.parse(localStorage.getItem('shelf.handoff')));
-ok(/^youtube:\/\/www\.youtube\.com\/watch\?v=abcdefghijk&t=(19|20|21)s$/.test(pyt) && phand && phand.id === 'abcdefghijk' && phand.ep && Math.abs(phand.t - 20) < 2, '6 with its video known, YouTube ↗ opens it at the spot playing now and remembers the hand-over: ' + pyt);
+ok(/^youtube:\/\/www\.youtube\.com\/watch\?v=abcdefghijk&t=(19|20|21)s$/.test(pyt) && phand && phand.id === 'abcdefghijk' && phand.ep && Math.abs(phand.t - 20) < 2 && phand.rate === 1 && await shelf(p, () => !window.__shelf.engine.state().timer), '6 with its video known, YouTube ↗ opens it at the spot playing now, remembers the hand-over (at 1×, YouTube\'s own speed) and stops the sleep timer: ' + pyt);
 await shelf(p, () => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); delete document.visibilityState; });
 await shelf(p, () => { const h = JSON.parse(localStorage.getItem('shelf.handoff')); h.at -= 40e3; localStorage.setItem('shelf.handoff', JSON.stringify(h)); window.__shelf.catchUp(); });
 await p.waitForTimeout(300);
@@ -160,6 +160,7 @@ ok(Math.abs(pback.rec - (phand.t + 40)) < 3 && Math.abs(pback.el - pback.rec) < 
 await p.locator('#toast button', { hasText: 'Undo' }).click(); await p.waitForTimeout(200);
 ok(Math.abs(await shelf(p, () => window.__shelf.audio[window.__shelf.engine.state().episode.guid].t) - phand.t) < 3, '6 Undo puts the podcast back where it was');
 await p.locator('#nPlay').click(); await p.waitForTimeout(300);
+await shelf(p, () => window.__shelf.engine.setRate(1)); await p.locator('#nSeg [data-m="15"]').click();
 await p.locator('[data-act="close-night"]').click();
 await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
 ok(await p.locator('#mini').isVisible() && /to sleep/.test(await p.locator('#miniSub').textContent()), '6 keeps playing with a mini bar after closing: ' + await p.locator('#miniSub').textContent());
