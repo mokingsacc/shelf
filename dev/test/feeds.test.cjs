@@ -61,6 +61,21 @@ assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck', publ
 assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck (feat. Jenny Schuetz)', published: T }, eps, 'The Ezra Klein Show').guid, 'a', 'a guest added to the video title still matches');
 assert.strictEqual(F.episodeFor({ title: 'Inflation Is Back and Nobody Noticed', published: T }, [{ guid: 'z', title: 'Inflation Explained', published: T }], 'x'), null, 'one shared word is not a match');
 assert.strictEqual(F.episodeFor({ title: 'Saagar on the Polling Mess', published: T }, eps, 'Breaking Points'), null, 'no episode: no button');
+
+// videoFor: a podcast episode's own video among YouTube search results
+var res = [
+  { kind: 'channel', id: 'UCx', title: 'Fin vs History' },
+  { kind: 'video', id: 'clip1', title: 'Agincourt in 60 seconds', channel: 'Fin vs History', dur: 61 },
+  { kind: 'video', id: 'other', title: 'The War of the Noses | Agincourt (Part 1) reaction', channel: 'Some Reactor', dur: 4100 },
+  { kind: 'video', id: 'own', title: 'The War of The Noses | Agincourt (Part 1) | Fin vs History', channel: 'Fin vs History', dur: 3240 }
+];
+var agin = { title: 'The War of The Noses | Agincourt (Part 1)', duration: 3185 };
+assert.strictEqual(F.videoFor(agin, res, 'Fin vs History').id, 'own', 'the channel with the podcast\'s name and the same length wins');
+assert.strictEqual(F.videoFor(agin, res.slice(0, 3), 'Fin vs History'), null, 'a reaction video a different length is not it');
+assert.strictEqual(F.videoFor({ title: 'The War of The Noses | Agincourt (Part 1)' }, [res[3]], 'Fin vs History').id, 'own', 'no length known: the title and channel decide');
+assert.strictEqual(F.videoFor({ title: 'Agincourt', duration: 3185 }, res, 'Fin vs History'), null, 'a one-word title is too thin to match');
+assert.strictEqual(F.videoFor({ title: '3. The Mayan Collapse - Ruins Among the Trees', duration: 3600 * 2 }, [{ kind: 'video', id: 'm', title: 'Fall of Civilizations: 3. The Mayan Collapse - Ruins Among the Trees', channel: 'Fall of Civilizations', dur: 3600 * 2 + 200 }], 'Fall of Civilizations Podcast').id, 'm', 'podcast name with "Podcast" on the end still finds its channel');
+assert.strictEqual(F.videoFor(agin, [{ kind: 'video', id: 'live', live: true, title: agin.title, channel: 'Fin vs History' }], 'Fin vs History'), null, 'a live stream is never it');
 assert.strictEqual(F.episodeFor({ title: 'The Case for Boredom', published: 0 }, eps, 'The Ezra Klein Show').guid, 'b', 'a pasted video (no date) needs a closer title');
 assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck', published: T }, [{ guid: 'n', title: 'Ep. 212: Why the Housing Market Is Stuck', published: T }], 'x').guid, 'n', 'episode numbers are ignored');
 assert.strictEqual(F.episodeFor({ title: 'Boredom', published: T }, eps, 'x'), null, 'one word is too little to go on');

@@ -127,6 +127,25 @@ var Feeds = (function () {
     });
     return bs >= (video.published ? 0.75 : 0.9) ? best : null;
   }
+  // The YouTube video that is this podcast episode, among YouTube search results: most title words shared, a little
+  // easier when the channel has the podcast's name, and never a different length when both are known. null when unsure.
+  function videoFor(ep, results, podcast) {
+    var drop = {}; words(podcast).forEach(function (w) { drop[w] = 1; });
+    var a = words(ep && ep.title, drop), pk = nameKey(podcast), best = null, bs = 0;
+    if (a.length < 2) return null;
+    (results || []).forEach(function (r) {
+      if (!r || r.kind !== 'video' || r.live) return;
+      var b = words(r.title, drop);
+      var n = a.filter(function (w) { return b.indexOf(w) >= 0; }).length, sc = b.length ? n / Math.min(a.length, b.length) : 0;
+      if (n < 2 || n < 0.5 * b.length || n < 0.5 * a.length) return; // a clip or a different episode
+      var ck = nameKey(r.channel || ''), own = pk.length >= 4 && ck.length >= 4 && (ck === pk || ck.indexOf(pk) >= 0 || pk.indexOf(ck) >= 0);
+      var d = ep.duration || 0, fits = d && r.dur ? Math.abs(d - r.dur) <= Math.max(600, 0.25 * d) : null;
+      if (fits === false) return;
+      var need = own ? (fits ? 0.6 : 0.75) : (fits ? 0.75 : 0.9), score = sc + (own ? 0.1 : 0) + (fits ? 0.05 : 0);
+      if (sc >= need && score > bs) { bs = score; best = r; }
+    });
+    return best;
+  }
 
   // ----- What did Mo paste into "Add channel"? -----
   function parseChannelInput(text) {
@@ -172,6 +191,6 @@ var Feeds = (function () {
 
   return { decode: decode, duration: duration, parseYouTube: parseYouTube, youtubeFeedUrls: youtubeFeedUrls, parsePodcast: parsePodcast,
     parseChannelInput: parseChannelInput, pageUrl: pageUrl, channelFromHtml: channelFromHtml, isConsentPage: isConsentPage, stripHtml: stripHtml,
-    podcastFor: podcastFor, episodeFor: episodeFor };
+    podcastFor: podcastFor, episodeFor: episodeFor, videoFor: videoFor };
 })();
 if (typeof module !== 'undefined') module.exports = Feeds;

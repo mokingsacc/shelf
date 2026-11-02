@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="85a40e62e9f6">
+<meta name="build" content="6a8cfb5ac7cd">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -71,7 +71,7 @@ svg{display:block;flex:none}
 .k{display:block;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- Home: masthead ---------- */
-.mast{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 10px) var(--g) 10px;border-bottom:3px solid var(--rule)}
+.mast{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:10px;align-items:center;padding:calc(env(safe-area-inset-top,0px) + 10px) var(--g) 10px;border-bottom:3px solid var(--rule)}
 .mast .d{font-size:42px;line-height:.85;font-weight:900;font-stretch:125%;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
 .mast .m{min-width:0;min-height:var(--tap);display:flex;flex-direction:column;justify-content:center;font-size:12px;line-height:1.3;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
 .mast .m>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -81,6 +81,7 @@ svg{display:block;flex:none}
 /* Day/night look: the sun or moon beside the self-check */
 .lookb{display:flex;align-items:center;justify-content:center;min-height:var(--tap);min-width:var(--tap);border:2px solid var(--rule)}
 .lookb svg{width:22px;height:22px}
+a.lookb{color:inherit;text-decoration:none}
 .lookwhen{font-size:20px!important;line-height:1.2!important;font-weight:800;letter-spacing:-.01em}
 .lookform{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
 .lookform .primary{min-height:50px;padding:0 16px;width:auto}
@@ -557,6 +558,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <header class="mast">
     <div class="d" id="dayNum" aria-hidden="true">--</div>
     <button type="button" class="m" data-act="refresh" aria-label="Check for new uploads"><span><span id="dayName"></span></span><span id="monthName"></span><span class="mono" id="summary">Loading…</span></button>
+    <a class="lookb" id="ytHome" href="https://www.youtube.com/" target="_blank" rel="noopener" aria-label="Open YouTube"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="3.5"/><path d="M10 9.3v5.4l4.6-2.7z" fill="currentColor" stroke="none"/></svg></a>
     <button type="button" class="lookb" id="lookBtn" data-act="look" aria-label="Day or night look"></button>
     <button type="button" class="stat" id="statusBtn" data-act="check" aria-label="Self-check"><i class="dot wait" id="statusDot"></i><span id="statusText" class="sr">Starting</span></button>
   </header>
@@ -619,7 +621,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <!-- Night player (podcasts) -->
 <section class="sheet night" id="nsheet" role="dialog" aria-modal="true" aria-label="Sleep player" aria-hidden="true">
   <div class="grab" aria-hidden="true"></div>
-  <div class="sh-top"><span><button type="button" class="x" data-act="close-night" aria-label="Close player, keep playing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="keep">keeps playing</span></span><span class="lnk" id="nLock">Lock screen ✓</span></div>
+  <div class="sh-top"><span><button type="button" class="x" data-act="close-night" aria-label="Close player, keep playing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="keep" id="nKeep">keeps playing</span></span><span class="lnks"><a class="lnk" id="nYt" href="#" target="_blank" rel="noopener" aria-label="Play this episode on YouTube, at this spot">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></span></div>
   <div class="nb">
     <img class="art" id="nArt" alt="" hidden>
     <div class="ch" id="nCh"></div>
@@ -1372,6 +1374,25 @@ var Feeds = (function () {
     });
     return bs >= (video.published ? 0.75 : 0.9) ? best : null;
   }
+  // The YouTube video that is this podcast episode, among YouTube search results: most title words shared, a little
+  // easier when the channel has the podcast's name, and never a different length when both are known. null when unsure.
+  function videoFor(ep, results, podcast) {
+    var drop = {}; words(podcast).forEach(function (w) { drop[w] = 1; });
+    var a = words(ep && ep.title, drop), pk = nameKey(podcast), best = null, bs = 0;
+    if (a.length < 2) return null;
+    (results || []).forEach(function (r) {
+      if (!r || r.kind !== 'video' || r.live) return;
+      var b = words(r.title, drop);
+      var n = a.filter(function (w) { return b.indexOf(w) >= 0; }).length, sc = b.length ? n / Math.min(a.length, b.length) : 0;
+      if (n < 2 || n < 0.5 * b.length || n < 0.5 * a.length) return; // a clip or a different episode
+      var ck = nameKey(r.channel || ''), own = pk.length >= 4 && ck.length >= 4 && (ck === pk || ck.indexOf(pk) >= 0 || pk.indexOf(ck) >= 0);
+      var d = ep.duration || 0, fits = d && r.dur ? Math.abs(d - r.dur) <= Math.max(600, 0.25 * d) : null;
+      if (fits === false) return;
+      var need = own ? (fits ? 0.6 : 0.75) : (fits ? 0.75 : 0.9), score = sc + (own ? 0.1 : 0) + (fits ? 0.05 : 0);
+      if (sc >= need && score > bs) { bs = score; best = r; }
+    });
+    return best;
+  }
 
   // ----- What did Mo paste into "Add channel"? -----
   function parseChannelInput(text) {
@@ -1417,7 +1438,7 @@ var Feeds = (function () {
 
   return { decode: decode, duration: duration, parseYouTube: parseYouTube, youtubeFeedUrls: youtubeFeedUrls, parsePodcast: parsePodcast,
     parseChannelInput: parseChannelInput, pageUrl: pageUrl, channelFromHtml: channelFromHtml, isConsentPage: isConsentPage, stripHtml: stripHtml,
-    podcastFor: podcastFor, episodeFor: episodeFor };
+    podcastFor: podcastFor, episodeFor: episodeFor, videoFor: videoFor };
 })();
 if (typeof module !== 'undefined') module.exports = Feeds;
 </script>
@@ -3679,11 +3700,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     return h + '<button type="button" class="more quiet" data-act="pl-add-close"><span>Done adding</span><span class="mono">×</span></button>';
   }
   // The YouTube app (the bounce automation lets it through when auto-lock's Shortcut is set up), or the web page in a browser
-  function saveHref(id) {
-    var web = 'https://www.youtube.com/watch?v=' + id, app = web.replace(/^https:/, 'youtube:');
-    if (!Native.inApp) return web;
-    return prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + '&shelf=nolock') : app;
-  }
+  function saveHref(id) { return ytApp('https://www.youtube.com/watch?v=' + id, false); }
   function plSaved(v) { v.saving = 0; v.addRes = null; v.addQ = ''; if (mypls) mypls.at = 0; loadPlist(v); }
   var plAddSeq = 0;
   function plAddSearch(v, q) {
@@ -4013,6 +4030,26 @@ if (typeof module !== 'undefined') module.exports = AI;
       toast((linked ? 'Podcast version from ' + Core.fmt(t) + '. You can lock the phone. The two can be a minute apart, so nudge it if needed.' : 'Playing the podcast episode. Your place in the video stays as it was.') + (tm ? ' 45-minute sleep timer on.' : ''));
     }, 450);
   }
+  // ---------- The other way: a podcast episode's own YouTube video ----------
+  // The episode a Listen started knows its video; others are looked up once (YouTube search, matched by title, the
+  // channel's name and length), remembered in the episode's record (yt), and a miss is asked again a day later.
+  var podYt = {};
+  function podYtLook(ep) {
+    var r = arec[ep.guid] || {};
+    if (r.video) return { id: r.video };
+    if (r.yt) return { id: r.yt };
+    var c = podYt[ep.guid];
+    if (c && (c.busy || Date.now() - c.at < (c.failed ? 60000 : 864e5))) return c;
+    if (!ep.title) return null;
+    var podcast = ep.podcast || r.podcast || '', dur = ep.duration || r.dur || 0;
+    c = podYt[ep.guid] = { busy: true, at: Date.now() };
+    Search.run({ fetchJSON: fetchJSON, fetchText: fetchText }, (podcast + ' ' + ep.title).trim(), prefs.apiKey).then(function (res) {
+      var v = Feeds.videoFor({ title: ep.title, duration: dur }, res, podcast);
+      if (v && arec[ep.guid]) { arec[ep.guid].yt = v.id; saveAudio(); }
+      c.id = v ? v.id : '';
+    }, function () { c.failed = true; }).then(function () { c.busy = false; c.at = Date.now(); renderAudio(); });
+    return c;
+  }
   // Listening moves the video's place along with it, never to the very end (so it is never ticked by the audio;
   // a podcast cut differently could otherwise finish a video that isn't finished)
   function syncTwin(r) {
@@ -4154,13 +4191,22 @@ if (typeof module !== 'undefined') module.exports = AI;
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
     if (!h) return;
     rawSet(HAND_KEY, 'null', false);
-    var v = videos[h.id], away = (Date.now() - h.at) / 1000, rate = h.rate || 1;
+    // What moves: the video, or a podcast episode handed to its video (h.ep)
+    var v = h.ep ? arec[h.ep] : videos[h.id], away = (Date.now() - h.at) / 1000, rate = h.rate || 1;
     // Only when Shelf really went to YouTube (armed as it left), not after a night away or a cancelled tap
     if (!h.armed || !v || v.done || away < 15 || away > 8 * 3600 || Math.abs((v.t || 0) - h.t) > 30) return;
     var mine = ++catchSeq, at = h.t;
     function clamp(t) { return v.dur > 0 ? Math.min(t, Math.max(h.t, v.dur - 30)) : t; } // short of the end, so it isn't counted as watched
     function put(t) {
-      at = t; v.t = t; v.updated = Date.now(); saveVideos();
+      at = t;
+      if (h.ep) {
+        v.t = t; v.updated = Date.now(); syncTwin(v); saveAudio();
+        var est = engine && engine.state();
+        if (est && est.episode && est.episode.guid === h.ep) engine.seek(t); // it saves the place itself
+        renderAudio(); renderAll();
+        return;
+      }
+      v.t = t; v.updated = Date.now(); saveVideos();
       if (current === v.id && playerReady) {
         var st = -1; try { st = player.getPlayerState(); } catch (e) {}
         try {
@@ -4652,7 +4698,9 @@ if (typeof module !== 'undefined') module.exports = AI;
     $('#nPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
     $('#nRate').innerHTML = '<span>Speed <b>' + st.rate + '×</b></span><span>' + (st.rate === 1 ? 'tap to change' : 'remembered for this podcast') + '</span>';
     $('#nRate').setAttribute('aria-label', 'Speed ' + st.rate + ' times. Tap to change.');
-    $('#nLock').hidden = !Native.inApp;
+    $('#nKeep').textContent = Native.inApp ? 'keeps playing, locked too' : 'keeps playing';
+    var yt = podYtLook(ep);
+    $('#nYt').setAttribute('aria-label', yt && yt.id ? 'Play this episode on YouTube, at this spot' : 'Look for this episode on YouTube');
     renderTimerUI('a');
   }
   function closeNight() { nightOpen = false; closeSheet('#nsheet'); renderAudio(); renderAll(); }
@@ -5693,21 +5741,50 @@ if (typeof module !== 'undefined') module.exports = AI;
     var v = current && videos[current]; if (!v) return null;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
-    var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
+    var web = ytLink({ id: v.id, t: t, done: v.done });
     // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
     // YouTube ↗ goes through the same Shortcut with "nolock" on the end: the Shortcut stops before locking, and its
     // "pass" note lets the YouTube guard automation (bounces you back to Shelf when you open YouTube yourself) let it through
-    var viaShortcut = !!prefs.autoLock;
-    var href = !Native.inApp ? web : viaShortcut ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + (noLock ? '&shelf=nolock' : '')) : app;
-    return { v: v, t: t, web: web, href: href, lock: viaShortcut, rate: wantRate || 1 };
+    return { v: v, t: t, web: web, href: ytApp(web, !noLock), lock: !!prefs.autoLock, rate: wantRate || 1 };
+  }
+  // A youtube.com address as Shelf opens it: the YouTube app (youtube://, so iOS can't hand it to Safari), through the
+  // auto-lock Shortcut when that is set up (its "pass" note gets it past the YouTube guard automation; "nolock" on the
+  // end stops it before it locks the phone); in a browser, the web page
+  function ytApp(web, lock) {
+    if (!Native.inApp) return web;
+    var app = web.replace(/^https:/, 'youtube:');
+    if (!prefs.autoLock) return app;
+    return 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + (lock ? '' : (app.indexOf('?') < 0 ? '?' : '&') + 'shelf=nolock'));
+  }
+  // No YouTube app: the web page, if Shelf is still on screen a moment later (the Shortcut route has no such check)
+  function appFallbackTo(web) {
+    clearTimeout(appFallback);
+    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(web, '_blank'); }, 1500);
   }
   function handOff(h) {
     catchSeq++; // a history check still running from the last return stops
     clearTimeout(appFallback);
-    if (Native.inApp && !h.lock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
+    if (Native.inApp && !h.lock) appFallbackTo(h.web);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
   }
+  // Today's YouTube button: the YouTube app, at its home
+  $('#ytHome').addEventListener('click', function () { var web = 'https://www.youtube.com/'; this.href = ytApp(web, false); appFallbackTo(web); });
+  // The podcast player's YouTube ↗: the episode's own video at the spot playing now (found as the player opens), else
+  // YouTube's search for it. Shelf pauses the podcast; back in Shelf its place moves on as a video's does (catchUp).
+  $('#nYt').addEventListener('click', function (e) {
+    var st = engine && engine.state(), ep = st && st.episode;
+    if (!ep) { e.preventDefault(); return; }
+    engine.capture(true);
+    var t = st.t || 0, found = podYtLook(ep), id = found && found.id, web;
+    if (id) web = 'https://www.youtube.com/watch?v=' + id + (t > 5 ? '&t=' + Math.floor(t) + 's' : '');
+    else web = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(((ep.podcast || '') + ' ' + ep.title).trim());
+    this.href = ytApp(web, false);
+    catchSeq++;
+    appFallbackTo(web);
+    engine.pause();
+    rawSet(HAND_KEY, id ? JSON.stringify({ id: id, ep: ep.guid, t: t, at: Date.now(), rate: st.rate || 1 }) : 'null', false);
+  });
   function rateTxt(r) { return r + '×'; }
   ['#ytLink', '#ytOpen'].forEach(function (sel) {
     $(sel).addEventListener('click', function (e) {
@@ -6110,7 +6187,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     watchBoot();
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
-      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, get podYt() { return podYt; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);
