@@ -144,7 +144,7 @@ final class ShelfWatchKitTests: XCTestCase {
         XCTAssertEqual(Words.days(Step2(goal: "Step 2 CK", days: 60)), "60 days to Step 2 CK")
         XCTAssertEqual(Words.days(Step2(goal: "Step 2 CK", days: 1)), "1 day to Step 2 CK")
         XCTAssertEqual(Words.days(Step2(goal: "Step 2 CK", days: 0, past: true)), "Step 2 CK is done")
-        for code in ["hidden", "stalled", "asleep", "unreachable", "timeout", "old", "nothing", "end", "missing", "nourl", "noai", "unknown", "noroute"] {
+        for code in ["hidden", "stalled", "asleep", "waits", "unreachable", "timeout", "old", "nothing", "end", "missing", "nourl", "noai", "unknown", "noroute"] {
             XCTAssertFalse(Words.why(code).contains("went wrong"), code + " has its own words")
         }
         XCTAssertTrue(Words.why("error", msg: "boom").contains("boom"))
@@ -160,6 +160,14 @@ final class ShelfWatchKitTests: XCTestCase {
         XCTAssertEqual(Rules.fadeVolume(endsAt: now.addingTimeInterval(600), now: now), 1)
         XCTAssertEqual(Rules.fadeVolume(endsAt: now.addingTimeInterval(-5), now: now), 0)
         XCTAssertEqual(Rules.fadeVolume(endsAt: nil), 1)
+        XCTAssertEqual(Rules.holdStep(15, held: 0.5, dur: 700), 15)
+        XCTAssertEqual(Rules.holdStep(15, held: 2.5, dur: 700), 30)
+        XCTAssertEqual(Rules.holdStep(15, held: 9, dur: 700), 60)
+        XCTAssertEqual(Rules.holdStep(30, held: 9, dur: 7200), 240)
+        XCTAssertEqual(Rules.holdMove(10, by: -15, dur: 700), 0)
+        XCTAssertEqual(Rules.holdMove(690, by: 30, dur: 700), 699)
+        XCTAssertEqual(Rules.holdMove(100, by: -15, dur: 700), 85)
+        XCTAssertEqual(Rules.holdMove(0, by: 15, dur: 0), 0)
         XCTAssertEqual(Rules.resumeAt(100.7, dur: 3600, done: false), 97)
         XCTAssertEqual(Rules.resumeAt(3, dur: 3600, done: false), 0)
         XCTAssertEqual(Rules.resumeAt(3595, dur: 3600, done: false), 0)

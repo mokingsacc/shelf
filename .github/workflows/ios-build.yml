@@ -7,18 +7,22 @@ on:
   push:
     paths: ['ios/**', '.github/workflows/ios-build.yml', '.github/scripts/watch-shots.sh']
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Mac to build on (another one when GitHub has no macos-26 free)
+        default: macos-26
 permissions:
   contents: write
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Xcode version
         run: xcodebuild -version
       - name: Test the shared watch code (ShelfWatchKit)
-        run: cd ios/ShelfWatchKit && swift test 2>&1 | tail -25
+        run: set -o pipefail; cd ios/ShelfWatchKit && swift test 2>&1 | tail -25
       - name: Build the app (with its watch app) for the simulator
         run: |
           # No -sdk here: it would build the watch app with the iPhone's SDK; each target keeps its own

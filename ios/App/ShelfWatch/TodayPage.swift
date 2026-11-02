@@ -13,7 +13,7 @@ struct TodayPage: View {
                     top(Act.showing(store, player, at: ctx.date))
                 }
                 ForEach(picks, id: \.id) { p in
-                    PickRow(pick: p, big: picks.first?.id == p.id && Act.showing(store, player) == nil && store.live)
+                    PickRow(pick: p, big: picks.first?.id == p.id && Act.showing(store, player) == nil && store.reachable)
                 }
             }
             .padding(.horizontal, Metric.inset)
@@ -24,7 +24,7 @@ struct TodayPage: View {
     private var picks: [Pick] { Array((store.snap?.pick ?? []).prefix(3)) }
 
     @ViewBuilder private func top(_ s: Showing?) -> some View {
-        if !store.live && !(s?.onWatch ?? false) {
+        if !store.reachable && !(s?.onWatch ?? false) {
             AwayBlock()
         } else if let s {
             NowBlock(s: s)
@@ -34,7 +34,7 @@ struct TodayPage: View {
     }
 }
 
-/// The phone is away or Shelf isn't open: one plain line, and the time of the state shown (a tap opens CHECK)
+/// The phone is out of reach: one plain line, and the time of the state shown (a tap opens CHECK)
 struct AwayBlock: View {
     @EnvironmentObject var store: Store
     var body: some View {
@@ -42,7 +42,7 @@ struct AwayBlock: View {
             HStack(alignment: .top, spacing: 6) {
                 Rectangle().fill(Ink.wait).frame(width: 8, height: 8).padding(.top, 4)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Open Shelf on your iPhone to control it").font(.shelf(13, .bold)).foregroundStyle(Ink.ink).fixedSize(horizontal: false, vertical: true)
+                    Text("iPhone out of reach").font(.shelf(13, .bold)).foregroundStyle(Ink.ink).fixedSize(horizontal: false, vertical: true)
                     if !store.stale.isEmpty { Meta(text: store.stale) }
                 }
                 Spacer(minLength: 0)
@@ -57,23 +57,31 @@ struct AwayBlock: View {
 struct NowBlock: View {
     @EnvironmentObject var store: Store
     var s: Showing
+    @State private var note: String?      // why play/pause didn't work, in the title's place for a moment
     var body: some View {
         let pal = Palette.of(audio: !s.isVideo)
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 Button { store.go(.now) } label: {
                     VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 3) {
-                            Image(systemName: s.onWatch ? "applewatch" : "iphone").font(.system(size: 9, weight: .heavy))
-                            Cap(text: (s.playing ? "" : "Paused · ") + s.tag, color: pal.night ? pal.mute : pal.accent)
+                        if let note {
+                            Text(note).font(.shelf(12, .semibold)).foregroundStyle(Ink.wait).lineLimit(2).minimumScaleFactor(0.7)
+                        } else {
+                            HStack(spacing: 3) {
+                                Image(systemName: s.onWatch ? "applewatch" : "iphone").font(.system(size: 9, weight: .heavy))
+                                Cap(text: (s.playing ? "" : "Paused · ") + s.tag, color: pal.night ? pal.mute : pal.accent)
+                            }
+                            .foregroundStyle(pal.night ? pal.mute : pal.accent)
+                            Text(s.title).font(.shelf(15, .bold)).lineLimit(1).foregroundStyle(Ink.ink)
                         }
-                        .foregroundStyle(pal.night ? pal.mute : pal.accent)
-                        Text(s.title).font(.shelf(15, .bold)).lineLimit(1).foregroundStyle(Ink.ink)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(Press())
-                PlayCell(s: s, pal: pal, size: 44)
+                PlayCell(s: s, pal: pal, size: 44) { p in
+                    withAnimation { note = p }
+                    Task { try? await Task.sleep(nanoseconds: 4_000_000_000); if note == p { withAnimation { note = nil } } }
+                }
             }
             .frame(height: 45)
             ProgressLine(fraction: s.dur > 0 ? s.t / s.dur : 0, fill: pal.accent).padding(.horizontal, -Metric.inset)
@@ -87,11 +95,12 @@ struct PlayCell: View {
     var s: Showing
     var pal: Palette
     var size: CGFloat
+    var said: (String) -> Void = { _ in }
     @State private var busy = false
     var body: some View {
         Button {
             busy = true
-            Task { await Act.toggle(s); busy = false }
+            Task { if let p = await Act.toggle(s) { said(p) }; busy = false }
         } label: {
             ZStack {
                 if pal.night {

@@ -93,7 +93,15 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         try? s.updateApplicationContext([LinkKey.snapshot: LinkData.pack(json), LinkKey.sentAt: Date().timeIntervalSince1970])
     }
 
-    private func lastSnapshot() -> Data? { try? Data(contentsOf: Self.file("watch-snapshot.json")) }
+    /// The page's last snapshot. With Shelf closed nothing of its own plays, whatever it last said
+    private func lastSnapshot() -> Data? {
+        guard let d = try? Data(contentsOf: Self.file("watch-snapshot.json")) else { return nil }
+        guard plugin == nil, var o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any], var n = o["now"] as? [String: Any],
+              (n["playing"] as? Bool) == true else { return d }
+        n["playing"] = false
+        o["now"] = n
+        return (try? JSONSerialization.data(withJSONObject: o)) ?? d
+    }
 
     /// What plays now, while the watch app is open (the page's word gives way while the iPhone plays a podcast for the watch)
     func now(_ json: String, pocket: Bool = false) {
@@ -150,13 +158,15 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     /// Taps that wait for Shelf to open (behind "Tap to play"), rather than being dropped when the page can't act now
     static func waits(_ name: String) -> Bool { name == "play" || name == "next" }
 
-    private func receive(id: String, json: Data) {
-        let name = Command.name(of: json)
-        let text = String(decoding: json, as: UTF8.self)
+    private func receive(id: String, json raw: Data) {
         DispatchQueue.main.async {
             // A podcast while Shelf isn't on screen, and the remote while one plays: the iPhone plays it itself
             let app = UIApplication.shared
             let away = app.applicationState != .active
+            // Play on something paused, while Shelf can't resume it (closed, or asleep in the background): a play of it from its place
+            let json = away && !PocketPlayer.shared.active ? self.asPlay(raw) ?? raw : raw
+            let name = Command.name(of: json)
+            let text = String(decoding: json, as: UTF8.self)
             let task = app.beginBackgroundTask(withName: "shelf-pocket") { [weak self] in self?.endTask("pocket|" + id) }
             if task != .invalid { self.tasks["pocket|" + id] = task }
             if name != "play" || away, let c = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any],
@@ -178,6 +188,15 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
             self.endTask("pocket|" + id)
             self.inboxed(id: id, name: name, text: text)
         }
+    }
+
+    /// The watch's play on something paused (it sends the entry with it), as a play of that entry; nil for anything else
+    private func asPlay(_ json: Data) -> Data? {
+        guard Command.name(of: json) == "resume", var c = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any],
+              let e = c["entry"] as? [String: Any], (e["key"] as? String ?? "") != "" else { return nil }
+        c["cmd"] = "play"
+        c.removeValue(forKey: "key")
+        return try? JSONSerialization.data(withJSONObject: c, options: [.sortedKeys])
     }
 
     /// What the iPhone itself plays for the watch now, from any thread
@@ -223,6 +242,14 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
                 if task != .invalid { self.tasks[id] = task }
                 let page = self.plugin
                 page?.command(id: id, json: text)
+                // Shelf isn't on screen, so YouTube can't start: "Tap to play" goes up now, not after the page's wait
+                if app.applicationState != .active && Self.waits(name) {
+                    self.queue.async {
+                        guard let it = self.item(id) else { return }
+                        self.notify(it)
+                        if self.notificationsAllowed, let d = try? JSONSerialization.data(withJSONObject: ["ok": false, "why": "notified", "queued": true]) { self.answer(id, d) }
+                    }
+                }
                 // No answer from the page in time (or no page at all: Shelf isn't open): tell the watch plainly, and keep what should wait
                 self.queue.async {
                     let work = DispatchWorkItem { [weak self] in self?.noAnswer(id: id, name: name) }
@@ -249,7 +276,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         let keep = Self.waits(name) || Command.durable(name)
         if Self.waits(name) { notify(item) }
         if !keep { remove(id) }
-        let r: [String: Any] = ["ok": false, "why": Self.waits(name) && notificationsAllowed ? "notified" : "asleep", "queued": keep]
+        let r: [String: Any] = ["ok": false, "why": Self.waits(name) ? (notificationsAllowed ? "notified" : "waits") : "asleep", "queued": keep]
         if let d = try? JSONSerialization.data(withJSONObject: r) { answer(id, d) }
     }
 
@@ -290,13 +317,14 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     // MARK: "Tap to play" on the iPhone
 
     private func notify(_ item: Item) {
+        guard item.notified != true else { return }   // once per tap (it may go up at once and again when the page answers)
         var list = readInbox()
         if let i = list.firstIndex(where: { $0.id == item.id }) { list[i].notified = true; writeInbox(list) }
         let title = Command.title(of: Data(item.json.utf8))
         let c = UNMutableNotificationContent()
         c.title = "Tap to play"
         c.body = (title.isEmpty ? "What you chose on your watch" : "“" + title + "”") + " plays in Shelf when it opens."
-        c.sound = nil
+        c.sound = .default
         c.threadIdentifier = "shelf-watch"
         if #available(iOS 15.0, *) { c.interruptionLevel = .timeSensitive }
         let req = UNNotificationRequest(identifier: "watch-" + item.id, content: c, trigger: nil)
@@ -360,15 +388,18 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
         guard let id = message[LinkKey.id] as? String, let cmd = message[LinkKey.command] as? Data else { replyHandler([:]); return }
         if Command.name(of: cmd) == "hello" {
             // The watch app opened: the latest snapshot at once, from disk
-            var r: [String: Any] = [LinkKey.ack: id, "page": plugin != nil]
+            var r: [String: Any] = [LinkKey.ack: id, "page": answers]
             if let d = lastSnapshot() { r[LinkKey.snapshot] = LinkData.pack(d) }
             replyHandler(r)
             DispatchQueue.main.async { if PocketPlayer.shared.active { PocketPlayer.shared.sendNow() } }
             return
         }
-        replyHandler([LinkKey.ack: id, "page": plugin != nil])
+        replyHandler([LinkKey.ack: id, "page": answers])
         receive(id: id, json: cmd)
     }
+
+    /// Something on the iPhone answers the watch's taps: Shelf's page, or the iPhone's own player
+    private var answers: Bool { plugin != nil || pocketNow() != nil }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         guard let id = message[LinkKey.id] as? String, let cmd = message[LinkKey.command] as? Data else { return }

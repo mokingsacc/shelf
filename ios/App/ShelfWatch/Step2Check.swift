@@ -121,7 +121,7 @@ struct CheckPage: View {
         var out: [Line] = []
         let shown = store.snap.map { Store.clock($0.date) } ?? "nothing yet"
         if store.live { out.append(Line(id: 1, ok: true, text: "iPhone connected, Shelf open")) }
-        else if store.reachable { out.append(Line(id: 1, ok: false, text: "Open Shelf on your iPhone to control it")) }
+        else if store.reachable { out.append(Line(id: 1, ok: true, text: "iPhone connected. Shelf is closed there: podcasts play from here, a video needs one tap on the iPhone")) }
         else { out.append(Line(id: 1, ok: false, text: "iPhone out of reach. Showing " + shown)) }
         if store.waiting > 0 { out.append(Line(id: 2, ok: false, text: "\(store.waiting) change" + (store.waiting == 1 ? "" : "s") + " wait for your iPhone")) }
         else { out.append(Line(id: 2, ok: true, text: "Synced " + (store.heardAt.map { Words.ago($0) } ?? "not yet"))) }

@@ -75,7 +75,8 @@ public enum Words {
         switch code {
         case "hidden": return "Shelf is in the background on your iPhone. Open it there (a play you chose starts then)."
         case "stalled": return "It didn't start on your iPhone. Open Shelf there and try again."
-        case "asleep": return "Open Shelf on your iPhone to control it from here."
+        case "asleep": return "Shelf is closed on your iPhone. Open it there for this."
+        case "waits": return "Open Shelf on your iPhone and it starts there."
         case "notified": return "On your iPhone, tap “Tap to play” and it starts."
         case "unreachable": return "Your iPhone isn't in reach. Bring it closer, or play a podcast on the watch."
         case "timeout": return "Your iPhone didn't answer. Open Shelf on it and try again."
@@ -105,6 +106,17 @@ public enum Rules {
     }
 
     /// The volume for a gentle fade over the last minute of a sleep timer (1 before that)
+    /// Holding −15 or +15 on the watch: each quarter second moves on by the skip, then 2×, 4× and (past an hour long) 8× it
+    public static func holdStep(_ base: Double, held: Double, dur: Double) -> Double {
+        let times: Double = held < 2 ? 1 : held < 4 ? 2 : (held < 6 || dur <= 3600) ? 4 : 8
+        return base * times
+    }
+
+    /// Where a hold's step lands: never before the start, nor past a second before the end (the end would finish it)
+    public static func holdMove(_ from: Double, by: Double, dur: Double) -> Double {
+        max(0, min(max(0, dur - 1), from + by))
+    }
+
     public static func fadeVolume(endsAt: Date?, now: Date = Date(), fade: TimeInterval = 60) -> Float {
         guard let endsAt else { return 1 }
         return Float(max(0, min(1, endsAt.timeIntervalSince(now) / fade)))

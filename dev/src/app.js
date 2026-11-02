@@ -662,11 +662,7 @@
     return h + '<button type="button" class="more quiet" data-act="pl-add-close"><span>Done adding</span><span class="mono">×</span></button>';
   }
   // The YouTube app (the bounce automation lets it through when auto-lock's Shortcut is set up), or the web page in a browser
-  function saveHref(id) {
-    var web = 'https://www.youtube.com/watch?v=' + id, app = web.replace(/^https:/, 'youtube:');
-    if (!Native.inApp) return web;
-    return prefs.autoLock ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + '&shelf=nolock') : app;
-  }
+  function saveHref(id) { return ytApp('https://www.youtube.com/watch?v=' + id, false); }
   function plSaved(v) { v.saving = 0; v.addRes = null; v.addQ = ''; if (mypls) mypls.at = 0; loadPlist(v); }
   var plAddSeq = 0;
   function plAddSearch(v, q) {
@@ -996,6 +992,29 @@
       toast((linked ? 'Podcast version from ' + Core.fmt(t) + '. You can lock the phone. The two can be a minute apart, so nudge it if needed.' : 'Playing the podcast episode. Your place in the video stays as it was.') + (tm ? ' 45-minute sleep timer on.' : ''));
     }, 450);
   }
+  // ---------- The other way: a podcast episode's own YouTube video ----------
+  // The episode a Listen started knows its video; others are looked up once (YouTube search, matched by title, the
+  // channel's name and length), remembered in the episode's record (yt), and a miss is asked again a day later.
+  // Kept apart from the episode records (localStorage shelf.podyt, { guid: { id, at } }), so a lookup never makes an episode
+  // look started. A match is kept; a miss is asked again after a week; an error after an hour (quota, key) or 5 minutes.
+  var PODYT_KEY = 'shelf.podyt', podYt = {}, podYtSaved = null;
+  function podYtStore() { if (!podYtSaved) { try { podYtSaved = JSON.parse(rawGet(PODYT_KEY) || '{}') || {}; } catch (e) { podYtSaved = {}; } } return podYtSaved; }
+  function podYtLook(ep) {
+    var r = arec[ep.guid] || {};
+    if (r.video) return { id: r.video };
+    var c = podYt[ep.guid] || podYtStore()[ep.guid];
+    if (c && (c.busy || c.id || Date.now() - c.at < (c.wait || 7 * 864e5))) return c;
+    if (!ep.title) return null;
+    var podcast = ep.podcast || r.podcast || '', dur = ep.duration || r.dur || 0;
+    c = podYt[ep.guid] = { busy: true, at: Date.now() };
+    Search.run({ fetchJSON: fetchJSON, fetchText: fetchText }, (podcast + ' ' + ep.title).trim(), prefs.apiKey).then(function (res) {
+      var v = Feeds.videoFor({ title: ep.title, duration: dur }, res, podcast);
+      c.id = v ? v.id : '';
+      var all = podYtStore(); all[ep.guid] = { id: c.id, at: Date.now() }; rawSet(PODYT_KEY, JSON.stringify(all), false);
+    }, function (e) { c.wait = /allowance|key|Data API/i.test(e && e.message || '') ? 3600e3 : 300e3; })
+      .then(function () { c.busy = false; c.at = Date.now(); renderAudio(); });
+    return c;
+  }
   // Listening moves the video's place along with it, never to the very end (so it is never ticked by the audio;
   // a podcast cut differently could otherwise finish a video that isn't finished)
   function syncTwin(r) {
@@ -1137,13 +1156,22 @@
     var h = null; try { h = JSON.parse(rawGet(HAND_KEY) || 'null'); } catch (e) {}
     if (!h) return;
     rawSet(HAND_KEY, 'null', false);
-    var v = videos[h.id], away = (Date.now() - h.at) / 1000, rate = h.rate || 1;
+    // What moves: the video, or a podcast episode handed to its video (h.ep)
+    var v = h.ep ? arec[h.ep] : videos[h.id], away = (Date.now() - h.at) / 1000, rate = h.rate || 1;
     // Only when Shelf really went to YouTube (armed as it left), not after a night away or a cancelled tap
     if (!h.armed || !v || v.done || away < 15 || away > 8 * 3600 || Math.abs((v.t || 0) - h.t) > 30) return;
     var mine = ++catchSeq, at = h.t;
     function clamp(t) { return v.dur > 0 ? Math.min(t, Math.max(h.t, v.dur - 30)) : t; } // short of the end, so it isn't counted as watched
     function put(t) {
-      at = t; v.t = t; v.updated = Date.now(); saveVideos();
+      at = t;
+      if (h.ep) {
+        v.t = t; v.updated = Date.now(); syncTwin(v); saveAudio();
+        var est = engine && engine.state();
+        if (est && est.episode && est.episode.guid === h.ep) engine.seek(t); // it saves the place itself
+        renderAudio(); renderAll();
+        return;
+      }
+      v.t = t; v.updated = Date.now(); saveVideos();
       if (current === v.id && playerReady) {
         var st = -1; try { st = player.getPlayerState(); } catch (e) {}
         try {
@@ -1165,7 +1193,7 @@
     var guess = clamp(h.t + away * rate);
     if (guess - h.t >= 5) put(guess);
     // Once: the phone can lock itself after Play locked
-    if (prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
+    if (!h.ep && prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
     if (!Native.device) { if (guess - h.t >= 5) say(false); return; }
     if (guess - h.t >= 5) say(false);
     var tries = 0;
@@ -1183,8 +1211,9 @@
         if ((!spot || (spot.t != null && Math.abs(spot.t - h.t) < 3)) && tries < 5) return setTimeout(function () { if (mine === catchSeq) look(); }, 2500);
         if (!ok && ytOut) { note({ state: 'out' }); if (guess - h.t >= 5) say(false, 'out'); return; }
         note({ state: !ok ? 'page' : !spot ? 'missing' : 'found', status: r.status, size: page.length, videos: (page.match(/"videoId":"/g) || []).length, spot: spot });
-        var t = spot && spot.t != null ? spot.t : spot && spot.pct != null && v.dur > 0 ? Math.min(Math.max(guess, spot.pct / 100 * v.dur), (spot.pct + 1) / 100 * v.dur) : null;
+        var t = spot && spot.t != null ? spot.t : !h.ep && spot && spot.pct != null && v.dur > 0 ? Math.min(Math.max(guess, spot.pct / 100 * v.dur), (spot.pct + 1) / 100 * v.dur) : null;
         if (t == null) return;
+        if (h.ep && t <= h.t + 2) return; // a podcast takes only a spot further on (an old visit to the video can still show)
         t = clamp(t);
         if (Math.abs(t - at) >= 2) put(t);
         say(true);
@@ -1593,7 +1622,8 @@
   }
   function openAudio(e) {
     if (current) closeVideo(true);
-    aMeta[e.key] = { source: e.src, image: e.image || '', published: e.published || 0, podcast: e.srcName };
+    var had = arec[e.key] || {};   // what Shelf knows stays when the entry comes without it (from the watch, or the iPhone's own player)
+    aMeta[e.key] = { source: e.src || had.source || '', image: e.image || had.image || '', published: e.published || had.published || 0, podcast: e.srcName || had.podcast || '' };
     nightOpen = true; openSheet('#nsheet');
     var st = engine.state(), same = st.episode && st.episode.guid === e.key;
     if (!same) engine.play({ guid: e.key, url: e.url, title: e.title, podcast: e.srcName, image: e.image, duration: e.dur });
@@ -1634,7 +1664,9 @@
     $('#nPlay').setAttribute('aria-label', st.playing ? 'Pause' : 'Play');
     $('#nRate').innerHTML = '<span>Speed <b>' + st.rate + '×</b></span><span>' + (st.rate === 1 ? 'tap to change' : 'remembered for this podcast') + '</span>';
     $('#nRate').setAttribute('aria-label', 'Speed ' + st.rate + ' times. Tap to change.');
-    $('#nLock').hidden = !Native.inApp;
+    $('#nKeep').textContent = Native.inApp ? 'keeps playing, locked too' : 'keeps playing';
+    var yt = podYtLook(ep);
+    $('#nYt').setAttribute('aria-label', yt && yt.id ? 'Play this episode on YouTube, at this spot' : 'Look for this episode on YouTube');
     renderTimerUI('a');
   }
   function closeNight() { nightOpen = false; closeSheet('#nsheet'); renderAudio(); renderAll(); }
@@ -2675,21 +2707,52 @@
     var v = current && videos[current]; if (!v) return null;
     var t = v.t || 0; // the spot playing now (after a Mark, the saved spot can be further on)
     try { var pt = player.getCurrentTime(); if (armed && typeof pt === 'number' && pt > 0) t = pt; } catch (e) {}
-    var web = ytLink({ id: v.id, t: t, done: v.done }), app = web.replace(/^https:/, 'youtube:');
+    var web = ytLink({ id: v.id, t: t, done: v.done });
     // Auto-lock on: the "Shelf Play Locked" iPhone Shortcut opens YouTube, waits, then locks the phone (apps can't lock it themselves)
     // YouTube ↗ goes through the same Shortcut with "nolock" on the end: the Shortcut stops before locking, and its
     // "pass" note lets the YouTube guard automation (bounces you back to Shelf when you open YouTube yourself) let it through
-    var viaShortcut = !!prefs.autoLock;
-    var href = !Native.inApp ? web : viaShortcut ? 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + (noLock ? '&shelf=nolock' : '')) : app;
-    return { v: v, t: t, web: web, href: href, lock: viaShortcut, rate: wantRate || 1 };
+    return { v: v, t: t, web: web, href: ytApp(web, !noLock), lock: !!prefs.autoLock, rate: wantRate || 1 };
+  }
+  // A youtube.com address as Shelf opens it: the YouTube app (youtube://, so iOS can't hand it to Safari), through the
+  // auto-lock Shortcut when that is set up (its "pass" note gets it past the YouTube guard automation; "nolock" on the
+  // end stops it before it locks the phone); in a browser, the web page
+  function ytApp(web, lock) {
+    if (!Native.inApp) return web;
+    var app = web.replace(/^https:/, 'youtube:');
+    if (!prefs.autoLock) return app;
+    return 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + (lock ? '' : (app.indexOf('?') < 0 ? '?' : '&') + 'shelf=nolock'));
+  }
+  // No YouTube app: the web page, if Shelf is still on screen a moment later (the Shortcut route has no such check)
+  function appFallbackTo(web) {
+    clearTimeout(appFallback);
+    if (Native.inApp && !prefs.autoLock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(web, '_blank'); }, 1500);
   }
   function handOff(h) {
     catchSeq++; // a history check still running from the last return stops
     clearTimeout(appFallback);
-    if (Native.inApp && !h.lock) appFallback = setTimeout(function () { if (document.visibilityState === 'visible') window.open(h.web, '_blank'); }, 1500);
+    if (Native.inApp && !h.lock) appFallbackTo(h.web);
     try { player.pauseVideo(); } catch (e) {}
     rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
   }
+  // Today's YouTube button: the YouTube app, at its home
+  $('#ytHome').addEventListener('click', function () { var web = 'https://www.youtube.com/'; this.href = ytApp(web, false); appFallbackTo(web); });
+  // The podcast player's YouTube ↗: the episode's own video at the spot playing now (found as the player opens), else
+  // YouTube's search for it. Shelf pauses the podcast; back in Shelf its place moves on as a video's does (catchUp).
+  $('#nYt').addEventListener('click', function (e) {
+    var st = engine && engine.state(), ep = st && st.episode;
+    if (!ep) { e.preventDefault(); return; }
+    engine.capture(true);
+    var t = st.t || 0, found = podYtLook(ep), id = found && found.id, web;
+    if (id) web = 'https://www.youtube.com/watch?v=' + id + (t > 5 ? '&t=' + Math.floor(t) + 's' : '');
+    else web = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(((ep.podcast || '') + ' ' + ep.title).trim());
+    this.href = ytApp(web, false);
+    catchSeq++;
+    appFallbackTo(web);
+    engine.pause();
+    if (st.timer) engine.setTimer(null); // it runs on the clock: it would stop the podcast as soon as it played again
+    // The YouTube app plays at its own speed, so the time away counts at 1×
+    rawSet(HAND_KEY, id ? JSON.stringify({ id: id, ep: ep.guid, t: t, at: Date.now(), rate: 1 }) : 'null', false);
+  });
   function rateTxt(r) { return r + '×'; }
   ['#ytLink', '#ytOpen'].forEach(function (sel) {
     $(sel).addEventListener('click', function (e) {
@@ -3092,7 +3155,7 @@
     watchBoot();
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
-      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, get podYt() { return podYt; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);
