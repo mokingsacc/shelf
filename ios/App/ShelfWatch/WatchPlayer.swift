@@ -30,6 +30,9 @@ final class WatchPlayer: ObservableObject {
     @Published private(set) var timer: SleepState?
     @Published private(set) var problem: String?       // "noroute", "noaudio", "noairpods"
     @Published private(set) var lastRoute = ""
+    /// The Crown's level for the watch's own playback (0–1, kept between launches): the player's volume, under the system's
+    /// (never back below 0.1 at launch, so a podcast never starts silent)
+    @Published private(set) var gain: Double = max(0.1, UserDefaults.standard.object(forKey: "shelf.gain") as? Double ?? 1)
 
     private var player: AVPlayer?
     private var tick: Any?
@@ -91,6 +94,7 @@ final class WatchPlayer: ObservableObject {
         let pi = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: pi)
         p.automaticallyWaitsToMinimizeStalling = true
+        p.volume = Float(gain)
         player = p
         item = it
         dur = it.dur
@@ -187,10 +191,22 @@ final class WatchPlayer: ObservableObject {
             timerEnds = nil
             timer = nil
         }
-        player?.volume = 1
+        applyGain()
     }
 
-    func setTimerEnd() { timerEnds = nil; timer = SleepState(mode: "end"); player?.volume = 1 }
+    func setTimerEnd() { timerEnds = nil; timer = SleepState(mode: "end"); applyGain() }
+
+    /// The Crown on Now, while the watch plays
+    func setGain(_ g: Double) {
+        gain = min(1, max(0, g))
+        defaults.set(gain, forKey: "shelf.gain")
+        applyGain()
+    }
+
+    /// The Crown's level, faded by the sleep timer in its last minute
+    private func applyGain() {
+        player?.volume = Float(gain) * (timerEnds.map { Rules.fadeVolume(endsAt: $0) } ?? 1)
+    }
 
     /// Stops and sends the spot; the item stays so Now shows it paused
     func stop() {
@@ -229,7 +245,7 @@ final class WatchPlayer: ObservableObject {
         t = s
         if let d = player?.currentItem?.duration.seconds, d.isFinite, d > 0 { dur = d }
         if let ends = timerEnds {
-            player?.volume = Rules.fadeVolume(endsAt: ends)
+            applyGain()
             if Date() >= ends { paused(by: nil); setTimer(nil); return }
         }
         if playing, Date().timeIntervalSince(lastSpot) >= 30 { saveSpot() }
