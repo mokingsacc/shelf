@@ -18,7 +18,8 @@ struct NowView: View {
     @State private var jumping = false              // a jump's seek is on its way
     @State private var shown = false                // on screen
     @FocusState private var crown: Bool             // the Crown turns the volume while Now is on top
-    @State private var crownAt: Double = 0          // the Crown's own position: only its turns count, never its value
+    @State private var crownAt: Double = 0          // the Crown's own position in detents (a few thousand turns either way;
+                                                    // a finer stride over that range froze the screen): only turns count
     @State private var turning: Double?             // the level while turning (the iPhone's word catches up after)
     @State private var turnedAt = Date.distantPast  // the last turn
     @State private var marked: Double?              // Mark's frozen second, for 2 s
@@ -38,9 +39,9 @@ struct NowView: View {
         .focusable(crownable)
         .focused($crown)
         .defaultFocus($crown, true)
-        .digitalCrownRotation($crownAt, from: -1_000_000, through: 1_000_000, by: 1.0 / 32, sensitivity: .medium, isContinuous: true, isHapticFeedbackEnabled: true)
+        .digitalCrownRotation($crownAt, from: -50_000, through: 50_000, by: 1, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
         .focusEffectDisabled()
-        .onChange(of: crownAt) { old, new in nudge(new - old) }
+        .onChange(of: crownAt) { old, new in nudge((new - old) / 32) }
         .onAppear { if !player.active { store.readPhoneVolume() }; claimCrown() }
         .onChange(of: player.active) { _, _ in turning = nil; if !player.active { store.readPhoneVolume() } }
         .onChange(of: store.path) { _, _ in claimCrown() }
