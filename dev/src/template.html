@@ -94,6 +94,7 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .dot{display:block;width:12px;height:12px;background:var(--grey);flex:none}
 .dot.good{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.wait{background:var(--wait)}
 .note{margin:0;padding:12px var(--g);font-size:13px;border-bottom:2px solid var(--hair);background:var(--soft)}
+.note button{font:inherit;font-weight:600;color:inherit;background:none;border:0;padding:0;margin:0;text-decoration:underline;cursor:pointer}
 
 /* Continue card and Up next */
 .now{display:grid;grid-template-columns:minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;padding:12px var(--g);border-bottom:3px solid var(--rule);position:relative}
@@ -810,6 +811,20 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <div class="grab" aria-hidden="true"></div>
   <div class="dh"><h2 id="twinH">Podcast version</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
   <div class="db" id="twinBody"></div>
+</dialog>
+
+<dialog id="extDlg" aria-labelledby="extH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="extH">Shelf for Chrome</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db">
+    <p>A small Chrome extension lets Shelf read channels, search and your YouTube history, and sends YouTube to Shelf. Set it up once:</p>
+    <ol class="steps">
+      <li><a href="shelf-extension.zip" download>Download shelf-extension.zip</a> and unzip it.</li>
+      <li>In Chrome, open <b class="mono">chrome://extensions</b> and turn on <b>Developer mode</b>.</li>
+      <li>Click <b>Load unpacked</b> and pick the unzipped <b>shelf-extension</b> folder. Then reload this page.</li>
+    </ol>
+    <p class="cnote">Keep that folder: Chrome runs the extension from it.</p>
+  </div>
 </dialog>
 
 <dialog id="lockDlg" aria-labelledby="lockH">
