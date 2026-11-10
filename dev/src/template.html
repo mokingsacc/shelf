@@ -96,18 +96,12 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .note{margin:0;padding:12px var(--g);font-size:13px;border-bottom:2px solid var(--hair);background:var(--soft)}
 .note button{font:inherit;font-weight:600;color:inherit;background:none;border:0;padding:0;margin:0;text-decoration:underline;cursor:pointer}
 
-/* Continue card and Up next */
-.now{display:grid;grid-template-columns:minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;padding:12px var(--g);border-bottom:3px solid var(--rule);position:relative}
+/* Pick up from rows */
 .th{display:block;aspect-ratio:16/9;width:100%;max-width:100%;position:relative;overflow:hidden;background:var(--soft)}
 .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .th .len{position:absolute;right:4px;bottom:4px;font:600 10px/1.3 var(--mono);background:rgba(0,0,0,.78);color:#fff;padding:1px 4px}
 .th.sq{aspect-ratio:16/9}
 .th.sq img{object-fit:contain;background:#000}
-.now .tx{min-width:0}
-.now b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:17px;line-height:1.1;font-weight:800;letter-spacing:-.02em;font-stretch:108%;margin-top:3px;overflow-wrap:anywhere}
-.now .meta{display:block;font-size:12px;line-height:1.35;color:var(--grey);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.now .bar{position:absolute;left:0;right:0;bottom:-3px;height:3px;background:var(--hair)}
-.now .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--cob);width:0}
 .next{display:grid;grid-template-columns:minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;min-height:60px;padding:8px var(--g);border-bottom:3px solid var(--rule)}
 .next .tx{min-width:0}
 .next b{display:block;font-size:15px;font-weight:800;margin-top:2px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -120,16 +114,16 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 
 /* Bands */
 .bands{display:flex;flex-direction:column}
-/* Pick up from: Continue, Up next and the last video in the YouTube app, folded under one heading */
+/* Pick up from: the last video in the YouTube app, then Sleep and Entertainment, folded under one heading */
 .band.pick{--bg:var(--paper);--fg:var(--ink);padding:0;border-bottom:3px solid var(--rule)}
 .band.pick .hd{padding:6px var(--g) 2px;width:auto}
 .band.pick .hd h2{font-size:22px}
 .band.pick:not(.open) .pickbody{display:none}
 .band.pick .pickbody>:last-child{border-bottom:0}
 /* a slot with nothing in it keeps its place, quiet */
-.now.ph,.next.ph{opacity:.62}
-.now.ph .playsq,.next.ph .playsq{visibility:hidden}
-.now:disabled,#ytLast.ph button{cursor:default}
+.next.ph{opacity:.62}
+.next.ph .playsq{visibility:hidden}
+.next:disabled,#ytLast.ph button{cursor:default}
 #ytLast .tx{display:block;min-width:0;text-align:left;padding:0}
 #ytLast .kl{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 #ytLast .hint{font-size:11px;font-weight:400;color:var(--grey);flex:none}
@@ -171,6 +165,9 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .tw-ep.best{border-top:3px solid var(--ink)}
 .tw-ep b{display:block;font-size:15px;font-weight:800;line-height:1.25}
 .tw-ep small{display:block;font:400 12px var(--mono);color:var(--grey);margin-top:3px}
+.tw-ep.quiet{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.tw-ep.quiet b{font-weight:600;color:var(--grey)}
+.tw-ep.quiet small{margin-top:0;text-align:right}
 .band .chl button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;min-height:52px;border-top:2px solid currentColor;padding:6px 0;text-align:left}
 .band .chl.first button:first-child{margin-top:6px;border-top-width:3px}
 .band .chl b{display:block;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -582,19 +579,18 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <section class="band pick open" id="pick" aria-label="Pick up from">
     <div class="hd"><button type="button" class="tg" data-act="toggle-band" data-id="_pickShut" aria-expanded="true"><h2>Pick up from</h2><span class="car" aria-hidden="true" id="pickCar"></span></button><span class="tm mono" id="pickN"></span></div>
     <div class="pickbody">
-  <button type="button" class="now" id="cont" data-act="resume">
-    <span class="tx"><span class="k" id="contK">Continue</span><b id="contTitle"></b><span class="meta mono" id="contMeta"></span></span>
-    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
-    <span class="bar" aria-hidden="true"><i id="contBar"></i></span>
-  </button>
-  <button type="button" class="next" id="next" data-act="ep-play">
-    <span class="tx"><span class="k" id="nextK">Up next</span><b id="nextT"></b></span>
-    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
-  </button>
   <div class="next" id="ytLast">
     <button type="button" class="tx" id="ytLastTx" data-act="yt-hist"><span class="kl"><span class="k" id="ytLastK">Last in YouTube</span><span class="hint mono" id="ytLastH">history ›</span></span><b id="ytLastT"></b></button>
     <button type="button" class="playsq" id="ytLastPlay" data-act="yt-last" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></button>
   </div>
+  <button type="button" class="next" id="pk1" data-act="open-section">
+    <span class="tx"><span class="k" id="pk1K"></span><b id="pk1T"></b></span>
+    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
+  </button>
+  <button type="button" class="next" id="pk2" data-act="open-section">
+    <span class="tx"><span class="k" id="pk2K"></span><b id="pk2T"></b></span>
+    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
+  </button>
     </div>
   </section>
   <div class="bands" id="bands"></div>
