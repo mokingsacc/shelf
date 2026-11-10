@@ -111,6 +111,9 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .next .tx{min-width:0}
 .next b{display:block;font-size:15px;font-weight:800;margin-top:2px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .next b .mono{font-weight:400;color:var(--grey);font-size:12px}
+.next b:has(.tt){display:flex;gap:6px;align-items:baseline}
+.next b .tt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.next b .mono{flex:none}
 .playsq{width:var(--tap);height:var(--tap);background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;flex:none}
 .playsq svg{width:18px;height:18px}
 
@@ -121,7 +124,15 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .band.pick .hd{padding:6px var(--g) 2px;width:auto}
 .band.pick .hd h2{font-size:22px}
 .band.pick:not(.open) .pickbody{display:none}
-.band.pick .pickbody>button:last-of-type:not([hidden]){border-bottom:0}
+.band.pick .pickbody>:last-child{border-bottom:0}
+/* a slot with nothing in it keeps its place, quiet */
+.now.ph,.next.ph{opacity:.62}
+.now.ph .playsq,.next.ph .playsq{visibility:hidden}
+.now:disabled,#ytLast.ph button{cursor:default}
+#ytLast .tx{display:block;min-width:0;text-align:left;padding:0}
+#ytLast .kl{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+#ytLast .hint{font-size:11px;font-weight:400;color:var(--grey);flex:none}
+#ytLast.ph .hint{display:none}
 .addcat{display:flex;justify-content:space-between;align-items:center;min-height:56px;margin:0;padding:0 var(--g);border-top:2px solid var(--hair);border-bottom:2px solid var(--hair);font:700 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);background:var(--paper);width:100%}
 .band{padding:12px var(--g) 14px;background:var(--bg);color:var(--fg)}
 .band.c1{--bg:var(--b1-bg);--fg:var(--b1-fg);--tb:var(--b1-tag-bg);--tf:var(--b1-tag-fg)}
@@ -477,6 +488,8 @@ a.chrow{text-decoration:none;color:inherit}a.chrow *{text-decoration:none}
 .night .keep{font:400 12px var(--mono);color:var(--n-dim)}
 .night .sh-top>span:first-child{display:inline-flex;align-items:center;gap:10px;min-width:0}
 .night .keep{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* a phone's width has room for the two buttons, not for the caption as well */
+@media (max-width:479px){.night .sh-top .keep{display:none}}
 .night .sh-top .lnks{flex:none}
 .night .sh-top .lnk{border-color:var(--n-rule);color:var(--n-dim)}
 .night .nb{display:flex;flex-direction:column;padding:10px var(--g) 0;flex:1}
@@ -565,22 +578,22 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <button type="button" class="stat" id="statusBtn" data-act="check" aria-label="Self-check"><i class="dot wait" id="statusDot"></i><span id="statusText" class="sr">Starting</span></button>
   </header>
   <p class="note" id="webNote" hidden></p>
-  <section class="band pick open" id="pick" aria-label="Pick up from" hidden>
+  <section class="band pick open" id="pick" aria-label="Pick up from">
     <div class="hd"><button type="button" class="tg" data-act="toggle-band" data-id="_pickShut" aria-expanded="true"><h2>Pick up from</h2><span class="car" aria-hidden="true" id="pickCar"></span></button><span class="tm mono" id="pickN"></span></div>
     <div class="pickbody">
-  <button type="button" class="now" id="cont" data-act="resume" hidden>
+  <button type="button" class="now" id="cont" data-act="resume">
     <span class="tx"><span class="k" id="contK">Continue</span><b id="contTitle"></b><span class="meta mono" id="contMeta"></span></span>
     <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
     <span class="bar" aria-hidden="true"><i id="contBar"></i></span>
   </button>
-  <button type="button" class="next" id="next" data-act="ep-play" hidden>
+  <button type="button" class="next" id="next" data-act="ep-play">
     <span class="tx"><span class="k" id="nextK">Up next</span><b id="nextT"></b></span>
     <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
   </button>
-  <button type="button" class="next" id="ytLast" data-act="yt-last" hidden>
-    <span class="tx"><span class="k" id="ytLastK">Last in YouTube</span><b id="ytLastT"></b></span>
-    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
-  </button>
+  <div class="next" id="ytLast">
+    <button type="button" class="tx" id="ytLastTx" data-act="yt-hist"><span class="kl"><span class="k" id="ytLastK">Last in YouTube</span><span class="hint mono" id="ytLastH">history ›</span></span><b id="ytLastT"></b></button>
+    <button type="button" class="playsq" id="ytLastPlay" data-act="yt-last" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></button>
+  </div>
     </div>
   </section>
   <div class="bands" id="bands"></div>
@@ -623,7 +636,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <!-- Night player (podcasts) -->
 <section class="sheet night" id="nsheet" role="dialog" aria-modal="true" aria-label="Sleep player" aria-hidden="true">
   <div class="grab" aria-hidden="true"></div>
-  <div class="sh-top"><span><button type="button" class="x" data-act="close-night" aria-label="Close player, keep playing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="keep" id="nKeep">keeps playing</span></span><span class="lnks"><a class="lnk" id="nYt" href="#" target="_blank" rel="noopener" aria-label="Play this episode on YouTube, at this spot">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></span></div>
+  <div class="sh-top"><span><button type="button" class="x" data-act="close-night" aria-label="Close player, keep playing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="keep" id="nKeep">keeps playing</span></span><span class="lnks"><button type="button" class="lnk" id="nVid" data-act="pod-video" aria-label="Watch this episode's video here, at this spot" hidden><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg><span>Video</span></button><a class="lnk" id="nYt" href="#" target="_blank" rel="noopener" aria-label="Play this episode on YouTube, at this spot">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></span></div>
   <div class="nb">
     <img class="art" id="nArt" alt="" hidden>
     <div class="ch" id="nCh"></div>

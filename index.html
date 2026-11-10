@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="5f57ba15b63f">
+<meta name="build" content="4b3699a65240">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -111,6 +111,9 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .next .tx{min-width:0}
 .next b{display:block;font-size:15px;font-weight:800;margin-top:2px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .next b .mono{font-weight:400;color:var(--grey);font-size:12px}
+.next b:has(.tt){display:flex;gap:6px;align-items:baseline}
+.next b .tt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.next b .mono{flex:none}
 .playsq{width:var(--tap);height:var(--tap);background:var(--ink);color:var(--paper);display:flex;align-items:center;justify-content:center;flex:none}
 .playsq svg{width:18px;height:18px}
 
@@ -121,7 +124,15 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .band.pick .hd{padding:6px var(--g) 2px;width:auto}
 .band.pick .hd h2{font-size:22px}
 .band.pick:not(.open) .pickbody{display:none}
-.band.pick .pickbody>button:last-of-type:not([hidden]){border-bottom:0}
+.band.pick .pickbody>:last-child{border-bottom:0}
+/* a slot with nothing in it keeps its place, quiet */
+.now.ph,.next.ph{opacity:.62}
+.now.ph .playsq,.next.ph .playsq{visibility:hidden}
+.now:disabled,#ytLast.ph button{cursor:default}
+#ytLast .tx{display:block;min-width:0;text-align:left;padding:0}
+#ytLast .kl{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+#ytLast .hint{font-size:11px;font-weight:400;color:var(--grey);flex:none}
+#ytLast.ph .hint{display:none}
 .addcat{display:flex;justify-content:space-between;align-items:center;min-height:56px;margin:0;padding:0 var(--g);border-top:2px solid var(--hair);border-bottom:2px solid var(--hair);font:700 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink);background:var(--paper);width:100%}
 .band{padding:12px var(--g) 14px;background:var(--bg);color:var(--fg)}
 .band.c1{--bg:var(--b1-bg);--fg:var(--b1-fg);--tb:var(--b1-tag-bg);--tf:var(--b1-tag-fg)}
@@ -477,6 +488,8 @@ a.chrow{text-decoration:none;color:inherit}a.chrow *{text-decoration:none}
 .night .keep{font:400 12px var(--mono);color:var(--n-dim)}
 .night .sh-top>span:first-child{display:inline-flex;align-items:center;gap:10px;min-width:0}
 .night .keep{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* a phone's width has room for the two buttons, not for the caption as well */
+@media (max-width:479px){.night .sh-top .keep{display:none}}
 .night .sh-top .lnks{flex:none}
 .night .sh-top .lnk{border-color:var(--n-rule);color:var(--n-dim)}
 .night .nb{display:flex;flex-direction:column;padding:10px var(--g) 0;flex:1}
@@ -565,22 +578,22 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <button type="button" class="stat" id="statusBtn" data-act="check" aria-label="Self-check"><i class="dot wait" id="statusDot"></i><span id="statusText" class="sr">Starting</span></button>
   </header>
   <p class="note" id="webNote" hidden></p>
-  <section class="band pick open" id="pick" aria-label="Pick up from" hidden>
+  <section class="band pick open" id="pick" aria-label="Pick up from">
     <div class="hd"><button type="button" class="tg" data-act="toggle-band" data-id="_pickShut" aria-expanded="true"><h2>Pick up from</h2><span class="car" aria-hidden="true" id="pickCar"></span></button><span class="tm mono" id="pickN"></span></div>
     <div class="pickbody">
-  <button type="button" class="now" id="cont" data-act="resume" hidden>
+  <button type="button" class="now" id="cont" data-act="resume">
     <span class="tx"><span class="k" id="contK">Continue</span><b id="contTitle"></b><span class="meta mono" id="contMeta"></span></span>
     <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
     <span class="bar" aria-hidden="true"><i id="contBar"></i></span>
   </button>
-  <button type="button" class="next" id="next" data-act="ep-play" hidden>
+  <button type="button" class="next" id="next" data-act="ep-play">
     <span class="tx"><span class="k" id="nextK">Up next</span><b id="nextT"></b></span>
     <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
   </button>
-  <button type="button" class="next" id="ytLast" data-act="yt-last" hidden>
-    <span class="tx"><span class="k" id="ytLastK">Last in YouTube</span><b id="ytLastT"></b></span>
-    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
-  </button>
+  <div class="next" id="ytLast">
+    <button type="button" class="tx" id="ytLastTx" data-act="yt-hist"><span class="kl"><span class="k" id="ytLastK">Last in YouTube</span><span class="hint mono" id="ytLastH">history ›</span></span><b id="ytLastT"></b></button>
+    <button type="button" class="playsq" id="ytLastPlay" data-act="yt-last" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></button>
+  </div>
     </div>
   </section>
   <div class="bands" id="bands"></div>
@@ -623,7 +636,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <!-- Night player (podcasts) -->
 <section class="sheet night" id="nsheet" role="dialog" aria-modal="true" aria-label="Sleep player" aria-hidden="true">
   <div class="grab" aria-hidden="true"></div>
-  <div class="sh-top"><span><button type="button" class="x" data-act="close-night" aria-label="Close player, keep playing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="keep" id="nKeep">keeps playing</span></span><span class="lnks"><a class="lnk" id="nYt" href="#" target="_blank" rel="noopener" aria-label="Play this episode on YouTube, at this spot">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></span></div>
+  <div class="sh-top"><span><button type="button" class="x" data-act="close-night" aria-label="Close player, keep playing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button><span class="keep" id="nKeep">keeps playing</span></span><span class="lnks"><button type="button" class="lnk" id="nVid" data-act="pod-video" aria-label="Watch this episode's video here, at this spot" hidden><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg><span>Video</span></button><a class="lnk" id="nYt" href="#" target="_blank" rel="noopener" aria-label="Play this episode on YouTube, at this spot">YouTube <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg></a></span></div>
   <div class="nb">
     <img class="art" id="nArt" alt="" hidden>
     <div class="ch" id="nCh"></div>
@@ -2209,7 +2222,10 @@ var Courses = (function () {
       if (/reelWatchEndpoint|\/shorts\/|LOCKUP_CONTENT_TYPE_(?!VIDEO)/.test(item)) continue;
       var idm = item.match(/"contentId":"([\w-]{11})"/) || item.match(/"watchEndpoint":\{"videoId":"([\w-]{11})"/) || item.match(/"videoId":"([\w-]{11})"/);
       if (!idm) continue;
-      out.push(readItem(item, idm[1]));
+      var it = readItem(item, idm[1]);
+      // Safety net behind the markup check: a #shorts title, or a length known to be under 90 s, is a Short
+      if (/#shorts?\b/i.test(it.title || '') || (it.dur > 0 && it.dur < 90)) continue;
+      out.push(it);
     }
     return out;
   }
@@ -3080,7 +3096,14 @@ if (typeof module !== 'undefined') module.exports = AI;
 
   var videos, prefs, arec, lib, marks, aMeta = {};
   var lastSavedAt = 0;
-  function saveVideos() { if (store(KEY, videos)) lastSavedAt = Date.now(); renderSoon(); }
+  function saveVideos() { if (store(KEY, videos)) lastSavedAt = Date.now(); mirrorEp(); renderSoon(); }
+  // A video that plays as a podcast episode's twin (v.ep) moves the episode's place too, so lists show one truth
+  function mirrorEp() {
+    var v = current && videos[current], r = v && v.ep && arec && arec[v.ep];
+    if (!r) return;
+    r.t = v.t || 0; if (!r.dur && v.dur) r.dur = v.dur; r.done = !!v.done; r.yt = v.id; r.as = 'video'; r.updated = Date.now();
+    saveAudio();
+  }
   function saveAudio() { if (store(AKEY, arec)) lastSavedAt = Date.now(); }
   function savePrefs() { store(PREF, prefs); }
 
@@ -3132,11 +3155,20 @@ if (typeof module !== 'undefined') module.exports = AI;
     lib.sources(sectionId).forEach(function (s) { itemsOf(s).forEach(function (it) { out.push(entryFromItem(s, it)); }); });
     return out.sort(function (a, b) { return b.published - a.published; });
   }
+  // A video opened from a podcast episode (v.ep) is that episode's twin while the episode's record exists: lists show the episode
+  function twinOf(v) { return !!(v && v.ep && arec[v.ep]); }
   function startedEntries(sectionId) {
     var out = [];
-    Object.keys(videos).forEach(function (id) { var e = entryFromVideo(videos[id]); if (started(e) && e.section === sectionId) out.push(e); });
+    Object.keys(videos).forEach(function (id) { var e = entryFromVideo(videos[id]); if (started(e) && e.section === sectionId && !twinOf(videos[id])) out.push(e); });
     Object.keys(arec).forEach(function (g) { if (arec[g].video) return; var e = entryFromAudio(g, arec[g]); if (started(e) && (sectionId === undefined || e.section === sectionId)) out.push(e); });
     return out.sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+  }
+  // Started things that belong to one channel, whether or not its feed still lists them
+  function startedOfSource(src) {
+    var out = [];
+    Object.keys(videos).forEach(function (id) { var v = videos[id]; if (v.channelId === src.id && !twinOf(v)) { var e = entryFromVideo(v); if (started(e)) out.push(e); } });
+    Object.keys(arec).forEach(function (g) { var r = arec[g]; if (r.source === src.id && !r.video) { var e = entryFromAudio(g, r); if (started(e)) out.push(e); } });
+    return out;
   }
   function newCountFor(sectionId) { return feedEntries(sectionId).filter(isNew).length; }
   function srcNewCount(id) { var s = lib.source(id); return s ? itemsOf(s).map(function (it) { return entryFromItem(s, it); }).filter(isNew).length : 0; }
@@ -3170,7 +3202,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     moon: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>'
   };
 
-  // Day or night: after 21:30 (and until 05:00) Sleep comes first and Continue becomes Bedtime
+  // Day or night: after 21:30 (and until 05:00) Sleep comes first
   function hourNow() { if (typeof window.__hour === 'number') return window.__hour; var d = new Date(); return d.getHours() + d.getMinutes() / 60; }
   function dayPart() { var h = hourNow(); return h >= 21.5 || h < 5 ? 'night' : h >= 18 ? 'evening' : 'day'; }
   function isNight() { return dayPart() === 'night'; }
@@ -3242,22 +3274,27 @@ if (typeof module !== 'undefined') module.exports = AI;
     return '<button type="button" data-act="open-channel" data-id="' + esc(s.id) + '"><span class="tx"><b>' + esc(s.name) + '</b><small>' + esc(sub) + '</small></span><span aria-hidden="true">›</span></button>';
   }
   var refreshing = false;
+  // A band's rows (Home and the watch): the one in-progress item played last (only if within the past week), then the
+  // newest uploads, "max" rows in all. "rest" counts the new uploads that didn't fit.
+  function bandRows(sectionId, max) {
+    var fresh = feedEntries(sectionId).filter(isNew), cut = Date.now() - 7 * 86400000;
+    var go = startedEntries(sectionId).filter(function (e) { return (e.updated || 0) >= cut; })[0];
+    var rows = go ? [go] : [];
+    rows = rows.concat(fresh.slice(0, max - rows.length));
+    return { fresh: fresh, rows: rows, rest: fresh.length - (rows.length - (go ? 1 : 0)) };
+  }
   function renderHome() {
     reg.h = [];
     var d = new Date(), night = isNight();
     $('#dayNum').textContent = pad2(d.getDate());
     $('#dayName').textContent = DAYS[d.getDay()] + (night ? ' night' : '');
     $('#monthName').textContent = MONTHS[d.getMonth()] + ' ' + d.getFullYear();
-    var allNew = 0, unfinished = startedEntries(undefined).length;
-    Object.keys(videos).forEach(function (id) { var e = entryFromVideo(videos[id]); if (started(e)) unfinished++; });
+    var allNew = 0;
     var html = '';
     daySections().forEach(function (sec) {
-      var fresh = feedEntries(sec.id).filter(isNew), go = startedEntries(sec.id);
+      var br = bandRows(sec.id, 3), fresh = br.fresh, list = br.rows;
       allNew += fresh.length;
-      // At most three: the newest uploads and the one you're in the middle of, then "+N more"
-      var list = fresh.slice(0, go.length ? 2 : 3).concat(go.slice(0, 1));
-      fresh.slice(list.length - Math.min(go.length, 1)).concat(go.slice(1)).forEach(function (e) { if (list.length < 3 && list.indexOf(e) < 0) list.push(e); });
-      var rest = fresh.length + go.length - list.length, srcs = lib.sources(sec.id).length, open = isOpenBand(sec.id);
+      var rest = br.rest, srcs = lib.sources(sec.id).length, open = isOpenBand(sec.id);
       html += bandHead(sec.id, bandClass(sec.id), sec.name, fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty', 'open-section', open);
       if (!open) { html += '</section>'; return; }
       if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
@@ -3269,7 +3306,7 @@ if (typeof module !== 'undefined') module.exports = AI;
       html += '</section>';
     });
     // Pasted videos that belong to no section
-    var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
+    var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e) && !twinOf(videos[e.key]); })
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
     // Pasted always shows, with a URL button to play any YouTube link
     var urlBtn = '<button type="button" class="urlb" data-act="paste-url" aria-label="Play a YouTube link">+ URL</button>';
@@ -3284,45 +3321,62 @@ if (typeof module !== 'undefined') module.exports = AI;
     html += '<button type="button" class="addcat" data-act="add-section"><span>+ Add category</span><span aria-hidden="true">›</span></button>';
     $('#bands').innerHTML = html;
     fitAll($('#bands'));
-    var pk = pickState(), top = pk.top, bed = pk.bed;
-    $('#cont').hidden = !top;
+    // Pick up from: always three rows in the same order (Continue, Up next, Last in YouTube); an empty one says so quietly
+    var pk = pickState(), top = pk.top, cb = $('#cont');
+    cb.classList.toggle('ph', !top); cb.disabled = !top;
     if (top) {
       var p = prog(top);
-      $('#cont').setAttribute('data-e', regE('h', top));
-      $('#cont').setAttribute('data-bed', bed ? '1' : '');
-      $('#contK').textContent = (bed ? 'Bedtime' : 'Continue') + (top.srcName ? ' · ' + top.srcName : '');
+      cb.setAttribute('data-e', regE('h', top));
+      $('#contK').textContent = 'Continue' + (top.srcName ? ' · ' + top.srcName : '');
       $('#contTitle').textContent = top.title;
-      var tm = engine && engine.state().timer, lights = tm && tm.mode === 'min' ? tm.endsAt : Date.now() + (p.dur ? Math.min(45 * 60, (p.dur - p.t)) * 1000 : 45 * 60000);
-      $('#contMeta').textContent = bed ? (leftText(p) || Core.fmt(p.t)) + (tm ? ' · lights out ' + clockText(lights) : ' · 45-min timer, lights out ' + clockText(lights))
-        : Core.fmt(p.t) + (p.dur ? ' · ' + leftText(p) : '');
+      $('#contMeta').textContent = Core.fmt(p.t) + (p.dur ? ' · ' + leftText(p) : '');
       $('#contBar').style.width = Core.pct(p).toFixed(1) + '%';
-      $('#cont').setAttribute('aria-label', (bed ? 'Bedtime: ' : 'Continue ') + top.title + ' from ' + Core.fmt(p.t));
+      cb.setAttribute('aria-label', 'Continue ' + top.title + ' from ' + Core.fmt(p.t));
+    } else {
+      cb.removeAttribute('data-e');
+      $('#contK').textContent = 'Continue';
+      $('#contTitle').textContent = 'Nothing on the go';
+      $('#contMeta').textContent = 'Whatever you start waits here';
+      $('#contBar').style.width = '0%';
+      cb.setAttribute('aria-label', 'Continue: nothing on the go');
     }
-    var nc = pk.nc, npr = pk.npr, nx = pk.nx;
-    $('#next').hidden = !nx;
+    var nc = pk.nc, npr = pk.npr, nx = pk.nx, nb = $('#next');
+    nb.classList.toggle('ph', !nx);
     if (nx) {
-      $('#next').setAttribute('data-id', nc.id); $('#next').setAttribute('data-v', nx.id);
-      $('#nextK').textContent = 'Up next · ' + nc.name + ' · ' + (npr.notch + 1) + ' of ' + npr.total;
-      $('#nextT').innerHTML = esc(epLabel(nx, npr.notch)) + ' · ' + esc(shortTitle(nx.title)) + (nx.dur ? ' <span class="mono">' + Core.fmt(nx.dur) + '</span>' : '');
-      $('#next').setAttribute('aria-label', 'Play next in ' + nc.name + ': ' + epLabel(nx, npr.notch));
+      nb.setAttribute('data-act', 'ep-play'); nb.setAttribute('data-id', nc.id); nb.setAttribute('data-v', nx.id);
+      $('#nextK').textContent = 'Up next · ' + nc.name + ' · ' + (pk.ni + 1) + ' of ' + npr.total;
+      $('#nextT').innerHTML = '<span class="tt">' + esc(epLabel(nx, pk.ni)) + ' · ' + esc(shortTitle(nx.title)) + '</span>' + (nx.dur ? ' <span class="mono">' + Core.fmt(nx.dur) + '</span>' : '');
+      nb.setAttribute('aria-label', 'Play next in ' + nc.name + ': ' + epLabel(nx, pk.ni));
+    } else {
+      nb.setAttribute('data-act', 'goto-courses'); nb.removeAttribute('data-id'); nb.removeAttribute('data-v');
+      $('#nextK').textContent = 'Up next';
+      $('#nextT').textContent = 'No course on the go';
+      nb.setAttribute('aria-label', 'Up next: no course on the go. Open Courses');
     }
-    // Last in YouTube: the newest video in the account's watch history, at the spot YouTube saved (exact when the
-    // history has the second, else from its red bar, "about")
-    var ly = lastYT, lyShow = !!ly || (Native.device && ytOut);
-    $('#ytLast').hidden = !lyShow;
-    if (lyShow && Native.device && ytOut) {
+    // Last in YouTube: the newest video in the account's watch history (not Continue's), at the spot YouTube saved
+    // (exact when the history has the second, else from its red bar, "about"). The text opens the history, the square plays.
+    var ly = pk.ly, lyOut = !!(Native.device && ytOut), yl = $('#ytLast');
+    yl.classList.toggle('ph', !lyOut && !ly);
+    $('#ytLastTx').disabled = $('#ytLastPlay').disabled = !lyOut && !ly;
+    if (lyOut) {
       $('#ytLastK').textContent = 'Last in YouTube · signed out';
       $('#ytLastT').innerHTML = 'YouTube signed Shelf out. <span class="mono">Tap to sign in again</span>';
-      $('#ytLast').setAttribute('aria-label', 'YouTube signed Shelf out. Sign in again');
-    } else if (lyShow) {
+      $('#ytLastTx').setAttribute('aria-label', 'YouTube signed Shelf out. Sign in again');
+      $('#ytLastPlay').setAttribute('aria-label', 'Sign in to YouTube again');
+    } else if (ly) {
       var lyDone = ly.pct != null && ly.pct >= 97;
       $('#ytLastK').textContent = 'Last in YouTube' + (ly.author ? ' · ' + ly.author : '');
-      $('#ytLastT').innerHTML = esc(ly.title || 'YouTube video') + ' <span class="mono">' + (lyDone ? 'watched' : ly.t != null ? (ly.exact === false ? 'about ' : 'at ') + Core.fmt(ly.t) : '') + '</span>';
-      $('#ytLast').setAttribute('aria-label', 'Pick up from YouTube: ' + (ly.title || 'video') + (ly.t != null && !lyDone ? ' at ' + Core.fmt(ly.t) : ''));
+      $('#ytLastT').innerHTML = '<span class="tt">' + esc(ly.title || 'YouTube video') + '</span> <span class="mono">' + (lyDone ? 'watched' : ly.t != null ? (ly.exact === false ? 'about ' : 'at ') + Core.fmt(ly.t) : '') + '</span>';
+      $('#ytLastTx').setAttribute('aria-label', 'Last in YouTube: ' + (ly.title || 'video') + (ly.t != null && !lyDone ? ' at ' + Core.fmt(ly.t) : '') + '. Open your YouTube history');
+      $('#ytLastPlay').setAttribute('aria-label', 'Play ' + (ly.title || 'video'));
+    } else {
+      $('#ytLastK').textContent = 'Last in YouTube';
+      $('#ytLastT').textContent = Native.device ? 'Nothing yet' : 'Shows in the Shelf app';
+      $('#ytLastTx').setAttribute('aria-label', 'Last in YouTube: ' + (Native.device ? 'nothing yet' : 'shows in the Shelf app'));
+      $('#ytLastPlay').setAttribute('aria-label', 'Play');
     }
-    // The three fold under "Pick up from" (open unless closed with its heading)
-    var pickN = [!!top, !!nx, lyShow].filter(Boolean).length, pickOpen = !isOpenBand('_pickShut');
-    $('#pick').hidden = !pickN;
+    // The three fold under "Pick up from" (open unless closed with its heading); folded, it counts the filled ones
+    var pickN = [!!top, !!nx, lyOut || !!ly].filter(Boolean).length, pickOpen = !isOpenBand('_pickShut');
     $('#pick').classList.toggle('open', pickOpen);
     $('#pick .tg').setAttribute('aria-expanded', String(pickOpen));
     $('#pickCar').innerHTML = I.down;
@@ -3332,25 +3386,29 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can pick up where you left off, or paste a YouTube link into Search.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can pick up where you left off, or press ⌘V to play a YouTube link.'; }
     else wn.hidden = true;
   }
-  // Pick up from (Home, and the watch): Continue (Bedtime at night) and Up next
+  // Pick up from (Home, and the watch): always the same three: Continue, Up next, Last in YouTube
+  // The video ids that stand for the same thing as an entry (an episode and its video)
+  function twinIds(e) {
+    if (!e) return {};
+    var out = {}; out[e.key] = 1;
+    if (e.type === 'audio' && arec[e.key]) { if (arec[e.key].yt) out[arec[e.key].yt] = 1; if (arec[e.key].video) out[arec[e.key].video] = 1; }
+    return out;
+  }
   function pickState() {
-    var night = isNight();
-    // Continue: the most recent unfinished thing anywhere. At night, the last podcast you fell asleep to (Bedtime).
-    var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(started))
-      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); })
-      // The last video in the YouTube app has its own card below, so Continue is the latest thing besides it
-      .filter(function (e) { return !(lastYT && e.type === 'video' && e.key === lastYT.id); });
-    var top = all[0], bed = night && all.filter(function (e) { return e.type === 'audio'; })[0];
-    if (bed) top = bed;
-    // The podcast bar at the bottom already is "continue" for the episode it holds
-    var held = engine && engine.state().episode;
-    if (held && arec[held.guid] && arec[held.guid].done) held = null;
-    if (held) { top = all.filter(function (e) { return !(e.type === 'audio' && e.key === held.guid); })[0]; bed = null; }
-    if (held && top && top.type === 'audio') top = null;
-    // Up next: the next episode of the course on the go (not at night, and not when Continue already is it)
-    var nc = !night && upNextCourse(), npr = nc && cs.progress(nc.id), nx = npr && npr.next;
-    if (nx && top && top.key === nx.id) nx = null;
-    return { top: top || null, bed: bed || null, nc: nc || null, npr: npr || null, nx: nx || null };
+    // Continue: the most recent unfinished thing played in Shelf, a video or a podcast
+    var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return started(e) && !twinOf(videos[e.key]); }))
+      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
+    var top = all[0] || null, mine = twinIds(top);
+    // Up next: the next episode of the course on the go; the same video as Continue gives way to the next unticked one
+    var nc = upNextCourse(), npr = nc && cs.progress(nc.id), nx = npr && npr.next, ni = npr ? npr.notch : -1;
+    if (nx && mine[nx.id]) {
+      var arr = cs.items(nc.id), j;
+      nx = null;
+      for (j = npr.notch + 1; j < arr.length; j++) if (!cs.isDone(nc.id, arr[j].id) && !mine[arr[j].id]) { nx = arr[j]; ni = j; break; }
+    }
+    // Last in YouTube: the newest video in the history that isn't Continue
+    var ly = ytHist.filter(function (h) { return !mine[h.id]; })[0] || null;
+    return { top: top, nc: nc || null, npr: npr || null, nx: nx || null, ni: ni, ly: ly };
   }
   // "11:57 pm"
   function clockText(t) { return SleepTimer.clock(t).replace('about ', ''); }
@@ -3358,7 +3416,7 @@ if (typeof module !== 'undefined') module.exports = AI;
   // ---------- Pages ----------
   var stack = [], skipPops = 0;
   function push(view) { stack.push(view); renderPage(); $('#page').scrollTop = 0; renderTabs(); try { history.pushState({ shelf: stack.length }, ''); } catch (e) {} }
-  function pop() { stack.pop(); if (stack.length) renderPage(); else { $('#page').hidden = true; renderHome(); } renderTabs(); }
+  function pop() { stack.pop(); if (stack.length) renderPage(); else { $('#page').hidden = true; renderHome(); refreshLastYT(); } renderTabs(); }
   window.addEventListener('popstate', function () { if (skipPops) { skipPops--; if (afterUnwind) afterUnwind(); return; } if (stack.length) pop(); });
   // Close every open page and take their history entries with them, then run "then" (a new tab's first page)
   var afterUnwind = null;
@@ -3376,7 +3434,7 @@ if (typeof module !== 'undefined') module.exports = AI;
   function goHome() {
     var n = stack.length;
     if (!n) { try { window.scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' }); } catch (e) {} return; }
-    unwind(); $('#page').hidden = true; renderHome(); renderTabs();
+    unwind(); $('#page').hidden = true; renderHome(); renderTabs(); refreshLastYT();
   }
   function openTab(view) {
     var v = stack[stack.length - 1];
@@ -3417,7 +3475,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (v.name === 'section') { var s = lib.section(v.id); return s ? s.name : 'Back'; }
     if (v.name === 'channel') { var c = lib.source(v.id); return c ? c.name : 'Back'; }
     if (v.name === 'subch' || v.name === 'plist') return v.title || 'Back';
-    return { courses: 'Courses', search: 'Search', marks: 'Marks', pasted: 'Pasted', mypls: 'Playlists' }[v.name] || 'Back';
+    return { ythist: 'YouTube history', courses: 'Courses', search: 'Search', marks: 'Marks', pasted: 'Pasted', mypls: 'Playlists' }[v.name] || 'Back';
   }
   function ib(act, id, icon, label, on) { return '<button type="button" class="ib' + (on ? ' on' : '') + '" data-act="' + act + '"' + (id != null ? ' data-id="' + esc(id) + '"' : '') + ' aria-label="' + esc(label) + '">' + icon + '</button>'; }
   function topHTML(cls, title, meta, icons, extra) {
@@ -3458,6 +3516,17 @@ if (typeof module !== 'undefined') module.exports = AI;
     h += fold('Watched', done.slice(0, 30).map(function (e) { return itemHTML(e, scope); }).join(''), done.length);
     return h;
   }
+  // A channel's or section's page: what you've started on top ("Keep going": the last three played in the past 30 days), then
+  // everything in date order, newest first. Watched ones stay in place (greyed); the first 12 show, the rest fold under "Older".
+  function pageListHTML(items, scope, opts, label, keep) {
+    var cut = Date.now() - 30 * 86400000, seen = {}, h = '';
+    var kg = keep.filter(function (e) { if (seen[e.type + e.key] || !started(e) || (prog(e).updated || 0) < cut) return false; seen[e.type + e.key] = 1; return true; })
+      .sort(function (a, b) { return (prog(b).updated || 0) - (prog(a).updated || 0); }).slice(0, 3);
+    var row = function (e) { return itemHTML(e, scope, opts && opts(e)); };
+    if (kg.length) h += '<h2 class="subh"><span>Keep going</span><span class="mono">' + kg.length + '</span></h2>' + kg.map(row).join('');
+    h += '<h2 class="subh"><span>' + label + '</span><span class="mono">' + items.length + '</span></h2>' + items.slice(0, 12).map(row).join('');
+    return h + fold('Older', items.slice(12).map(row).join(''), Math.max(0, items.length - 12));
+  }
   function renderPage() {
     var v = stack[stack.length - 1], pg = $('#page'), html = '';
     if (!v) return;
@@ -3473,10 +3542,10 @@ if (typeof module !== 'undefined') module.exports = AI;
       if (!feedsOn) html += '<p class="pnote">Channels load in the Shelf app on your iPhone.</p>';
       var items = feedEntries(sec.id);
       var have = {}; items.forEach(function (e) { have[e.key] = 1; });
-      startedEntries(sec.id).forEach(function (e) { if (!have[e.key]) items.unshift(e); });
-      items.sort(function (a, b) { return (started(b) - started(a)) || (started(a) ? (b.updated || 0) - (a.updated || 0) : 0); });
+      startedEntries(sec.id).forEach(function (e) { if (!have[e.key]) items.push(e); });
+      items.sort(function (a, b) { return (b.published || 0) - (a.published || 0); });
       if (srcs.length && !items.length) html += '<p class="pnote">' + (refreshing ? 'Checking for new uploads…' : 'Nothing here yet. Open a channel below to see its videos.') + '</p>';
-      else if (items.length) html += listHTML(items, 'p', null, 'Latest');
+      else if (items.length) html += pageListHTML(items, 'p', null, 'Latest', startedEntries(sec.id));
       // Channels sit folded under the videos (open straight away when there are no videos yet)
       var ch = '';
       if (!srcs.length) ch += '<p class="pnote">No channels here yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
@@ -3499,14 +3568,16 @@ if (typeof module !== 'undefined') module.exports = AI;
       html += topHTML(bandClass(s.section), s.name, st2 && !st2.ok ? '<span class="err">Couldn\'t update: ' + esc(st2.error) + '</span>' : '<b>' + kind + '</b> · latest ' + list.length + (st2 ? ' · updated ' + esc(Core.ago(st2.fetched)) : ''),
         ib('refresh-channel', s.id, I.refresh, 'Check for new uploads') + ib('channel-menu', s.id, I.dots, 'Section, Shorts or remove'));
       if (!list.length) html += '<p class="pnote">' + (st2 && !st2.ok ? 'Nothing loaded. Tap ↻ to try again.' : 'Loading…') + '</p>';
-      else html += listHTML(list, 'p', function (e) { return { fresh: chanNew[e.key] }; }, s.type === 'podcast' ? 'Episodes' : 'Videos');
+      else html += pageListHTML(list, 'p', function (e) { return { fresh: chanNew[e.key] }; }, s.type === 'podcast' ? 'Episodes' : 'Videos', list.concat(startedOfSource(s)));
       if (s.type === 'youtube') html += '<button type="button" class="more" data-act="chan-playlists" data-id="' + esc(s.id) + '" data-t="' + esc(s.name) + '"><span>Playlists</span><span class="mono">all of ' + esc(s.name) + '\'s ›</span></button><p class="pnote">YouTube lists only the latest 15 uploads here. For older ones, use Search.</p>';
     } else if (v.name === 'pasted') {
-      var vids = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section; })
+      var vids = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !twinOf(videos[e.key]); })
         .sort(function (a, b) { return (isDoneE(a) - isDoneE(b)) || (b.updated || 0) - (a.updated || 0); });
       html += topHTML('c0', 'Pasted', vids.length + (vids.length === 1 ? ' video' : ' videos') + ' from channels you don\'t follow', ib('paste-url', null, I.plus, 'Play a YouTube link'));
       if (!vids.length) html += '<p class="pnote">Nothing pasted yet. Tap + to play a YouTube link.</p>';
       vids.forEach(function (e) { html += '<div class="irow">' + itemHTML(e, 'p') + ib('remove-video', e.key, I.x, 'Remove ' + e.title) + '</div>'; });
+    } else if (v.name === 'ythist') {
+      html += histPageHTML();
     } else if (v.name === 'courses') {
       html += coursesPage(v);
     } else if (v.name === 'mypls') {
@@ -3959,6 +4030,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     current = null; vTimer = null; vTimerMsg = ''; lastErr = '';
     closeSheet('#vsheet');
     renderAll(); watchNowSoon(true);
+    if (!silent) refreshLastYT();
   }
   // ---------- Listen: the same show as a podcast, which keeps playing with the phone locked ----------
   // Only for channels that publish their videos as a podcast too (matched by name, then episode title and date).
@@ -3985,9 +4057,9 @@ if (typeof module !== 'undefined') module.exports = AI;
   }
   function listenLabel(v) { var tw = v && twins[v.id]; $('#vListen').querySelector('span').textContent = tw && tw.waiting ? 'Finding podcast…' : 'Listen'; }
   function renderListen(v) {
-    var on = Native.inApp && !!twinWho(v);
+    var mine = twinOf(v), on = Native.inApp && (mine || !!twinWho(v));
     $('#vListen').hidden = !on; layoutTwin();
-    if (on) twinLook(v);
+    if (on && !mine) twinLook(v);
     listenLabel(v);
   }
   // Two buttons a row; an odd last one takes the whole row
@@ -3998,12 +4070,23 @@ if (typeof module !== 'undefined') module.exports = AI;
   function listen() {
     var v = current && videos[current];
     if (!v) return;
+    if (twinOf(v)) { listenEp(v); return; }
     var tw = twinLook(v);
     if (!tw) { toast("Shelf doesn't know this video's channel, so it can't look for its podcast.", 'warn'); return; }
     if (tw.busy) { tw.waiting = true; listenLabel(v); return; }
     // Sure of the episode: play now, inside the tap (iOS only starts audio from a tap)
     if (tw.r && tw.r.ep && twinFits(v, tw.r.ep)) { playTwin(v, tw.r.ep, true); return; }
     offerTwin(v, tw.r);
+  }
+  // Back to the podcast episode this video was opened from, at the video's spot (no directory lookup)
+  function listenEp(v) {
+    var r = arec[v.ep], t = v.t || 0;
+    capture(true);
+    t = v.t || t;
+    closeVideo(true); // its last save mirrors the place into the episode, so the episode's own fields are set after it
+    r.t = r.dur && t > r.dur - 30 ? Math.max(0, r.dur - 60) : t; r.as = 'audio'; r.done = false; r.updated = Date.now(); saveAudio();
+    openAudio({ key: v.ep, url: r.url, title: r.title, srcName: r.podcast, image: r.image, dur: r.dur, src: r.source });
+    var st = engine.state(); if (st.episode && st.episode.guid === v.ep && Math.abs((st.t || 0) - r.t) > 5) engine.seek(r.t);
   }
   function offerTwin(v, r) {
     if (!r || r.offline) { toast("Couldn't reach the podcast directory. Check your internet and tap Listen again.", 'warn'); return; }
@@ -4052,6 +4135,7 @@ if (typeof module !== 'undefined') module.exports = AI;
   function podYtLook(ep) {
     var r = arec[ep.guid] || {};
     if (r.video) return { id: r.video };
+    if (r.yt) return { id: r.yt };
     var c = podYt[ep.guid] || podYtStore()[ep.guid];
     if (c && (c.busy || c.id || Date.now() - c.at < (c.wait || 7 * 864e5))) return c;
     if (!ep.title) return null;
@@ -4073,6 +4157,33 @@ if (typeof module !== 'undefined') module.exports = AI;
     var t = v.dur > 0 ? Math.min(r.t, v.dur - 30) : r.t;
     if (t <= (v.t || 0) + 1) return; // forward only: an older listen replayed later never rewinds the video
     v.t = t; v.updated = Date.now(); saveVideos();
+  }
+  // The podcast player's Video: the episode's own YouTube video, inside Shelf, at the same spot. While the lookup still runs the
+  // button says so and carries on when it lands; a miss offers Shelf's own Search.
+  var podVidWait = '';
+  function podVideo() {
+    var st = engine && engine.state(), ep = st && st.episode;
+    if (!ep) return;
+    var f = podYtLook(ep);
+    if (f && f.busy) { podVidWait = ep.guid; renderAudio(); return; }
+    podVidWait = '';
+    if (f && f.id) { startPodVideo(ep, f.id); return; }
+    var q = ((ep.podcast || '') + ' ' + (ep.title || '')).trim();
+    toast("Couldn't find this episode's video.", 'warn', { label: 'Search', fn: function () { if (nightOpen) closeNight(); unwind(function () { push({ name: 'search', q: q }); runSearch(q); }); } }, 8000);
+  }
+  function startPodVideo(ep, id) {
+    var st = engine.state(), t = st.episode && st.episode.guid === ep.guid ? st.t || 0 : 0;
+    engine.capture(true);
+    engine.pause();
+    if (st.timer) engine.setTimer(null); // it runs on the clock: it would stop the podcast as soon as it played again
+    var r = arec[ep.guid] = Object.assign({}, aMeta[ep.guid] || {}, arec[ep.guid] || {}, { url: ep.url, title: ep.title, podcast: ep.podcast, image: ep.image || (arec[ep.guid] || {}).image || '', updated: Date.now() });
+    if (!r.dur && (st.dur || ep.duration)) r.dur = st.dur || ep.duration;
+    r.t = t; r.yt = id; r.as = 'video'; saveAudio();
+    var v = ensureVideo({ id: id, title: ep.title, author: ep.podcast });
+    v.t = t; v.done = false; v.ep = ep.guid; v.updated = Date.now();
+    nightOpen = false; closeSheet('#nsheet');
+    openVideo({ id: id, title: ep.title, author: ep.podcast });
+    renderAudio(); renderAll();
   }
   function keepAwake(on) {
     Native.keepAwake(on); // the sure way, in shells from 6 Oct 2026; the web wake lock below for older ones
@@ -4154,13 +4265,16 @@ if (typeof module !== 'undefined') module.exports = AI;
   // history (the YouTube app saves it there; Mo said yes to this on 6 Oct 2026) and corrects the place quietly.
   // Never past the end; an Undo puts it back, and the scrub bar fine-tunes it.
   // The newest video in the YouTube app's watch history, for the "Pick up from" fold (kept between launches)
-  var LY_KEY = 'shelf.lastyt', lastYT = null, lastYTAt = 0;
+  var LY_KEY = 'shelf.lastyt', lastYT = null, lastYTAt = 0, YH_KEY = 'shelf.ythist', ytHist = [], ytHistAt = 0;
   try { lastYT = JSON.parse(rawGet(LY_KEY) || 'null'); } catch (e) {}
+  // The recent videos of the same history (no Shorts), for the YouTube history page; Last in YouTube is the newest of them
+  try { ytHist = JSON.parse(rawGet(YH_KEY) || 'null') || []; ytHistAt = +rawGet(YH_KEY + 'at') || 0; } catch (e) {}
+  if (!ytHist.length && lastYT) ytHist = [lastYT];
   // YouTube can stop accepting Shelf's sign-in on its side while the phone still holds the cookies: its pages then
   // come back with no data (a redirect to Google's sign-in, or a page without ytInitialData). Shells from 12 Oct
   // 2026 heal that by themselves (readYT); otherwise the card says so and offers one tap to sign in again.
   var ytOut = rawGet('shelf.ytout') === '1';
-  function setYtOut(on) { if (on === ytOut) return; ytOut = on; rawSet('shelf.ytout', on ? '1' : '0', false); renderHome(); renderSubs(); renderMyPls(); if ($('#checkDlg').open) fillCheck(); }
+  function setYtOut(on) { if (on === ytOut) return; ytOut = on; rawSet('shelf.ytout', on ? '1' : '0', false); renderHome(); renderSubs(); renderMyPls(); var hv = stack[stack.length - 1]; if (hv && hv.name === 'ythist') renderPage(); if ($('#checkDlg').open) fillCheck(); }
   function hasData(r) { return !!r && r.status === 200 && (r.data || '').indexOf('ytInitialData') >= 0; }
   // Signed in as far as the phone knows, but YouTube answered without its data: the sign-in lapsed on YouTube's side
   function lapsed(r) { return !!r && !!r.signedIn && (r.status === 200 ? !hasData(r) : r.status >= 300 && r.status < 400); }
@@ -4189,9 +4303,29 @@ if (typeof module !== 'undefined') module.exports = AI;
     }, function () { resigning = false; toast("Couldn't open the sign-in page. Close and reopen Shelf.", 'warn'); });
   }
   function noteHistory(page) {
-    var l = Courses.historyLatest(page); if (!l) return;
-    l.exact = !!Courses.historySpot(page, l.id) && Courses.historySpot(page, l.id).t != null;
-    lastYT = l; lastYTAt = Date.now(); rawSet(LY_KEY, JSON.stringify(l), false); renderHome();
+    var list = Courses.historyItems(page, 30); if (!list.length) return;
+    list.forEach(function (h) { var sp = Courses.historySpot(page, h.id); h.exact = !!sp && sp.t != null; });
+    ytHist = list; lastYT = list[0]; lastYTAt = ytHistAt = Date.now();
+    rawSet(LY_KEY, JSON.stringify(lastYT), false); rawSet(YH_KEY, JSON.stringify(ytHist), false); rawSet(YH_KEY + 'at', String(ytHistAt), false);
+    renderHome();
+    var hv = stack[stack.length - 1]; if (hv && hv.name === 'ythist') renderPage();
+  }
+  // Play a history video in Shelf from YouTube's spot (from the start when YouTube shows it watched)
+  function playHist(h) { if (h) openVideo({ id: h.id, t: h.pct != null && h.pct >= 97 ? 0 : h.t || 0, title: h.title, author: h.author }); }
+  function histRow(h) {
+    var done = h.pct != null && h.pct >= 97, pc = h.pct != null ? h.pct : (h.dur && h.t != null ? h.t / h.dur * 100 : null);
+    var meta = done ? 'watched' : h.t != null ? '<b>' + (h.exact === false ? 'about ' : 'at ') + esc(Core.fmt(h.t)) + (h.dur ? ' / ' + esc(Core.fmt(h.dur)) : '') + '</b>' : (h.dur ? '<b>' + esc(Core.fmt(h.dur)) + '</b>' : '');
+    return '<button type="button" class="item' + (done ? ' watched' : '') + '" data-act="yt-play" data-id="' + esc(h.id) + '">' +
+      '<span class="th"><img src="https://i.ytimg.com/vi/' + esc(h.id) + '/mqdefault.jpg" alt="" loading="lazy" decoding="async" onerror="this.remove()">' + (h.dur ? '<span class="len mono">' + esc(Core.fmt(h.dur)) + '</span>' : '') + '</span>' +
+      '<span class="tx"><span class="ch"><span>' + esc(h.author || 'YouTube') + '</span></span><span class="t">' + esc(h.title || 'YouTube video') + '</span>' +
+      '<span class="meta mono">' + meta + '</span>' + (pc != null && !done ? '<span class="pr"><i style="width:' + Math.max(0, Math.min(100, pc)).toFixed(1) + '%"></i></span>' : '') + '</span></button>';
+  }
+  function histPageHTML() {
+    var h = topHTML('c0', 'YouTube history', 'Videos only, no Shorts' + (ytHistAt ? ' · updated ' + esc(Core.ago(ytHistAt)) : ''), ib('yt-hist-refresh', null, I.refresh, 'Check your YouTube history again'));
+    if (Native.device && ytOut) return h + '<p class="pnote">YouTube signed Shelf out, so its history can\'t be read. <button type="button" data-act="yt-resign">Sign in again</button></p>';
+    if (!ytHist.length) return h + '<p class="pnote">' + (Native.device ? 'Nothing here yet. Videos you watch in YouTube show up here.' : 'Your YouTube history shows in the Shelf app.') + '</p>';
+    var rows = ytHist.map(histRow);
+    return h + '<h2 class="subh"><span>Recent</span><span class="mono">' + ytHist.length + '</span></h2>' + rows.slice(0, 12).join('') + fold('More', rows.slice(12).join(''), rows.length - 12);
   }
   var lyAgain = null;
   function refreshLastYT(force) {
@@ -4716,6 +4850,10 @@ if (typeof module !== 'undefined') module.exports = AI;
     $('#nRate').setAttribute('aria-label', 'Speed ' + st.rate + ' times. Tap to change.');
     $('#nKeep').textContent = Native.inApp ? 'keeps playing, locked too' : 'keeps playing';
     var yt = podYtLook(ep);
+    $('#nVid').hidden = !Native.inApp;
+    var finding = podVidWait === ep.guid && !!yt && !!yt.busy;
+    $('#nVid').querySelector('span').textContent = finding ? 'Finding video…' : 'Video';
+    if (podVidWait === ep.guid && yt && !yt.busy) { podVidWait = ''; setTimeout(podVideo, 0); }
     $('#nYt').setAttribute('aria-label', yt && yt.id ? 'Play this episode on YouTube, at this spot' : 'Look for this episode on YouTube');
     renderTimerUI('a');
   }
@@ -4726,6 +4864,14 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (!e) return;
     if (e.type === 'audio') {
       if (!e.url) { var r = arec[e.key]; if (r && r.url) e.url = r.url; }
+      // Last watched as the episode's video: open that, at the episode's spot
+      var ar = arec[e.key];
+      if (ar && ar.as === 'video' && ar.yt) {
+        var ev = ensureVideo({ id: ar.yt, title: e.title, author: e.srcName });
+        ev.t = ar.done ? 0 : Core.resumeAt(ar); ev.done = false; ev.ep = e.key; ev.updated = Date.now(); saveVideos();
+        openVideo({ id: ar.yt, title: e.title, author: e.srcName });
+        return;
+      }
       if (!e.url) { toast("This episode's audio link is missing. Open its podcast and play it from there.", 'warn'); return; }
       openAudio(e);
     } else openVideo({ id: e.key, title: e.title, author: e.srcName, channelId: lib.source(e.src) ? e.src : '', section: e.section, dur: e.dur, list: e.list });
@@ -5299,20 +5445,20 @@ if (typeof module !== 'undefined') module.exports = AI;
   }
   function watchSnap() {
     var pk = pickState(), night = isNight(), pick = [];
-    if (pk.top) pick.push({ kind: pk.bed ? 'bedtime' : 'continue', entry: watchEntry(pk.top) });
-    if (pk.nx) pick.push({ kind: 'upnext', label: pk.nc.name + ' · ' + (pk.npr.notch + 1) + ' of ' + pk.npr.total, entry: watchCourseEntry(pk.nc, pk.nx, pk.npr.notch) });
-    if (lastYT && !(Native.device && ytOut)) {
-      var lyDone = lastYT.pct != null && lastYT.pct >= 97;
-      pick.push({ kind: 'lastyt', entry: { type: 'video', key: lastYT.id, title: lastYT.title || 'YouTube video', srcName: lastYT.author || '', src: '', dur: Math.round(lastYT.dur || 0),
-        t: lyDone ? 0 : Math.round(lastYT.t || 0), done: lyDone, isNew: false, section: '', about: lastYT.exact === false } });
+    if (pk.top) pick.push({ kind: 'continue', entry: watchEntry(pk.top) });
+    if (pk.nx) pick.push({ kind: 'upnext', label: pk.nc.name + ' · ' + (pk.ni + 1) + ' of ' + pk.npr.total, entry: watchCourseEntry(pk.nc, pk.nx, pk.ni) });
+    var wly = pk.ly;
+    if (wly && !(Native.device && ytOut)) {
+      var lyDone = wly.pct != null && wly.pct >= 97;
+      pick.push({ kind: 'lastyt', entry: { type: 'video', key: wly.id, title: wly.title || 'YouTube video', srcName: wly.author || '', src: '', dur: Math.round(wly.dur || 0),
+        t: lyDone ? 0 : Math.round(wly.t || 0), done: lyDone, isNew: false, section: '', about: wly.exact === false } });
     }
     var sections = daySections().map(function (sec) {
-      var fresh = feedEntries(sec.id).filter(isNew), go = startedEntries(sec.id), seen = {}, items = [];
-      go.slice(0, 2).concat(fresh).concat(go.slice(2)).forEach(function (e) { if (!seen[e.key] && items.length < 6) { seen[e.key] = 1; items.push(watchEntry(e)); } });
-      return { id: sec.id, name: sec.name, newCount: fresh.length, more: Math.max(0, fresh.length + go.length - items.length), items: items,
+      var br = bandRows(sec.id, 6), fresh = br.fresh, items = br.rows.map(function (e) { return watchEntry(e); });
+      return { id: sec.id, name: sec.name, newCount: fresh.length, more: br.rest, items: items,
         channels: lib.sources(sec.id).filter(function (x) { return !brokenDup(x); }).map(function (x) { return { id: x.id, name: x.name, podcast: x.type === 'podcast', newCount: srcNewCount(x.id) }; }) };
     });
-    var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
+    var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e) && !twinOf(videos[e.key]); })
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
     if (loose.length) sections.push({ id: '_pasted', name: 'Pasted', newCount: 0, more: Math.max(0, loose.length - 6), items: loose.slice(0, 6).map(function (e) { return watchEntry(e); }), channels: [] });
     var courses = cs ? cs.list().map(function (c) {
@@ -5477,7 +5623,7 @@ if (typeof module !== 'undefined') module.exports = AI;
         return go();
       }
       case 'section': {
-        if (c.id === '_pasted') return { ok: true, items: Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e); })
+        if (c.id === '_pasted') return { ok: true, items: Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e) && !twinOf(videos[e.key]); })
           .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); }).slice(0, 20).map(function (e) { return watchEntry(e); }) };
         if (!lib.section(c.id)) return { ok: false, why: 'missing' };
         var all = startedEntries(c.id).concat(feedEntries(c.id)), sn = {}, list = [];
@@ -5621,7 +5767,11 @@ if (typeof module !== 'undefined') module.exports = AI;
       case 'goal-reset': delete prefs.goal; savePrefs(); applyGoal(); $('#goalDlg').close(); renderAll(); $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); toast('Goal back to Step 2 CK on 22 December.'); break;
       case 'pace-copy': copyText(paceText(), function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy for Claude'; }, 2500); toast('Copied. Paste it into Claude.'); }); break;
       case 'yt-resign': signInAgain(); break;
-      case 'yt-last': if (Native.device && ytOut) { signInAgain(); break; } if (lastYT) openVideo({ id: lastYT.id, t: lastYT.pct != null && lastYT.pct >= 97 ? 0 : lastYT.t || 0, title: lastYT.title, author: lastYT.author }); break;
+      case 'yt-last': if (Native.device && ytOut) { signInAgain(); break; } playHist(pickState().ly); break;
+      case 'yt-hist': if (Native.device && ytOut) { signInAgain(); break; } push({ name: 'ythist' }); refreshLastYT(true); break;
+      case 'yt-hist-refresh': refreshLastYT(true); toast('Checking your YouTube history…'); break;
+      case 'yt-play': playHist(ytHist.filter(function (h) { return h.id === id; })[0]); break;
+      case 'goto-courses': openTab({ name: 'courses', id: 'med' }); break;
       case 'toggle-band': prefs.open = prefs.open || {}; if (prefs.open[id]) delete prefs.open[id]; else prefs.open[id] = 1; savePrefs(); renderHome(); var tg = document.querySelector('.band [data-act="toggle-band"][data-id="' + id + '"]'); if (tg) tg.focus({ preventScroll: true }); break;
       case 'edit-section': openSec(id); break;
       case 'sec-up': case 'sec-down': lib.moveSection(editing, act === 'sec-up' ? -1 : 1); renderAll(); break;
@@ -5650,6 +5800,7 @@ if (typeof module !== 'undefined') module.exports = AI;
       case 'open-marks': push({ name: 'marks' }); break;
       case 'mark': doMark(); break;
       case 'listen': listen(); break;
+      case 'pod-video': podVideo(); break;
       case 'lock-setup': openLockDlg(); break;
       case 'lock-toggle': prefs.autoLock = !prefs.autoLock; savePrefs(); renderLockDlg(); syncYtOpen(); if (prefs.autoLock) toast('Auto-lock on. Try Play locked on any video.'); break;
       case 'twin-pick': pickTwin(+b.getAttribute('data-i')); break;
@@ -6205,7 +6356,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     watchBoot();
     // Test hook
     window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
-      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, get podYt() { return podYt; }, syncTwin: syncTwin, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
+      get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, get podYt() { return podYt; }, syncTwin: syncTwin, renderHome: renderHome, push: push, get ytHist() { return ytHist; }, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
   restoreFromPhone().catch(function () { restoreFailed = true; }).then(boot);

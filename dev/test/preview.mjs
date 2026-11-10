@@ -6,7 +6,7 @@ import http from 'http'; import fs from 'fs'; import path from 'path';
 import { installFakes, CAP } from './fakenet.mjs';
 const root = new URL('../../', import.meta.url).pathname, OUT = process.argv[2], FONTS = process.argv[3];
 const server = http.createServer((q, r) => { fs.readFile(path.join(root, q.url.split('?')[0].replace(/\/$/, '/index.html')), (e, d) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { 'content-type': q.url.endsWith('.png') ? 'image/png' : 'text/html' }); r.end(d); }); }).listen(8767);
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
+const b = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
 const errs = [], problems = [];
 // Everything tappable, at least 44×44 (text links inside the self-check sentences are the one exception)
 const audit = (p, where) => p.evaluate((where) => {

@@ -300,6 +300,12 @@ function setup(store, opts = {}) {
   assert.strictEqual(Courses.historyLatest(HS).title, 'OpenAI CEO says', 'the video title, not a menu item');
   assert.strictEqual(Courses.historyItems(HR).length, 2);
 
+  // Safety net: a #shorts title or a length under 90 s is a Short even when the markup looks like a video
+  const vrs = (id, title, len) => ({ videoRenderer: { videoId: id, title: { runs: [{ text: title }] }, lengthText: { simpleText: len } } });
+  const HN = hist([vrs('sssssssssss', 'Funny cat #Shorts', '5:00'), vrs('tttttttttt1', 'Quick clip', '0:45'), vrs('uuuuuuuuuuu', 'Real talk', '12:00'), vrs('vvvvvvvvvvv', 'Edge', '1:30')]);
+  assert.deepStrictEqual(Courses.historyItems(HN, 10).map((x) => x.id), ['uuuuuuuuuuu', 'vvvvvvvvvvv'], '#shorts titles and clips under 90 s are dropped, 1:30 stays');
+  assert.strictEqual(Courses.historyLatest(HN).id, 'uuuuuuuuuuu');
+
   // Mo's report (6 Oct 15:40): a Shorts shelf (shortsLockupViewModel, menu "Add to queue") sits above the first video
   const shortsShelf = { reelShelfRenderer: { title: { runs: [{ text: 'Shorts' }] }, items: [{ shortsLockupViewModel: { entityId: 'shorts-y35MBltJNgM', menuOnTap: { innertubeCommand: { showSheetCommand: { panelLoadingStrategy: { inlineContent: { sheetViewModel: { content: { listViewModel: { listItems: [{ listItemViewModel: { title: { content: 'Add to queue' } } }] } } } } } } } }, onTap: { innertubeCommand: { commandMetadata: { webCommandMetadata: { url: '/shorts/y35MBltJNgM' } }, reelWatchEndpoint: { videoId: 'y35MBltJNgM' } } } } }] } };
   const HSS = hist([{ itemSectionRenderer: { contents: [shortsShelf] } }, { itemSectionRenderer: { contents: [real('dizqYRTo6aI', 30, '12:00')] } }]);
