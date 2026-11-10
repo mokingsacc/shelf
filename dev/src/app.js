@@ -5,7 +5,7 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var reduced = function () { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
   var isPhone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  var feedsOn = Native.inApp; // browsers can't read YouTube's channel lists (no cross-site permission); the app can
+  var feedsOn = Native.net; // a plain browser can't read YouTube's channel lists (no cross-site permission); the app and the Chrome extension can
 
   // ---------- storage ----------
   var canSave = (function () {
@@ -46,12 +46,12 @@
     return new Promise(function (res, rej) { var t = setTimeout(function () { rej(new Error(msg)); }, ms); p.then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); }); });
   }
   function netError(e) {
-    if (e && e.name === 'TypeError') return new Error(Native.inApp ? "Couldn't reach the internet. Check your connection." : 'This needs the Shelf app on your iPhone. Browsers aren\'t allowed to read YouTube\'s channel lists.');
+    if (e && e.name === 'TypeError') return new Error(Native.net ? "Couldn't reach the internet. Check your connection." : 'This needs the Shelf app on your iPhone or the Shelf extension in Chrome. Browsers aren\'t allowed to read YouTube\'s channel lists.');
     return e;
   }
-  // In the app every read goes through iOS networking (Native.httpGet); in a browser, plain fetch
+  // In the app every read goes through iOS networking and with the Chrome extension through it (Native.httpGet); in a plain browser, plain fetch
   function get(url, headers) {
-    var p = Native.inApp ? Native.httpGet(url, headers).catch(function () { throw new Error("Couldn't reach the internet. Check your connection."); })
+    var p = Native.net ? Native.httpGet(url, headers).catch(function () { throw new Error("Couldn't reach the internet. Check your connection."); })
       : fetch(url, { credentials: 'omit' }).then(function (r) { return r.text().then(function (t) { return { ok: r.ok, status: r.status, text: t }; }); }, function (e) { throw netError(e); });
     return withTimeout(p, 20000, 'No answer after 20 seconds. Check your internet.');
   }
@@ -232,7 +232,7 @@
       html += bandHead(sec.id, bandClass(sec.id), sec.name, fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty', 'open-section', open);
       if (!open) { html += '</section>'; return; }
       if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
-      else if (!srcs && !feedsOn) html += '<p class="empty">Your channels show here in the Shelf app on your iPhone.</p>';
+      else if (!srcs && !feedsOn) html += '<p class="empty">' + (isPhone ? 'Your channels show here in the Shelf app on your iPhone.' : 'Your channels show here once the Shelf extension is set up.') + '</p>';
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
       if (rest > 0) html += '<button type="button" class="more" data-act="open-section" data-id="' + esc(sec.id) + '"><span>+' + rest + ' more in ' + esc(sec.name) + '</span><span aria-hidden="true">›</span></button>';
       // Its channels, one line each: tap one for its videos, newest first
@@ -289,7 +289,7 @@
     }
     // Last in YouTube: the newest video in the account's watch history (not Continue's), at the spot YouTube saved
     // (exact when the history has the second, else from its red bar, "about"). The text opens the history, the square plays.
-    var ly = pk.ly, lyOut = !!(Native.device && ytOut), yl = $('#ytLast');
+    var ly = pk.ly, lyOut = !!(Native.yt && ytOut), yl = $('#ytLast');
     yl.classList.toggle('ph', !lyOut && !ly);
     $('#ytLastTx').disabled = $('#ytLastPlay').disabled = !lyOut && !ly;
     if (lyOut) {
@@ -305,8 +305,8 @@
       $('#ytLastPlay').setAttribute('aria-label', 'Play ' + (ly.title || 'video'));
     } else {
       $('#ytLastK').textContent = 'Last in YouTube';
-      $('#ytLastT').textContent = Native.device ? 'Nothing yet' : 'Shows in the Shelf app';
-      $('#ytLastTx').setAttribute('aria-label', 'Last in YouTube: ' + (Native.device ? 'nothing yet' : 'shows in the Shelf app'));
+      $('#ytLastT').textContent = Native.yt ? 'Nothing yet' : 'Shows in the Shelf app';
+      $('#ytLastTx').setAttribute('aria-label', 'Last in YouTube: ' + (Native.yt ? 'nothing yet' : 'shows in the Shelf app'));
       $('#ytLastPlay').setAttribute('aria-label', 'Play');
     }
     // The three fold under "Pick up from" (open unless closed with its heading); folded, it counts the filled ones
@@ -317,8 +317,11 @@
     $('#pickN').textContent = pickOpen ? '' : String(pickN);
     $('#summary').textContent = refreshing ? 'Checking for new uploads…' : '';
     var wn = $('#webNote');
-    if (!feedsOn) { wn.hidden = false; wn.textContent = isPhone ? 'New uploads and channels load in the Shelf app. Here you can pick up where you left off, or paste a YouTube link into Search.' : 'New uploads and channels load in the Shelf app on your iPhone. On this Mac you can pick up where you left off, or press ⌘V to play a YouTube link.'; }
-    else wn.hidden = true;
+    if (!feedsOn) {
+      wn.hidden = false;
+      if (isPhone) wn.textContent = 'New uploads and channels load in the Shelf app. Here you can pick up where you left off, or paste a YouTube link into Search.';
+      else wn.innerHTML = 'Channels, search and history need the Shelf extension in Chrome. <button type="button" data-act="ext-setup">Set it up</button>';
+    } else wn.hidden = true;
   }
   // Pick up from (Home, and the watch): always the same three: Continue, Up next, Last in YouTube
   // The video ids that stand for the same thing as an entry (an episode and its video)
@@ -473,7 +476,7 @@
       html += topHTML(bandClass(sec.id), sec.name, '<b>' + srcs.length + (srcs.length === 1 ? ' channel' : ' channels') + '</b>' + (nn ? ' · ' + nn + ' new' : ''),
         ib('add-channel', sec.id, I.plus, 'Add channel') + (nn ? ib('seen-section', sec.id, I.check, 'Mark all seen') : '') + (med ? ib('open-marks', null, I.mark, 'Marks') : '') + ib('edit-section', sec.id, I.dots, 'Edit section'));
       var misses = lib.seedMisses.filter(function (m) { return m.section === sec.id && !alreadyHave(m.input); });
-      if (!feedsOn) html += '<p class="pnote">Channels load in the Shelf app on your iPhone.</p>';
+      if (!feedsOn) html += '<p class="pnote">' + (isPhone ? 'Channels load in the Shelf app on your iPhone.' : 'Channels load with the Shelf extension in Chrome.') + '</p>';
       var items = feedEntries(sec.id);
       var have = {}; items.forEach(function (e) { have[e.key] = 1; });
       startedEntries(sec.id).forEach(function (e) { if (!have[e.key]) items.push(e); });
@@ -517,7 +520,7 @@
     } else if (v.name === 'mypls') {
       var mine = (mypls && mypls.list) || [];
       html += topHTML('c2', 'Playlists', '<b>Your YouTube playlists</b>' + (mine.length ? ' · ' + mine.length : ''), '');
-      if (myplsMsg) html += '<button type="button" class="more quiet" data-act="' + (ytOut && Native.device ? 'yt-resign' : 'mypls-retry') + '"><span>' + esc(myplsMsg) + '</span><span class="mono">↻</span></button>';
+      if (myplsMsg) html += '<button type="button" class="more quiet" data-act="' + (ytOut && Native.yt ? 'yt-resign' : 'mypls-retry') + '"><span>' + esc(myplsMsg) + '</span><span class="mono">↻</span></button>';
       else if (!mine.length) html += myplsBusy ? '<p class="pnote">Reading your playlists…</p>' : '<button type="button" class="more quiet" data-act="mypls-retry"><span>Read your playlists</span><span class="mono">↻</span></button>';
       html += mine.map(function (p) {
         var c = cs && cs.get(p.id);
@@ -612,7 +615,7 @@
     }, function (e) {
       if (my !== searchSeq) return;
       var m = e && e.message || 'Search failed.';
-      if (!Native.inApp && !prefs.apiKey && /Shelf app/.test(m)) m = 'Search without a key works in the Shelf app on your iPhone. Here, add a Google key (self-check, Search key), or search on YouTube and paste the link.';
+      if (!Native.net && !prefs.apiKey && /Shelf app/.test(m)) m = 'Search without a key works in the Shelf app on your iPhone and with the Shelf extension in Chrome. Here, add a Google key (self-check, Search key), or search on YouTube and paste the link.';
       v.msg = m; v.err = true; renderPage();
     });
   }
@@ -622,11 +625,11 @@
   // tap a channel for its latest videos, no home feed, no Shorts, no recommendations
   var SUBS_KEY = 'shelf.subs', SUBS_URL = 'https://www.youtube.com/feed/channels', subs = load(SUBS_KEY, null), subsBusy = false, subsErr = '';
   function loadSubs(force) {
-    if (!Native.device || subsBusy || (!force && subs && Date.now() - subs.at < 6 * 3600e3)) return;
+    if (!Native.yt || subsBusy || (!force && subs && Date.now() - subs.at < 6 * 3600e3)) return;
     subsBusy = true; subsErr = '';
     readYT(SUBS_URL).then(function (r) {
       subsBusy = false;
-      if (!r || !r.signedIn) subsErr = 'Sign in to YouTube in the self-check to see your subscriptions here.';
+      if (!r || !r.signedIn) subsErr = Native.ext ? 'Sign in to YouTube in Chrome to see your subscriptions here.' : 'Sign in to YouTube in the self-check to see your subscriptions here.';
       else if (!pageOk(r) && ytOut) subsErr = 'YouTube signed Shelf out. Tap here to sign in again.';
       else {
         var list = Courses.subChannels(r.data || '');
@@ -639,7 +642,7 @@
   }
   function renderSubs() { var v = stack[stack.length - 1]; if (v && v.name === 'search') keepTyping(renderPage); }
   function subsHTML() {
-    if (!Native.device) return '';
+    if (!Native.yt) return '';
     var list = (subs && subs.list) || [], k = foldKey('Subscriptions');
     if (!(k in foldOpen)) foldOpen[k] = false;
     var h = '<details class="fold subs" data-k="' + esc(k) + '"' + (foldOpen[k] ? ' open' : '') + '><summary><span class="sh">Subscriptions</span><span class="mono">' + (list.length || (subsBusy ? '…' : '')) + '</span>' + I.down + '</summary>';
@@ -669,12 +672,12 @@
   // ---------- Playlists tab: the playlists on Mo's YouTube account (read with Shelf's YouTube sign-in) ----------
   var MYPLS_KEY = 'shelf.mypls', MYPLS_URL = 'https://www.youtube.com/feed/playlists', mypls = load(MYPLS_KEY, null), myplsBusy = false, myplsMsg = '';
   function loadMyPls(force) {
-    if (!Native.device) { myplsMsg = 'Your playlists show here in the Shelf app on your iPhone.'; return; }
+    if (!Native.yt) { myplsMsg = 'Your playlists show here in the Shelf app on your iPhone.'; return; }
     if (myplsBusy || (!force && mypls && Date.now() - mypls.at < 6 * 3600e3)) return;
     myplsBusy = true; myplsMsg = '';
     readYT(MYPLS_URL).then(function (r) {
       myplsBusy = false;
-      if (!r || !r.signedIn) myplsMsg = 'Sign in to YouTube in the self-check to see your playlists here.';
+      if (!r || !r.signedIn) myplsMsg = Native.ext ? 'Sign in to YouTube in Chrome to see your playlists here.' : 'Sign in to YouTube in the self-check to see your playlists here.';
       else if (!r.ok && ytOut) myplsMsg = 'YouTube signed Shelf out. Tap here to sign in again.';
       else {
         var got = Courses.readPlaylists(Courses.initialData(r.data || '') || {}), l = got.items;
@@ -688,7 +691,7 @@
   function renderMyPls() { var v = stack[stack.length - 1]; if (v && v.name === 'mypls') renderPage(); }
   // A private or unlisted playlist of Mo's only opens signed in
   function signedInList(pid) {
-    if (!Native.device) return Promise.reject(new Error('gone'));
+    if (!Native.yt) return Promise.reject(new Error('gone'));
     return Native.youtubeGet('https://www.youtube.com/playlist?list=' + pid).then(function (r) {
       var d = r && r.signedIn && r.status === 200 && Courses.initialData(r.data || '');
       var items = d ? Courses.readVideos(d).items : [];
@@ -853,7 +856,7 @@
     $('#vCh').textContent = courseTag(v.id) || v.author || '';
     $('#vNext').hidden = true; clearTimeout(nextTimer); renderPlayerCourse(v.id); renderNextBtn(v.id);
     renderListen(v);
-    $('#ytLink').href = ytLink(v); syncYtOpen();
+    $('#ytLink').href = webOut(ytLink(v)); syncYtOpen();
     wantRate = rateFor(v); renderRateUI(v); renderMarkBtn(Core.resumeAt(v));
     openSheet('#vsheet');
     clearInterval(uiTick); uiTick = setInterval(videoTick, 1000);
@@ -950,7 +953,7 @@
   function showError(msg, v) {
     lastErr = msg;
     var html = '<span>' + esc(msg) + '</span>';
-    if (v) html += '<a href="' + esc(ytLink(v)) + '" target="_blank" rel="noopener">Open on YouTube' + (v.t > 5 && !v.done ? ' at ' + Core.fmt(v.t) : '') + '</a>';
+    if (v) html += '<a href="' + esc(webOut(ytLink(v))) + '" target="_blank" rel="noopener">Open on YouTube' + (v.t > 5 && !v.done ? ' at ' + Core.fmt(v.t) : '') + '</a>';
     var box = $('#perr'); box.innerHTML = html; box.hidden = false;
     updateDot();
   }
@@ -991,7 +994,7 @@
   }
   function listenLabel(v) { var tw = v && twins[v.id]; $('#vListen').querySelector('span').textContent = tw && tw.waiting ? 'Finding podcast…' : 'Listen'; }
   function renderListen(v) {
-    var mine = twinOf(v), on = Native.inApp && (mine || !!twinWho(v));
+    var mine = twinOf(v), on = Native.net && (mine || !!twinWho(v));
     $('#vListen').hidden = !on; layoutTwin();
     if (on && !mine) twinLook(v);
     listenLabel(v);
@@ -1170,7 +1173,7 @@
       applyLook();
       renderAll();
       catchUp();
-      refreshLastYT();
+      if (ytSignWait) { ytSignWait = false; recheckYT(); } else refreshLastYT();
       checkBuild();
       // Locked while playing in Shelf: say how to keep it going next time
       if (lockPaused && lockPaused === current) toast('YouTube stops videos inside other apps when the phone locks. Play locked opens it in the YouTube app, where Premium keeps playing.', '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 10000);
@@ -1185,7 +1188,7 @@
   var buildAt = 0;
   function checkBuild() {
     var mine = ($('meta[name="build"]') || {}).content || '';
-    if (!Native.inApp || !mine || Date.now() - buildAt < 10 * 60000) return;
+    if (!Native.net || !mine || Date.now() - buildAt < 10 * 60000) return;
     buildAt = Date.now();
     fetchText(new URL('build.txt?' + Date.now(), location.href).href).then(function (t) {
       if (!t.trim() || t.trim() === mine) return;
@@ -1218,7 +1221,15 @@
   // typing), then the page is read once more. At most one renewal every 15 minutes. r.ok: the page has its data.
   var healAt = 0;
   function readYT(url) {
-    function mark(r) { if (r) { r.ok = hasData(r); if (r.ok) setYtOut(false); else if (lapsed(r)) setYtOut(true); } return r; }
+    // With the extension the browser's own YouTube account answers: a page that says nobody is logged in is the signed-out state
+    function mark(r) {
+      if (r) {
+        r.ok = hasData(r);
+        if (Native.ext && r.status === 200 && !r.signedIn) { r.ok = false; setYtOut(true); }
+        else if (r.ok) setYtOut(false); else if (lapsed(r)) setYtOut(true);
+      }
+      return r;
+    }
     return Native.youtubeGet(url).then(function (r) {
       if (!lapsed(r) || !Native.canRefreshYT || Date.now() - healAt < 15 * 60000) return mark(r);
       healAt = Date.now();
@@ -1228,13 +1239,23 @@
   // The sheet with YouTube's sign-in link: signed in to Google still, it closes by itself in a moment with nothing to
   // type (the old YouTube cookies are replaced); otherwise Google asks for the password once
   var resigning = false;
+  // With the extension there is no sheet: YouTube's sign-in opens in a new tab (shelf=pass lets it through), and Shelf
+  // reads the history again when this tab is shown again
+  var ytSignWait = false;
   function signInAgain() {
+    if (Native.ext) { ytSignWait = true; window.open('https://www.youtube.com/signin?shelf=pass', '_blank'); toast('Sign in to YouTube in the new tab, then come back here.'); return; }
     if (resigning) return; resigning = true; toast('Opening YouTube sign-in…');
     Native.signInYT().then(function (a) {
       resigning = false;
       if (a && a.state === 'in') { setYtOut(false); toast('Signed in to YouTube again. Reloading…'); setTimeout(function () { location.reload(); }, 900); }
       else toast("Google didn't finish signing you in. In the self-check, tap Sign out of YouTube, then Sign in to YouTube.", 'warn');
     }, function () { resigning = false; toast("Couldn't open the sign-in page. Close and reopen Shelf.", 'warn'); });
+  }
+  function recheckYT() {
+    readYT(HIST_URL).then(function (r) {
+      if (r && r.signedIn) { if (pageOk(r)) noteHistory(r.data || ''); toast('Signed in to YouTube.'); renderHome(); renderSubs(); renderMyPls(); if ($('#checkDlg').open) fillCheck(); }
+      else { toast("YouTube isn't signed in yet. Try Sign in again.", 'warn'); }
+    }, function () {});
   }
   function noteHistory(page) {
     var list = Courses.historyItems(page, 30); if (!list.length) return;
@@ -1256,14 +1277,14 @@
   }
   function histPageHTML() {
     var h = topHTML('c0', 'YouTube history', 'Videos only, no Shorts' + (ytHistAt ? ' · updated ' + esc(Core.ago(ytHistAt)) : ''), ib('yt-hist-refresh', null, I.refresh, 'Check your YouTube history again'));
-    if (Native.device && ytOut) return h + '<p class="pnote">YouTube signed Shelf out, so its history can\'t be read. <button type="button" data-act="yt-resign">Sign in again</button></p>';
-    if (!ytHist.length) return h + '<p class="pnote">' + (Native.device ? 'Nothing here yet. Videos you watch in YouTube show up here.' : 'Your YouTube history shows in the Shelf app.') + '</p>';
+    if (Native.yt && ytOut) return h + '<p class="pnote">YouTube signed Shelf out, so its history can\'t be read. <button type="button" data-act="yt-resign">Sign in again</button></p>';
+    if (!ytHist.length) return h + '<p class="pnote">' + (Native.yt ? 'Nothing here yet. Videos you watch in YouTube show up here.' : 'Your YouTube history shows in the Shelf app.') + '</p>';
     var rows = ytHist.map(histRow);
     return h + '<h2 class="subh"><span>Recent</span><span class="mono">' + ytHist.length + '</span></h2>' + rows.slice(0, 12).join('') + fold('More', rows.slice(12).join(''), rows.length - 12);
   }
   var lyAgain = null;
   function refreshLastYT(force) {
-    if (!Native.device || (!force && Date.now() - lastYTAt < 30000)) return;
+    if (!Native.yt || (!force && Date.now() - lastYTAt < 30000)) return;
     lastYTAt = Date.now();
     readYT(HIST_URL).then(function (r) { if (pageOk(r)) noteHistory(r.data || ''); }, function () {});
     // The YouTube app saves its spot a little after you leave it, so look once more shortly after
@@ -1312,7 +1333,7 @@
     if (guess - h.t >= 5) put(guess);
     // Once: the phone can lock itself after Play locked
     if (!h.ep && prefs.autoLock == null && !prefs.lockOffered) { prefs.lockOffered = true; savePrefs(); setTimeout(function () { toast('Want the phone to lock by itself after Play locked?', '', { label: 'Set up', fn: openLockDlg }, 10000); }, 21000); }
-    if (!Native.device) { if (guess - h.t >= 5) say(false); return; }
+    if (!Native.yt) { if (guess - h.t >= 5) say(false); return; }
     if (guess - h.t >= 5) say(false);
     var tries = 0;
     function note(n) { histNote = Object.assign({ at: Date.now(), tries: tries }, n); }
@@ -1784,7 +1805,7 @@
     $('#nRate').setAttribute('aria-label', 'Speed ' + st.rate + ' times. Tap to change.');
     $('#nKeep').textContent = Native.inApp ? 'keeps playing, locked too' : 'keeps playing';
     var yt = podYtLook(ep);
-    $('#nVid').hidden = !Native.inApp;
+    $('#nVid').hidden = !Native.net;
     var finding = podVidWait === ep.guid && !!yt && !!yt.busy;
     $('#nVid').querySelector('span').textContent = finding ? 'Finding video…' : 'Video';
     if (podVidWait === ep.guid && yt && !yt.busy) { podVidWait = ''; setTimeout(podVideo, 0); }
@@ -1833,6 +1854,19 @@
     toast(text ? "That doesn't look like a YouTube link. Copy the address from YouTube and try again." : 'Nothing to open. Copy a YouTube link first.', 'warn');
     return false;
   }
+  // A YouTube link that YouTube sent here (the Chrome extension puts it after #open=): a video plays, a playlist opens its
+  // page, anything else is ignored quietly. The address is cleared so a reload doesn't open it again.
+  function openIncoming() {
+    var m = location.hash.match(/^#open=(.+)$/); if (!m) return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    var url = m[1];
+    if (!/^https?:/i.test(url)) { try { url = decodeURIComponent(url); } catch (e) { return; } }
+    if (!/^https?:\/\/((www|m)\.)?(youtube\.com|youtu\.be)\//i.test(url)) return;
+    var found = Core.findLinks(url), pl = Courses.playlistId(url);
+    if (found.length === 1) handleText(url);
+    else if (pl && !found.length) { if (current) closeVideo(); unwind(function () { openPlist(pl, ''); }); }
+  }
+  window.addEventListener('hashchange', openIncoming);
   document.addEventListener('paste', function (e) {
     var t = e.target, cd = e.clipboardData || window.clipboardData, txt = cd ? cd.getData('text') : '';
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) return;
@@ -1911,7 +1945,7 @@
   // ---------- Courses (playlists ticked episode by episode) ----------
   var cs = null, openC = null, cwin = {}, cgrid = {}, cplace = {}, confirmCourse = null, cEdit = false;
   function postJSON(url, body, headers) {
-    if (!Native.inApp) return Promise.reject(new Error('This needs the Shelf app on your iPhone.'));
+    if (!Native.net) return Promise.reject(new Error('This needs the Shelf app on your iPhone or the Shelf extension in Chrome.'));
     return withTimeout(Native.httpPost(url, body, headers), 20000, 'No answer after 20 seconds.').then(function (r) {
       if (!r.ok) throw new Error('YouTube said ' + r.status + '.');
       return r.text;
@@ -1988,7 +2022,7 @@
     }
     h += '<div class="cedge">' + (arr.length ? '<button type="button" data-act="course-grid" data-id="' + esc(c.id) + '">' + (cgrid[c.id] ? 'List' : 'Grid · ' + arr.length) + '</button>' +
       '<button type="button" data-act="course-place" data-id="' + esc(c.id) + '">Set place №</button>' : '') +
-      '<a href="' + esc(link) + '" target="_blank" rel="noopener">YouTube ↗</a>' +
+      '<a href="' + esc(webOut(link)) + '" target="_blank" rel="noopener">YouTube ↗</a>' +
       '<button type="button" class="danger" data-act="course-remove" data-id="' + esc(c.id) + '">' + (confirmCourse === c.id ? 'Tap again to remove' : 'Remove') + '</button></div>';
     return h + '</div>';
   }
@@ -2382,7 +2416,7 @@
     if (pk.top) pick.push({ kind: 'continue', entry: watchEntry(pk.top) });
     if (pk.nx) pick.push({ kind: 'upnext', label: pk.nc.name + ' · ' + (pk.ni + 1) + ' of ' + pk.npr.total, entry: watchCourseEntry(pk.nc, pk.nx, pk.ni) });
     var wly = pk.ly;
-    if (wly && !(Native.device && ytOut)) {
+    if (wly && !(Native.yt && ytOut)) {
       var lyDone = wly.pct != null && wly.pct >= 97;
       pick.push({ kind: 'lastyt', entry: { type: 'video', key: wly.id, title: wly.title || 'YouTube video', srcName: wly.author || '', src: '', dur: Math.round(wly.dur || 0),
         t: lyDone ? 0 : Math.round(wly.t || 0), done: lyDone, isNew: false, section: '', about: wly.exact === false } });
@@ -2701,8 +2735,9 @@
       case 'goal-reset': delete prefs.goal; savePrefs(); applyGoal(); $('#goalDlg').close(); renderAll(); $('#paceBody').innerHTML = paceHTML(); openDlg($('#paceDlg')); toast('Goal back to Step 2 CK on 22 December.'); break;
       case 'pace-copy': copyText(paceText(), function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy for Claude'; }, 2500); toast('Copied. Paste it into Claude.'); }); break;
       case 'yt-resign': signInAgain(); break;
-      case 'yt-last': if (Native.device && ytOut) { signInAgain(); break; } playHist(pickState().ly); break;
-      case 'yt-hist': if (Native.device && ytOut) { signInAgain(); break; } push({ name: 'ythist' }); refreshLastYT(true); break;
+      case 'ext-setup': openDlg($('#extDlg')); break;
+      case 'yt-last': if (Native.yt && ytOut) { signInAgain(); break; } playHist(pickState().ly); break;
+      case 'yt-hist': if (Native.yt && ytOut) { signInAgain(); break; } push({ name: 'ythist' }); refreshLastYT(true); break;
       case 'yt-hist-refresh': refreshLastYT(true); toast('Checking your YouTube history…'); break;
       case 'yt-play': playHist(ytHist.filter(function (h) { return h.id === id; })[0]); break;
       case 'goto-courses': openTab({ name: 'courses', id: 'med' }); break;
@@ -2848,11 +2883,14 @@
     // "pass" note lets the YouTube guard automation (bounces you back to Shelf when you open YouTube yourself) let it through
     return { v: v, t: t, web: web, href: ytApp(web, !noLock), lock: !!prefs.autoLock, rate: wantRate || 1 };
   }
+  // With the Chrome extension, YouTube sends every page it opens to Shelf; a link that leaves for YouTube on purpose
+  // carries shelf=pass, which the extension lets through (the one place that adds it)
+  function webOut(u) { return Native.ext && /^https:\/\/(www\.)?youtube\.com\//.test(u) ? u + (u.indexOf('?') < 0 ? '?' : '&') + 'shelf=pass' : u; }
   // A youtube.com address as Shelf opens it: the YouTube app (youtube://, so iOS can't hand it to Safari), through the
   // auto-lock Shortcut when that is set up (its "pass" note gets it past the YouTube guard automation; "nolock" on the
   // end stops it before it locks the phone); in a browser, the web page
   function ytApp(web, lock) {
-    if (!Native.inApp) return web;
+    if (!Native.inApp) return webOut(web);
     var app = web.replace(/^https:/, 'youtube:');
     if (!prefs.autoLock) return app;
     return 'shortcuts://run-shortcut?name=' + encodeURIComponent(LOCK_SHORTCUT) + '&input=text&text=' + encodeURIComponent(app + (lock ? '' : (app.indexOf('?') < 0 ? '?' : '&') + 'shelf=nolock'));
@@ -2870,6 +2908,7 @@
     rawSet(HAND_KEY, JSON.stringify({ id: h.v.id, t: h.t, at: Date.now(), rate: h.rate }), false);
   }
   // Today's YouTube button: the YouTube app, at its home
+  if (Native.ext) $('#ytHome').href = webOut('https://www.youtube.com/');
   $('#ytHome').addEventListener('click', function () { var web = 'https://www.youtube.com/'; this.href = ytApp(web, false); appFallbackTo(web); });
   // The podcast player's YouTube ↗: the episode's own video at the spot playing now (found as the player opens), else
   // YouTube's search for it. Shelf pauses the podcast; back in Shelf its place moves on as a video's does (catchUp).
@@ -3129,6 +3168,13 @@
         : tr.ok ? { ok: 1, text: 'Sound keeps playing on the lock screen' }
         : { ok: 0, text: 'Sound stopped when the screen locked. The app shell needs a fix and a rebuild in Xcode; tell Claude.' });
     }
+    if (Native.ext) {
+      var xs = Native.feedStatus;
+      out.push(xs.state === 'bad' ? { ok: 0, text: 'The Shelf extension v' + Native.ext + " is on but can't read other sites. " + xs.text }
+        : { ok: 1, text: 'Running with the Shelf extension v' + Native.ext });
+      if (ytOut) out.push({ ok: 0, text: "YouTube isn't signed in in this browser, so Shelf can't see your watch history, subscriptions or playlists. Sign in again to fix it.", fix: 'yt-again' });
+      else if (lastYT) out.push({ ok: 1, text: 'Last in YouTube: ' + (lastYT.title || lastYT.id) });
+    }
     var n = Object.keys(videos).length + Object.keys(arec).length, ch = lib.sources().length;
     out.push({ ok: 1, text: ch + ' channel' + (ch === 1 ? '' : 's') + ' in ' + lib.sections().length + ' sections, ' + n + ' saved spot' + (n === 1 ? '' : 's') + ', kept ' + (Native.inApp ? 'on this phone' : 'in this browser') });
     return out;
@@ -3170,7 +3216,7 @@
     var ya = Native.ytAccount.state, signIn = Native.inApp && ya !== 'old', acts = '';
     if (Native.inApp) acts += '<button type="button" class="ghost" id="toneBtn" data-act="tone">' + (Native.tonePlaying ? 'Stop the sound test' : 'Sound test') + '</button>';
     acts += '<button type="button" class="ghost" id="sendBtn" data-act="send">Copy shelf link</button>';
-    if (Native.device) acts += '<button type="button" class="ghost" data-act="yt-report">Copy YouTube report for Claude</button>';
+    if (Native.yt) acts += '<button type="button" class="ghost" data-act="yt-report">Copy YouTube report for Claude</button>';
     if (signIn && ya === 'in') acts += '<button type="button" class="ghost" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : 'Sign out of YouTube') + '</button>';
     $('#checkActs').innerHTML = acts;
     $('#trackBtn').hidden = !signIn; $('#aiKeyBtn').hidden = !Native.inApp;
@@ -3277,6 +3323,7 @@
     var m = location.hash.match(/^#shelf=([A-Za-z0-9_-]+)/);
     if (m) { importShelf(m[1]); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
     renderHome(); renderAudio(); renderTabs();
+    openIncoming();
     loadYT();
     updateDot();
     if (Native.inApp) Native.checkYT().then(updateDot); // the corner turns green as soon as the sign-in is known

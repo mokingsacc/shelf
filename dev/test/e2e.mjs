@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import { installFakes, CAP, CHANNELS } from './fakenet.mjs';
+import { installFakes, CAP, EXT, CHANNELS } from './fakenet.mjs';
 
 const root = new URL('../../', import.meta.url).pathname;
 const server = http.createServer((req, res) => {
@@ -1540,6 +1540,95 @@ const fctx = await browser.newContext(); await installFakes(fctx);
 const fp = await fctx.newPage(); await fp.goto('file://' + root + 'index.html'); await fp.waitForTimeout(400);
 await fp.locator('#statusBtn').click(); await fp.waitForTimeout(150);
 ok((await fp.locator('#checkList').textContent()).includes('opened the file directly'), 'file: opened-as-file is explained');
+
+console.log('\n== X Desktop Chrome with the Shelf extension (faked)');
+async function extPage({ url = URL0, ext = {}, fakes = {}, ctxOpts = {}, bridge = true, init = '' } = {}) {
+  const c = await browser.newContext({ viewport: { width: 1280, height: 820 }, permissions: ['clipboard-read', 'clipboard-write'], ...ctxOpts });
+  await installFakes(c, fakes); await c.addInitScript('window.__hour = 14.13;');
+  if (bridge) await c.addInitScript(EXT(ext));
+  if (init) await c.addInitScript(init);
+  const pg = await c.newPage();
+  pg.on('pageerror', (e) => errors.push('ext: ' + e.message));
+  pg.on('console', (mm) => { if (mm.type() === 'error' && !/Failed to load resource|net::ERR/.test(mm.text())) errors.push('ext: ' + mm.text()); });
+  await pg.goto(url);
+  return { c, pg };
+}
+let xc, x;
+// A signed-in account whose history page is empty (YouTube's page, with its data)
+({ c: xc, pg: x } = await extPage({ fakes: { fresh: true }, init: "window.__hist = { html: '<script>var ytInitialData = {};</script>' };" }));
+await settle(x);
+ok(await x.evaluate(() => document.documentElement.getAttribute('data-shelf-ext')) === '1.0.0' && await x.evaluate(() => !document.documentElement.classList.contains('in-app')), 'X the page knows the extension is there, and is not the phone app');
+ok(await shelf(x, () => window.__shelf.lib.sources().length) === 7, 'X channels load on first run (all seven found)');
+ok(await x.locator('#webNote').isHidden(), 'X with the extension the "set it up" note is hidden');
+ok((await shelf(x, () => window.__extCalls)).some((c) => /youtube\.com\/@/.test(c.url)), 'X channel pages are read through the extension');
+await x.waitForFunction(() => window.__shelf.checks().some((c) => /^Running with the Shelf extension v1\.0\.0$/.test(c.text)), null, { timeout: 6000 }).catch(() => {});
+ok((await shelf(x, () => window.__shelf.checks())).some((c) => c.ok === 1 && c.text === 'Running with the Shelf extension v1.0.0'), 'X the self-check says: Running with the Shelf extension v1.0.0');
+await x.waitForFunction(() => document.querySelector('#statusDot').classList.contains('good'), null, { timeout: 6000 }).catch(() => {});
+ok(await x.locator('#statusDot.good').count() === 1, 'X the corner is green');
+// Search, and play a result
+await x.locator('#searchBtn').click();
+await x.fill('#sq', 'renal'); await x.press('#sq', 'Enter'); await x.waitForTimeout(500);
+ok(await x.locator('#page .item').count() >= 1 && (await x.locator('#page .item').first().textContent()).includes('Renal'), 'X search returns results');
+await x.locator('#page .item').first().click(); await x.waitForTimeout(400);
+ok(await x.locator('#vsheet.open').count() === 1 && await shelf(x, () => window.__fake.getPlayerState()) === 1, 'X a result plays');
+// A link that leaves for YouTube on purpose carries the pass marker
+const pass1 = await x.evaluate(() => { const a = document.querySelector('#ytLink'); let h; a.addEventListener('click', (e) => { e.preventDefault(); h = a.href; }, { once: true }); a.click(); return h; });
+ok(/^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}.*[?&]shelf=pass$/.test(pass1), 'X the player\'s YouTube link carries shelf=pass: ' + pass1);
+await x.locator('[data-act="close-video"]').click();
+await x.locator('[data-act="back"]').click(); await x.waitForTimeout(150);
+await x.locator('#todayBtn').click(); await x.waitForTimeout(150);
+const passHome = await x.evaluate(() => { const a = document.querySelector('#ytHome'); let h; a.addEventListener('click', (e) => { e.preventDefault(); h = a.href; }, { once: true }); a.click(); return h; });
+ok(passHome === 'https://www.youtube.com/?shelf=pass', 'X Today\'s YouTube button carries shelf=pass: ' + passHome);
+// Last in YouTube and the History page, from the fake history
+await x.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, HIST); await x.waitForTimeout(400);
+ok(/Never Gonna/.test(await x.locator('#ytLastT').textContent()) && /Rick/.test(await x.locator('#ytLastK').textContent()), 'X Last in YouTube fills from the history: ' + await x.locator('#ytLastT').textContent());
+await x.locator('[data-act="yt-hist"]').first().click(); await x.waitForTimeout(400);
+ok(/YouTube history/.test(await x.locator('#page h1').textContent()) && await x.locator('#page .item').count() >= 2 && /Never Gonna/.test(await x.locator('#page').textContent()), 'X the History page fills from the history');
+ok((await shelf(x, () => window.__extCalls)).some((c) => /feed\/history/.test(c.url) && !(c.headers && c.headers.Cookie)), 'X history is read as the browser\'s own account (no Cookie header sent by Shelf)');
+await x.locator('[data-act="back"]').click(); await x.waitForTimeout(150);
+// Signed out of YouTube in the browser: the existing signed-out states show, and Sign in again opens a tab
+await x.evaluate(() => { window.__hist = { signedIn: false }; window.__shelf.refreshLastYT(true); }); await x.waitForTimeout(400);
+ok(/signed out/i.test(await x.locator('#ytLastK').textContent()), 'X signed out of YouTube: Last in YouTube says so: ' + await x.locator('#ytLastK').textContent());
+const popup = x.waitForEvent('popup', { timeout: 3000 }).catch(() => null);
+await x.locator('#ytLastTx').click();
+const pu = await popup;
+ok(!!pu && pu.url() === 'https://www.youtube.com/signin?shelf=pass', 'X Sign in again opens YouTube\'s sign-in with shelf=pass in a new tab: ' + (pu && pu.url()));
+if (pu) await pu.close().catch(() => {});
+await x.evaluate((h) => { window.__hist = { html: h }; document.dispatchEvent(new Event('visibilitychange')); }, HIST); await x.waitForTimeout(700);
+ok(/Never Gonna/.test(await x.locator('#ytLastT').textContent()) && !/signed out/i.test(await x.locator('#ytLastK').textContent()), 'X back in the Shelf tab, it reads the history again and is signed in');
+await xc.close();
+// An incoming YouTube link at start (what the redirect sends)
+({ c: xc, pg: x } = await extPage({ url: URL0 + '#open=https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42' }));
+await x.waitForTimeout(900);
+const st42 = await x.evaluate(() => window.__lastStart);
+ok(await shelf(x, () => window.__shelf.current) === 'dQw4w9WgXcQ' && st42 >= 38 && st42 <= 42, 'X #open= with a watch link plays that video near 42 s (started at ' + st42 + ')');
+ok(await x.evaluate(() => location.hash) === '', 'X the #open= address is cleared after use');
+// while open: a playlist link opens its page; other links are ignored
+await x.locator('[data-act="close-video"]').click(); await x.waitForTimeout(300);
+await x.evaluate(() => { location.hash = '#open=https://www.youtube.com/playlist?list=PLpeds0000000000'; }); await x.waitForTimeout(800);
+ok(await shelf(x, () => { const s = window.__shelf.stack; return s.length && s[s.length - 1].name === 'plist' && s[s.length - 1].id; }) === 'PLpeds0000000000', 'X #open= with a playlist link opens its page');
+await x.evaluate(() => { location.hash = '#open=https://example.com/watch?v=dQw4w9WgXcQ'; }); await x.waitForTimeout(400);
+await x.evaluate(() => { location.hash = '#open=https://www.youtube.com/feed/subscriptions'; }); await x.waitForTimeout(400);
+ok(await x.evaluate(() => location.hash) === '' && await x.locator('#toast.show').count() === 0 && await shelf(x, () => !window.__shelf.current), 'X other links are ignored quietly (no video, no message, address cleared)');
+await xc.close();
+// The bridge fails: reads fail and the self-check says so
+({ c: xc, pg: x } = await extPage({ ext: { down: true } }));
+await x.waitForTimeout(2500);
+ok((await shelf(x, () => window.__shelf.checks())).some((c) => c.ok === 0 && /Shelf extension v1\.0\.0 is on but can't read other sites/.test(c.text)), 'X when reads fail the self-check has a problem line');
+await xc.close();
+// No extension, desktop: the note says what to do, with a Set it up dialog
+({ c: xc, pg: x } = await extPage({ bridge: false }));
+await x.waitForTimeout(500);
+ok(await x.locator('#webNote').isVisible() && /Shelf extension in Chrome/.test(await x.locator('#webNote').textContent()) && await x.locator('#webNote [data-act="ext-setup"]').count() === 1, 'X without the bridge the note says channels, search and history need the extension, with Set it up');
+ok(!/—/.test(await x.locator('#webNote').textContent()), 'X the note has no em-dash');
+await x.locator('#webNote [data-act="ext-setup"]').click(); await x.waitForTimeout(200);
+ok(await x.locator('#extDlg[open]').count() === 1 && await x.locator('#extDlg li').count() === 3 && await x.locator('#extDlg a[href="shelf-extension.zip"]').count() === 1, 'X Set it up opens the three steps with a download link');
+await xc.close();
+// A phone browser without the extension keeps today's wording
+const pctx = await browser.newContext({ ...phone, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' }); await installFakes(pctx); await pctx.addInitScript('window.__hour = 14.13;');
+const pp = await pctx.newPage(); await pp.goto(URL0); await pp.waitForTimeout(400);
+ok(/Shelf app/.test(await pp.locator('#webNote').textContent()) && await pp.locator('#webNote [data-act="ext-setup"]').count() === 0, 'X a phone browser keeps the old note');
+await pctx.close();
 
 ok(errors.length === 0, 'no script errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
 await browser.close();

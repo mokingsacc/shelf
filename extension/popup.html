@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shelf</title>
+<style>
+  :root { color-scheme: light dark; --bg: #faf8f4; --ink: #1c1b19; --mute: #6b675f; --line: #d9d4c9; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1b1a18; --ink: #ece8df; --mute: #9b968b; --line: #3a3733; } }
+  body { margin: 0; width: 260px; padding: 16px; background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+  p { margin: 0 0 14px; }
+  button { display: block; width: 100%; box-sizing: border-box; font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); cursor: pointer; }
+  button.quiet { margin-top: 8px; background: none; color: var(--mute); border-color: var(--line); font-size: 13px; }
+</style>
+</head>
+<body>
+<p id="state">&nbsp;</p>
+<button type="button" id="open">Open Shelf</button>
+<button type="button" id="toggle" class="quiet">Allow YouTube for 15 minutes</button>
+<script src="popup.js"></script>
+</body>
+</html>
