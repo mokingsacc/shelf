@@ -394,6 +394,21 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
             DispatchQueue.main.async { if PocketPlayer.shared.active { PocketPlayer.shared.sendNow() } }
             return
         }
+        if Command.name(of: cmd) == "volume" {
+            // The watch's Crown: the iPhone's own volume, answered at once with the level (never the page's business)
+            let want = ((try? JSONSerialization.jsonObject(with: cmd)) as? [String: Any])?["v"] as? Double
+            DispatchQueue.main.async {
+                // Shelf may have been woken in the background just for this: the seconds to answer
+                let app = UIApplication.shared
+                var task = UIBackgroundTaskIdentifier.invalid
+                task = app.beginBackgroundTask(withName: "shelf-volume") { if task != .invalid { app.endBackgroundTask(task); task = .invalid } }
+                SystemVolume.shared.set(want) { now in
+                    replyHandler([LinkKey.ack: id, "vol": now])
+                    if task != .invalid { app.endBackgroundTask(task); task = .invalid }
+                }
+            }
+            return
+        }
         replyHandler([LinkKey.ack: id, "page": answers])
         receive(id: id, json: cmd)
     }
@@ -409,6 +424,76 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         guard let id = userInfo[LinkKey.id] as? String, let cmd = userInfo[LinkKey.command] as? Data else { return }
         receive(id: id, json: cmd)
+    }
+}
+
+/// The iPhone's volume for the watch's Crown. iOS has no call to set it, so this moves the slider of a system volume view
+/// kept out of sight in Shelf's window (with it there, iOS shows no volume banner over Shelf). Main thread only.
+final class SystemVolume {
+    static let shared = SystemVolume()
+    private var view: MPVolumeView?
+    private var want: Float?            // the newest level asked for: a late retry never undoes a newer one
+    private var lastUse = Date.distantPast
+
+    /// Sets the volume to `v` (0–1), or only reads it (nil); `done` gets the level it settled at
+    func set(_ v: Double?, done: @escaping (Double) -> Void) {
+        lastUse = Date()
+        let slider = self.slider()
+        guard let v, let slider else {
+            // A read: a slider just put in the window takes a moment to show the system's level
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                done(self?.level(slider) ?? Double(AVAudioSession.sharedInstance().outputVolume))
+                self?.letGo()
+            }
+            return
+        }
+        let target = Float(min(1, max(0, v)))
+        want = target
+        let move = { slider.setValue(target, animated: false); slider.sendActions(for: .valueChanged) }
+        move()
+        // A volume view only just made can miss its first move: once more if it hasn't taken, unless a newer level came
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            if self?.want == target, abs(slider.value - target) > 0.01 { move() }
+        }
+        // Answer with where it settled (iOS may cap it, e.g. the loud-headphones limit)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            done(self?.level(slider) ?? Double(target))
+            self?.letGo()
+        }
+    }
+
+    /// The slider follows the system volume; the audio session's number goes stale while Shelf's own session is idle
+    private func level(_ slider: UISlider?) -> Double {
+        if let slider, view?.window != nil { return Double(slider.value) }
+        return Double(AVAudioSession.sharedInstance().outputVolume)
+    }
+
+    /// Out of Shelf's window 2 s after the watch's last turn, so the iPhone's own buttons show their volume banner again
+    private func letGo() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) { [weak self] in
+            guard let self, Date().timeIntervalSince(self.lastUse) >= 2 else { return }
+            self.view?.removeFromSuperview()
+        }
+    }
+
+    private func slider() -> UISlider? {
+        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }.first
+        if view == nil {
+            let v = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 120, height: 40))
+            v.alpha = 0.01
+            v.isUserInteractionEnabled = false
+            v.accessibilityElementsHidden = true
+            view = v
+        }
+        if let view, let window, view.window !== window { window.addSubview(view) }
+        view?.layoutIfNeeded()
+        return view.flatMap(Self.findSlider)
+    }
+
+    private static func findSlider(_ v: UIView) -> UISlider? {
+        if let s = v as? UISlider { return s }
+        for sub in v.subviews { if let s = findSlider(sub) { return s } }
+        return nil
     }
 }
 

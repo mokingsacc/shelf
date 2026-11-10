@@ -47,6 +47,18 @@ final class PhoneLink: NSObject, WCSessionDelegate, @unchecked Sendable {
         return .failed
     }
 
+    /// The iPhone's volume: set it to `v` (0–1), or only read it (nil). The iPhone answers at once with its level; nil when
+    /// it's out of reach or didn't say (an older Shelf there)
+    func volume(_ v: Double?, reply: @escaping @Sendable (Double?) -> Void) {
+        guard let s = session, s.activationState == .activated, s.isReachable else { reply(nil); return }
+        var f: [String: Any] = [:]
+        if let v { f["v"] = v }
+        let c = Command("volume", f)
+        s.sendMessage([LinkKey.command: c.json, LinkKey.id: c.id], replyHandler: { r in
+            reply((r["vol"] as? NSNumber)?.doubleValue)
+        }, errorHandler: { _ in reply(nil) })
+    }
+
     /// Queued for the iPhone whatever happens (a podcast spot from the watch's own playback)
     func queue(_ c: Command) {
         guard let s = session, s.activationState == .activated else { return }
