@@ -86,4 +86,30 @@ assert.strictEqual(F.episodeFor({ title: 'Why the Housing Market Is Stuck', publ
 assert.strictEqual(F.episodeFor({ title: 'Boredom', published: T }, eps, 'x'), null, 'one word is too little to go on');
 assert.strictEqual(F.podcastFor('Dirty Medicine', [it('https://x/m', 'Medicine')]), '', 'a podcast named with just one word of the channel is not its twin');
 assert.strictEqual(F.episodeFor({ title: 'Krystal: Trump Tariffs DISASTER', published: T }, [{ guid: 'full', title: '10/6/25: Trump Tariffs Crash Markets, Israel Strikes, Shutdown Week Two, Polling Mess', published: T }], 'Breaking Points'), null, 'a clip is not the full show');
+
+// Real results pages: a joint byline still reads, and an episode with another title gets a short list
+{
+  global.Feeds = F;
+  const Search = require('../src/search.js');
+  const ezraRes = Search.fromPage(fx('yt-results-ezra.html')), finRes = Search.fromPage(fx('yt-results-fin.html'));
+  assert.strictEqual(F.videoFor({ title: 'Is There an A.I. Bubble? A Debate.', duration: 4245 }, ezraRes, 'The Ezra Klein Show').id, '9GLdGc9OX-A');
+  const dingo = { title: 'Golden Grahams Are For Satanists | “A Dingo Ate My Baby!” (Part 1)', duration: 2842 };
+  assert.strictEqual(F.videoFor(dingo, finRes, 'Fin vs History'), null, 'different titles: no title match');
+  let ch = F.videoChoices(dingo, finRes, 'Fin vs History', finRes.shows);
+  assert.strictEqual(ch.length, 1);
+  assert.strictEqual(ch[0].id, 'wCSVyeUoQIg'); assert.ok(ch[0].own && ch[0].fits === true);
+  assert.ok(!ch.some((c) => c.id === 'VHOh2OtXX3g' || c.id === 'IKHL3Fy-EmI'), 'too long and too short are left out');
+  ch = F.videoChoices(dingo, finRes, 'Fin vs History');
+  assert.deepStrictEqual(ch.map((c) => c.id), ['wCSVyeUoQIg']);
+  assert.strictEqual(ch[0].own, false);
+  // Own first, YouTube's order otherwise, at most 6, no live, no unknown length unless own, 3 others when the episode has no length
+  const v = (id, channel, dur, x) => Object.assign({ kind: 'video', id, title: id, channel, channelId: 'UC' + 'x'.repeat(22), dur }, x || {});
+  const many = [v('o1', 'Other', 1000), v('o2', 'Other', 1000), v('mine', 'Fin vs History', 1000), v('nolen', 'Other', 0), v('mylen', 'Fin vs History', 0), v('lv', 'Fin vs History', 0, { live: true }), v('o3', 'Other', 1000), v('o4', 'Other', 1000), { kind: 'channel', id: 'c' }];
+  assert.deepStrictEqual(F.videoChoices({ title: 't' }, many, 'Fin vs History').map((c) => c.id), ['mine', 'mylen', 'o1', 'o2', 'o3']);
+  assert.deepStrictEqual(F.videoChoices({ title: 't', duration: 1000 }, many, 'Fin vs History').map((c) => c.id), ['mine', 'mylen', 'o1', 'o2', 'o3', 'o4']);
+  assert.deepStrictEqual(F.videoChoices({ title: 't', duration: 1000 }, [v('far', 'Fin vs History', 1400)], 'Fin vs History'), [], 'over 300 s off');
+  assert.deepStrictEqual(F.videoChoices({ title: 't', duration: 1000 }, [v('near', 'Fin vs History', 1290)], 'Fin vs History').map((c) => c.id), ['near']);
+  assert.deepStrictEqual(F.videoChoices({ title: 't', duration: 1000 }, [v('x', 'Other', 1000)], 'Fin vs History', [{ title: 'Fin Vs. History', channelId: 'UC' + 'x'.repeat(22) }]).map((c) => c.own), [true], 'a show card names the channel');
+  assert.strictEqual(F.videoChoices({ title: 't', duration: 1000 }, Array.from({ length: 9 }, (_, i) => v('m' + i, 'Fin vs History', 1000)), 'Fin vs History').length, 6);
+}
 console.log('feeds: all tests passed');

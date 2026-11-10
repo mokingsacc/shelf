@@ -34,6 +34,10 @@ async function appPage({ prefs = {}, clip = '', fakes = {}, ctxOpts = {}, shell 
 }
 const settle = (p) => p.waitForFunction(() => window.__shelf && !window.__shelf.busy, null, { timeout: 10000 }).then(() => p.waitForTimeout(150)).catch(() => {});
 const shelf = (p, fn, a) => p.evaluate(fn, a);
+// Put a pasted video into a section (by its author's name), so it counts there
+const intoSec = (pg, id, author) => pg.evaluate(([i, a]) => { window.__shelf.videos[i].author = a; window.__shelf.renderHome(); }, [id, author]);
+// Open the Medicine band on Today (its first row is the course's next episode)
+const openMed = async (pg) => { if (!(await pg.locator('.row[data-act="ep-play"]').count())) { await pg.locator('[data-act="toggle-band"][data-id="med"]').click(); await pg.waitForTimeout(150); } };
 
 console.log('\n== 1 Open');
 let { ctx, p } = await appPage({ fakes: { fresh: true } });
@@ -55,7 +59,7 @@ await shelf(p, () => window.__shelf.refreshAll(true)); await settle(p);
 ok(await p.locator('.band ul').count() === 0 && await p.locator('.band .tg[aria-expanded="false"]').count() === 3 && await p.locator('.band.c0 .urlb').count() === 1, '2 Pasted has a + URL button; Home starts with every section folded');
 ok(!/days to Step 2 CK|unfinished/.test(await p.locator('#home').textContent()), '2 Home has no exam countdown or tallies');
 await p.locator('.band.c1 .tg').click(); await p.waitForTimeout(100);
-ok(await p.locator('.band.c1 .nw').count() === 3 && await shelf(p, () => !!window.__shelf.prefs.open.med), '2 tapping Medicine unfolds it (remembered): 3 NEW uploads');
+ok(await p.locator('.band.c1 .nw').count() === 3 - await p.locator('.band.c1 .row[data-act="ep-play"]').count() && await shelf(p, () => !!window.__shelf.prefs.open.med), '2 tapping Medicine unfolds it (remembered): 3 rows, the course row first when a course is on the go, the rest NEW uploads');
 ok((await p.locator('.band.c1 .tm').textContent()).includes('3 new'), '2 Medicine header says 3 new');
 await p.locator('.band.c1 .hd .tm').click();
 ok(await p.locator('#page .top h1').textContent() === 'Medicine' && !(await p.locator('#page .chrow').first().isVisible()), '2 the count opens Medicine, channels folded under the videos');
@@ -86,8 +90,9 @@ const prefs4 = await shelf(p, () => window.__prefs);
 await ctx.close();
 ({ ctx, p } = await appPage({ prefs: prefs4 })); // web storage gone, phone storage kept: like a fresh launch
 await p.waitForTimeout(1200);
-ok(await p.locator('#cont').isVisible() && /1:\d\d/.test(await p.locator('#contMeta').textContent()), '4 Resume strip shows it at ' + await p.locator('#contMeta').textContent());
-await p.locator('#cont').click(); await p.waitForTimeout(400);
+if (!(await p.locator('.band.c0 .row').count())) { await p.locator('.band.c0 [data-act="toggle-band"]').click(); await p.waitForTimeout(150); }
+ok(await p.locator('.band.c0 .row').first().isVisible(), '4 the unfinished pasted video waits in the Pasted band');
+await p.locator('.band.c0 .row').first().click(); await p.waitForTimeout(400);
 const start = await shelf(p, () => window.__lastStart);
 ok(Math.abs(start - (t - 3)) < 2, '4 one tap carries on from the saved spot (start ' + start + ')');
 
@@ -165,7 +170,7 @@ await p.locator('[data-act="close-night"]').click();
 await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
 ok(await p.locator('#mini').isVisible() && /to sleep/.test(await p.locator('#miniSub').textContent()), '6 keeps playing with a mini bar after closing: ' + await p.locator('#miniSub').textContent());
 await p.locator('#todayBtn').click(); await p.waitForTimeout(150);
-ok(await p.locator('#cont').isVisible() && /Rome/.test(await p.locator('#contTitle').textContent()) && (await p.locator('#contK').textContent()).startsWith('Continue'), '6 the podcast in the bar is also Continue (it is what you were playing last): ' + await p.locator('#contTitle').textContent());
+ok(await p.locator('#pk1').isVisible() && /Rome/.test(await p.locator('#pk1T').textContent()) && (await p.locator('#pk1K').textContent()).startsWith('Sleep'), '6 the podcast in the bar is also the Sleep row (it is what you were playing last there): ' + await p.locator('#pk1T').textContent());
 await p.evaluate(() => { window.__shelf.engine.state().timer.endsAt = Date.now() + 1500; });
 await p.waitForTimeout(3000);
 ok(await p.evaluate(() => document.querySelector('#audio').paused), '6 stops when the timer runs out');
@@ -428,7 +433,9 @@ const cinfo = await shelf(p, () => window.__shelf.courses.list().map((c) => { co
 ok(cinfo.join(' ') === 'Paeds:91/130:go OBGYN:60/60:done Ophthal:12/12:done Internal Med:0/150:new Pharm:0/80:new Family Med:0/40:new', 'C six playlists found and ticked from Mo\'s note: ' + cinfo.join(' '));
 ok(await shelf(p, () => window.__httpCalls.some((c) => c.method === 'POST' && /youtubei\/v1\/browse/.test(c.url))), 'C long playlists load past the first 100 (native POST)');
 ok(await shelf(p, () => { const c = window.__shelf.courses, ob = c.list()[1], pid = Object.keys(ob.pins)[0]; return c.items(ob.id).find((x) => x.id === pid).n; }) === 1607, 'C OBGYN 1607 carries the ‼ pin');
-ok(await p.locator('#next').isVisible() && /Paeds · 92 of 130/.test(await p.locator('#nextK').textContent()) && /1115/.test(await p.locator('#nextT').textContent()), 'C Home\'s Up next: ' + await p.locator('#nextK').textContent() + ' · ' + await p.locator('#nextT').textContent());
+await openMed(p);
+const crow0 = p.locator('.band .row[data-act="ep-play"]').first();
+ok(await crow0.isVisible() && /Paeds · 92 of 130/.test(await crow0.locator('small').textContent()) && /1115/.test(await crow0.locator('b').textContent()), 'C Home\'s Up next, first row of the Medicine band: ' + await crow0.locator('small').textContent() + ' · ' + await crow0.locator('b').textContent());
 ok(await p.locator('.band.c1 .sub').count() === 0, 'C Medicine has no exam line on Home');
 await p.locator('#coursesBtn').click(); await p.waitForTimeout(150);
 ok(await p.locator('#coursesBtn[aria-current="page"]').count() === 1 && await p.locator('#todayBtn[aria-current]').count() === 0, 'tabs: Courses is the current tab');
@@ -569,7 +576,7 @@ await p.goBack(); await p.waitForTimeout(300);
 ok(await p.locator('#page').isHidden(), 'tabs: Back from a tab goes Home');
 const playFrom = async (sec, chan, title) => {
   await p.locator('#todayBtn').click(); await p.waitForTimeout(100);
-  await p.locator('.band', { hasText: sec }).locator('.hd .tm').first().click();
+  await p.locator('.band:not(.pick)', { hasText: sec }).locator('.hd .tm').first().click();
   const fs = p.locator('#page details.fold:not([open]) summary', { hasText: 'Channels' }); if (await fs.count()) await fs.click();
   await p.locator('#page .chrow', { hasText: chan }).click();
   await p.locator('#page .item', { hasText: title }).first().click(); await p.waitForTimeout(700);
@@ -725,7 +732,7 @@ const guess = await shelf(p, () => ({ t: window.__shelf.videos[window.__shelf.cu
 ok(Math.abs(guess.t - (hand2 + 180)) < 3 && /at 1\.5×/.test(guess.toast) && /Sign in to YouTube/.test(guess.toast), 'Q not signed in: 2 min at 1.5× = 3 min on, and says how to get it exact: ' + guess.toast);
 await ctx.close();
 
-console.log('\n== R Pick up from (Continue, Up next, last in YouTube)');
+console.log('\n== R Pick up from (Last in YouTube, Sleep, Entertainment)');
 ({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true } }));
 await settle(p);
 // A history page with several videos: { id, title, author, t, dur, pct, short }
@@ -747,11 +754,12 @@ for (const vid of ['dQw4w9WgXcQ', 'M7lc1UVf-VE']) {
   await p.evaluate((v) => window.__shelf.handleText('https://youtu.be/' + v), vid); await p.waitForTimeout(1500);
   await p.evaluate(() => window.__fake.advance(100)); await p.waitForTimeout(1200);
   await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
+  await intoSec(p, vid, 'Breaking Points');
 }
-const contBefore = await p.locator('#contTitle').textContent();
+const contBefore = await p.locator('#pk2T').textContent();
 await p.evaluate(([h, h2]) => { window.__hist = { html: h2 }; window.__shelf.refreshLastYT(true); }, [ytHist, histPage([{ id: 'M7lc1UVf-VE', title: 'Fake title M7lc1UVf-VE', author: 'X', t: 30 }, { id: 'eeeeeeeeeee', title: 'PLAGUE Leaks From KNOWN Lab', author: 'Breaking Points', t: 893 }])]); await p.waitForTimeout(300);
-const three = await p.evaluate(() => ['#cont', '#next', '#ytLast'].map((q) => !document.querySelector(q).hidden));
-ok(three.every(Boolean) && contBefore === await p.locator('#contTitle').textContent() && /M7lc1UVf-VE/.test(contBefore) && /PLAGUE/.test(await p.locator('#ytLastT').textContent()), 'R when the YouTube video is also the latest in Shelf, Continue keeps it and Last in YouTube moves on to a different one: three rows (' + contBefore + ' / ' + await p.locator('#ytLastT').textContent() + ')');
+const three = await p.evaluate(() => ['#ytLast', '#pk1', '#pk2'].map((q) => !document.querySelector(q).hidden));
+ok(three.every(Boolean) && contBefore === await p.locator('#pk2T').textContent() && /M7lc1UVf-VE/.test(contBefore) && /PLAGUE/.test(await p.locator('#ytLastT').textContent()), 'R when the YouTube video is also the latest in Shelf, the Entertainment row keeps it and Last in YouTube moves on to a different one: three rows (' + contBefore + ' / ' + await p.locator('#ytLastT').textContent() + ')');
 await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, ytHist); await p.waitForTimeout(300);
 await p.locator('#statusBtn').click(); await p.waitForTimeout(150); await p.locator('#checkMore summary').click();
 await p.locator('[data-act="yt-report"]').click(); await p.waitForTimeout(500);
@@ -801,24 +809,26 @@ console.log('\n== T Pick up from: always three, in a fixed order');
 for (const [hr, dev, lbl] of [[13, true, 'day'], [23.2, true, 'night'], [13, false, 'plain browser']]) {
   ({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: hr, device: dev } }));
   await settle(p);
-  const rows = await p.evaluate(() => ['#cont', '#next', '#ytLast'].map((q) => { const e = document.querySelector(q), r = e.getBoundingClientRect(); return { hidden: e.hidden, shown: r.height > 20, y: r.top, k: e.querySelector('.k').textContent }; }));
-  ok(rows.every((r) => !r.hidden && r.shown) && rows[0].y < rows[1].y && rows[1].y < rows[2].y && /^Continue/.test(rows[0].k) && /^Up next/.test(rows[1].k) && /^Last in YouTube/.test(rows[2].k) && await p.locator('#pick').isVisible(), 'T ' + lbl + ': Continue, Up next, Last in YouTube, always, in that order');
-  ok(/Nothing on the go/.test(await p.locator('#contTitle').textContent()) && /Whatever you start waits here/.test(await p.locator('#contMeta').textContent()) && await p.locator('#cont').isDisabled(), 'T ' + lbl + ': nothing played yet: Continue says so quietly and is not tappable');
+  const rows = await p.evaluate(() => ['#ytLast', '#pk1', '#pk2'].map((q) => { const e = document.querySelector(q), r = e.getBoundingClientRect(); return { hidden: e.hidden, shown: r.height > 20, y: r.top, k: e.querySelector('.k').textContent }; }));
+  ok(rows.every((r) => !r.hidden && r.shown) && rows[0].y < rows[1].y && rows[1].y < rows[2].y && /^Last in YouTube/.test(rows[0].k) && /^Sleep/.test(rows[1].k) && /^Entertainment/.test(rows[2].k) && await p.locator('#pick').isVisible() && await p.locator('#cont, #next').count() === 0, 'T ' + lbl + ': Last in YouTube, Sleep, Entertainment, always, in that order, and no Continue or Up next row');
+  ok(/Nothing on the go/.test(await p.locator('#pk1T').textContent()) && /Nothing on the go/.test(await p.locator('#pk2T').textContent()) && await p.locator('#pk1').isEnabled() && await p.locator('#pk1').getAttribute('aria-label') === 'Sleep: nothing on the go. Open Sleep', 'T ' + lbl + ': nothing played yet: the section rows say so quietly and stay tappable');
   ok((await p.locator('#ytLastT').textContent()) === (dev ? 'Nothing yet' : 'Shows in the Shelf app') && await p.locator('#ytLast button').first().isDisabled(), 'T ' + lbl + ': no history yet: ' + await p.locator('#ytLastT').textContent());
+  if (lbl === 'day') {
+    await p.locator('#pk1').click(); await p.waitForTimeout(300);
+    ok(await shelf(p, () => { const t = window.__shelf.stack[window.__shelf.stack.length - 1]; return t.name === 'section' && t.id === 'sleep'; }), 'T an empty section row opens that section\'s page');
+  }
   await ctx.close();
 }
 ({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true } }));
 await settle(p);
 await shelf(p, () => { const c = window.__shelf.courses; c.list().forEach((x) => c.remove(x.id)); window.__shelf.renderHome(); });
-ok(await p.locator('#next').isVisible() && /No course on the go/.test(await p.locator('#nextT').textContent()) && /^Up next$/.test(await p.locator('#nextK').textContent()), 'T no course on the go: Up next keeps its row with a placeholder line');
+await p.locator('[data-act="toggle-band"][data-id="med"]').click().catch(() => {}); await p.waitForTimeout(150);
+ok(await p.locator('.row[data-act="ep-play"]').count() === 0, 'T no course on the go: the Medicine band has no course row and no placeholder');
 await p.locator('#pick .tg').click(); await p.waitForTimeout(150);
 ok(await p.locator('#pickN').textContent() === '0', 'T folded, the heading counts how many of the three are filled (' + await p.locator('#pickN').textContent() + ')');
-await p.locator('#pick .tg').click(); await p.waitForTimeout(150);
-await p.locator('#next').click(); await p.waitForTimeout(300);
-ok(await shelf(p, () => window.__shelf.stack.length === 1 && window.__shelf.stack[0].name === 'courses') && await p.locator('#coursesBtn[aria-current="page"]').count() === 1, 'T tapping the Up next placeholder opens the Courses tab');
 await ctx.close();
 
-console.log('\n== T2 Play, close, and it is Continue; Last in YouTube is another video, never a Short');
+console.log('\n== T2 Play, close, and it is the Entertainment row; Last in YouTube is another video, never a Short');
 ({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true } }));
 await settle(p);
 const HIST = histPage([
@@ -833,15 +843,19 @@ ok(/PLAGUE/.test(await p.locator('#ytLastT').textContent()) === false && /Never 
 await p.evaluate(() => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(1500);
 await p.evaluate(() => window.__fake.advance(100)); await p.waitForTimeout(1200);
 await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
-ok(/Continue/.test(await p.locator('#contK').textContent()) && await p.locator('#cont').isEnabled() && await p.evaluate(() => document.querySelector('#cont').getAttribute('aria-label').includes('Continue')) && /^\d+:\d\d · /.test(await p.locator('#contMeta').textContent()), 'T2 closing the video makes it Continue straight away: ' + await p.locator('#contTitle').textContent() + ' · ' + await p.locator('#contMeta').textContent());
-ok(/PLAGUE/.test(await p.locator('#ytLastT').textContent()) && !/Never Gonna|Shorty|Quick joke|Tiny/.test(await p.locator('#ytLast').textContent()), 'T2 Last in YouTube is a different video from Continue, and not a Short: ' + await p.locator('#ytLastT').textContent());
-// Up next never repeats Continue: play the course's next episode, and the one after it takes the slot
+await intoSec(p, 'dQw4w9WgXcQ', 'Breaking Points');
+ok((await p.locator('#pk2K').textContent()).startsWith('Entertainment') && await p.locator('#pk2').isEnabled() && (await p.locator('#pk2').getAttribute('aria-label')).includes('. Play') && /^at \d+:\d\d$/.test(await p.locator('#pk2T .mono').textContent()), 'T2 closing the video makes it the Entertainment row straight away: ' + await p.locator('#pk2T').textContent());
+ok(/PLAGUE/.test(await p.locator('#ytLastT').textContent()) && !/Never Gonna|Shorty|Quick joke|Tiny/.test(await p.locator('#ytLast').textContent()), 'T2 Last in YouTube is a different video from that row, and not a Short: ' + await p.locator('#ytLastT').textContent());
+// The course row never repeats a top row: play the course's next episode, and the one after it takes the slot
 const nxt = await p.evaluate(() => { const c = window.__shelf.courses, a = c.list().filter((x) => c.progress(x.id).state === 'go').sort((x, y) => (y.touched || 0) - (x.touched || 0))[0], pr = c.progress(a.id), it = c.items(a.id); return { first: pr.next.id, second: it[pr.notch + 1].id, total: pr.total, notch: pr.notch }; });
-ok(await p.locator('#next').getAttribute('data-v') === nxt.first, 'T2 Up next starts as the course\'s next episode');
+await openMed(p);
+ok(await p.locator('.row[data-act="ep-play"]').first().getAttribute('data-v') === nxt.first, 'T2 the course row starts as the course\'s next episode');
 await p.evaluate((id) => window.__shelf.handleText('https://youtu.be/' + id), nxt.first); await p.waitForTimeout(1500);
 await p.evaluate(() => window.__fake.advance(60)); await p.waitForTimeout(1200);
 await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
-ok(await p.locator('#next').getAttribute('data-v') === nxt.second && new RegExp((nxt.notch + 2) + ' of ' + nxt.total).test(await p.locator('#nextK').textContent()) && (await p.locator('#cont').getAttribute('data-e')) !== null, 'T2 when Continue is that same episode, Up next shows the next one in the course instead: ' + await p.locator('#nextK').textContent());
+await intoSec(p, nxt.first, 'Breaking Points');
+await openMed(p);
+ok(await p.locator('.row[data-act="ep-play"]').first().getAttribute('data-v') === nxt.second && new RegExp((nxt.notch + 2) + ' of ' + nxt.total).test(await p.locator('.row[data-act="ep-play"]').first().locator('small').textContent()) && (await p.locator('#pk2').getAttribute('data-e')) !== null, 'T2 when a top row is that same episode, the course row shows the next one instead');
 await ctx.close();
 
 console.log('\n== H YouTube history page');
@@ -959,16 +973,17 @@ console.log('\n== V Today bands: at most one in-progress row, played this week, 
 await settle(p);
 await p.evaluate(() => window.__shelf.refreshAll(true)); await settle(p);
 await p.locator('.band.c1 .tg').click(); await p.waitForTimeout(150);
-const medRows = async () => ({ n: await p.locator('.band.c1 ul li').count(), t: (await p.locator('.band.c1 ul li').allTextContents()).map((x) => x.replace(/\s+/g, ' ')), more: await p.locator('.band.c1 .more').allTextContents() });
+// The course row (Up next) is the band's first row when a course is on the go; the others are counted without it
+const medRows = async () => { const o = await p.locator('.band.c1 ul li:not(:has(.row[data-act="ep-play"]))'); return { n: await o.count(), course: await p.locator('.band.c1 .row[data-act="ep-play"]').count(), t: (await o.allTextContents()).map((x) => x.replace(/\s+/g, ' ')), more: await p.locator('.band.c1 .more').allTextContents() }; };
 let mr = await medRows();
-ok(mr.n === 3 && mr.more.length === 0, 'V Medicine: three new uploads, three rows, no "more" line');
+ok(mr.course === 1 && mr.n === 2 && mr.t.every((x) => /NEW/.test(x)) && mr.more.length === 1 && /\+1 more in Medicine/.test(mr.more[0]), 'V Medicine: the course row, two new uploads, and "+1 more" for the third: ' + mr.t.join(' | ') + ' / ' + mr.more.join(','));
 const abId = await shelf(p, () => {
   const s = window.__shelf.lib.sources().find((x) => x.name === 'Dirty Medicine'), it = window.__shelf.lib.items(s.id).find((x) => /Acid-Base/.test(x.title));
   window.__shelf.videos[it.id] = { id: it.id, title: it.title, author: s.name, channelId: s.id, t: 92, dur: 600, added: it.published, updated: Date.now() - 3600e3, done: false };
   window.__shelf.renderHome(); return it.id;
 });
 mr = await medRows();
-ok(mr.n === 3 && /Acid-Base/.test(mr.t[0]) && !/NEW/.test(mr.t[0]) && /NEW/.test(mr.t[1]) && /NEW/.test(mr.t[2]) && mr.more.length === 1 && /\+1 more in Medicine/.test(mr.more[0]), 'V what you played last is the first row, then the newest uploads: 3 rows, "+1 more in Medicine" counts only the new one left out: ' + mr.t.join(' | ') + ' / ' + mr.more.join(','));
+ok(mr.course === 1 && mr.n === 2 && /Acid-Base/.test(mr.t[0]) && !/NEW/.test(mr.t[0]) && /NEW/.test(mr.t[1]) && mr.more.length === 1 && /\+2 more in Medicine/.test(mr.more[0]), 'V after the course row, what you played last is the first row, then the newest upload: "+2 more in Medicine" counts only the new ones left out: ' + mr.t.join(' | ') + ' / ' + mr.more.join(','));
 const bsnap = await shelf(p, () => window.__shelf.watchSnap().sections.find((s) => s.name === 'Medicine'));
 ok(/Acid-Base/.test(bsnap.items[0].title) && bsnap.items.filter((i) => !i.isNew).length === 1 && bsnap.more === 0, 'V the watch snapshot follows the same rule: ' + bsnap.items.map((i) => i.title.slice(0, 12)).join(' | ') + ' more ' + bsnap.more);
 // A second, older half-played one never shows; and the first one goes stale after a week
@@ -978,7 +993,7 @@ mr = await medRows();
 ok(!mr.t.some((x) => /long ago/.test(x)), 'V an old half-played item (20 days) never shows on Today');
 await shelf(p, (id) => { window.__shelf.videos[id].updated = Date.now() - 8 * 864e5; window.__shelf.renderHome(); }, abId);
 mr = await medRows();
-ok(mr.n === 3 && mr.t.every((x) => /NEW/.test(x)) && !mr.t.some((x) => /Acid-Base/.test(x)), 'V played 8 days ago: it drops out of the band, only new uploads remain');
+ok(mr.n === 2 && mr.t.every((x) => /NEW/.test(x)) && !mr.t.some((x) => /Acid-Base/.test(x)), 'V played 8 days ago: it drops out of the band, only new uploads remain');
 await ctx.close();
 
 
@@ -1009,13 +1024,13 @@ ok(w2.vt > 50 && Math.abs(w2.rt - w2.vt) < 1 && w2.dur > 0, 'W while the video p
 // one truth in the lists: the episode stands for both
 await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(500);
 await p.locator('#todayBtn').click().catch(() => {}); await p.waitForTimeout(300);
-const w3 = await shelf(p, () => ({ cont: document.querySelector('#contTitle').textContent, pasted: document.querySelector('.band.c0 .tm') && document.querySelector('.band.c0 .tm').textContent, sleepRows: Array.from(document.querySelectorAll('.band.c3 li')).filter((e) => /Rome/.test(e.textContent)).length }));
+const w3 = await shelf(p, () => ({ cont: document.querySelector('#pk1T').textContent, pasted: document.querySelector('.band.c0 .tm') && document.querySelector('.band.c0 .tm').textContent, sleepRows: Array.from(document.querySelectorAll('.band.c3 li')).filter((e) => /Rome/.test(e.textContent)).length }));
 ok(/Rome/.test(w3.cont) && /^0/.test(w3.pasted || '') && w3.sleepRows <= 1, 'W Today shows the episode once (Continue), and its video is not listed again (Pasted ' + w3.pasted + ')');
 // Last in YouTube never repeats the video that is Continue's twin
 await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, histPage([{ id: 'abcdefghijk', title: 'Rome: The Fall of the Western Empire', author: 'Fall of Civilizations', t: 300 }, { id: 'eeeeeeeeeee', title: 'PLAGUE Leaks', author: 'Breaking Points', t: 893 }])); await p.waitForTimeout(400);
 ok(/PLAGUE/.test(await p.locator('#ytLastT').textContent()), 'W Last in YouTube skips the twin video of the Continue episode: ' + await p.locator('#ytLastT').textContent());
 // opening that episode from a list opens the video, at the episode's spot
-await p.locator('#cont').click(); await p.waitForTimeout(1500);
+await p.locator('#pk1').click(); await p.waitForTimeout(1500);
 const w4 = await shelf(p, (g) => ({ id: window.__lastId, start: window.__lastStart, rt: window.__shelf.audio[g].t, sheet: !!document.querySelector('#nsheet.open') }), romeG);
 ok(await p.locator('#vsheet.open').count() === 1 && w4.id === 'abcdefghijk' && Math.abs(w4.start - (w4.rt - 3)) <= 4 && !w4.sheet, 'W opening the episode (as=video) from Continue plays its video at the episode\'s spot, not the podcast player (' + w4.start + ' vs ' + Math.round(w4.rt) + ')');
 // Listen goes straight back to the episode at the video's spot, no directory lookup
@@ -1038,9 +1053,147 @@ await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTime
 const romeG2 = await shelf(p, () => window.__shelf.engine.state().episode.guid);
 await shelf(p, (g) => { window.__shelf.podYt[g] = { id: '', at: Date.now() }; }, romeG2);
 await p.locator('#nVid').click(); await p.waitForTimeout(300);
-ok(/Couldn't find this episode's video/.test(await p.locator('#toast').textContent()) && await p.locator('#toast button', { hasText: 'Search' }).count() === 1 && await p.locator('#vsheet.open').count() === 0 && !(await p.evaluate(() => document.querySelector('#audio').paused)), 'W2 not found: a toast with a Search action, the podcast keeps playing');
+ok(/Shelf found no video of this episode on YouTube/.test(await p.locator('#toast').textContent()) && await p.locator('#toast button', { hasText: 'Search' }).count() === 1 && await p.locator('#vsheet.open').count() === 0 && !(await p.evaluate(() => document.querySelector('#audio').paused)), 'W2 not found: a toast with a Search action, the podcast keeps playing');
 await p.locator('#toast button', { hasText: 'Search' }).click(); await p.waitForTimeout(1500);
 ok(await shelf(p, () => window.__shelf.stack[window.__shelf.stack.length - 1].name) === 'search' && /Fall of Civilizations Podcast Rome/.test(await p.locator('#sq').inputValue()) && await p.locator('#nsheet.open').count() === 0 && (await p.locator('#page .item').count() > 0 || /Searching|No results/.test(await p.locator('#page').textContent())), 'W2 Search opens Shelf\'s own Search page with the podcast name and title already run: ' + await p.locator('#sq').inputValue());
+await ctx.close();
+
+console.log('\n== W3 Which video is it');
+const vq = { mode: 'guess' };
+const openRome = async (pg) => { await pg.locator('.band.c3 .hd .tm').click(); await pg.locator('#page .item', { hasText: 'Rome' }).click(); await pg.waitForTimeout(1200); return shelf(pg, () => window.__shelf.engine.state().episode.guid); };
+const lookupDone = (pg, g) => pg.waitForFunction((g) => { const c = window.__shelf.podYt[g]; return c && !c.busy; }, g, { timeout: 6000 }).catch(() => {});
+const resultCalls = (pg) => shelf(pg, () => window.__httpCalls.filter((c) => /youtube\.com\/results\?search_query=Fall/.test(c.url)).length);
+({ ctx, p } = await appPage({ fakes: { fresh: false, vq }, shell: { hour: 13, device: true } }));
+await settle(p);
+const vidG = await openRome(p);
+await lookupDone(p, vidG);
+const found3 = await shelf(p, (g) => window.__shelf.podYt[g], vidG);
+ok(found3.id === 'guessedvid1' && found3.guess === true && found3.list.length === 2, 'W3 a joint video with another title is found through the show card, as a guess, with a list kept: ' + JSON.stringify(found3));
+const searches0 = await resultCalls(p);
+await shelf(p, () => window.__shelf.engine.seek(20));
+await p.locator('#nVid').click(); await p.waitForTimeout(1500);
+const g1 = await shelf(p, (g) => ({ id: window.__lastId, start: window.__lastStart, rec: window.__shelf.audio[g], vep: window.__shelf.videos.guessedvid1 && window.__shelf.videos.guessedvid1.ep, toast: document.querySelector('#toast').textContent }), vidG);
+ok(await p.locator('#vsheet.open').count() === 1 && g1.id === 'guessedvid1' && Math.abs(g1.start - 17) <= 3 && g1.rec.ytg === 1 && g1.vep === vidG, 'W3 a guessed video opens at the same spot and is marked as a guess (start ' + g1.start + ')');
+ok(/Playing “A Wholly Different Title”\. Not this episode\?/.test(g1.toast) && await p.locator('#toast button', { hasText: 'Pick another' }).count() === 1, 'W3 the toast names the video and offers Pick another: ' + g1.toast);
+await p.locator('#toast button', { hasText: 'Pick another' }).click(); await p.waitForTimeout(300);
+ok(await p.locator('#twinDlg[open]').count() === 1 && (await p.locator('#twinH').textContent()) === 'Which video is it?' && await p.locator('#twinBody [data-act="podvid-pick"]').count() === 2 && await p.locator('#twinBody [data-act="podvid-search"]').count() === 1 && /Pick it once/.test(await p.locator('#twinBody p').first().textContent()), 'W3 Pick another opens the list: two videos and None of these');
+ok(/Some Other Channel/.test(await p.locator('#twinBody [data-act="podvid-pick"]').nth(1).textContent()) && /3:47:00|3:47/.test(await p.locator('#twinBody [data-act="podvid-pick"]').nth(1).textContent()), 'W3 each choice shows its channel and length');
+await p.locator('#twinBody [data-act="podvid-pick"]', { hasText: 'Another Long Documentary' }).click(); await p.waitForTimeout(1500);
+const g2 = await shelf(p, (g) => ({ id: window.__lastId, start: window.__lastStart, rec: window.__shelf.audio[g], old: window.__shelf.videos.guessedvid1, nu: window.__shelf.videos.otherchan01, saved: JSON.parse(localStorage.getItem('shelf.podyt2'))[g] }), vidG);
+ok(await p.locator('#twinDlg[open]').count() === 0 && await p.locator('#vsheet.open').count() === 1 && g2.id === 'otherchan01' && g2.rec.yt === 'otherchan01' && !g2.rec.ytg && g2.nu.ep === vidG, 'W3 the pick opens that video and the episode points at it, no longer a guess');
+ok(!g2.old, 'W3 the wrongly guessed video, made by the guess, is gone (no wrong title left as a started video)');
+ok(g2.saved.id === 'otherchan01' && g2.saved.guess === false, 'W3 the pick is remembered: ' + JSON.stringify({ id: g2.saved.id, guess: g2.saved.guess }));
+await p.locator('#vListen').click(); await p.waitForTimeout(900);
+const searches1 = await resultCalls(p);
+await p.locator('#nVid').click(); await p.waitForTimeout(1500);
+ok(await p.locator('#vsheet.open').count() === 1 && await shelf(p, () => window.__lastId) === 'otherchan01' && await p.locator('#twinDlg[open]').count() === 0 && !/show/.test(await p.locator('#toast').getAttribute('class')) && await resultCalls(p) === searches1 && searches1 === searches0, 'W3 a second tap on Video opens the picked video straight away: no list, no toast, no new search');
+await ctx.close();
+
+// a failed search says so, and Try again searches at once
+vq.mode = 'fail';
+({ ctx, p } = await appPage({ fakes: { fresh: false, vq }, shell: { hour: 13, device: true } }));
+await settle(p);
+const failG = await openRome(p);
+await lookupDone(p, failG);
+await p.locator('#nVid').click(); await p.waitForTimeout(400);
+ok(/Couldn't reach YouTube to look for this episode's video\./.test(await p.locator('#toast').textContent()) && await p.locator('#toast button', { hasText: 'Try again' }).count() === 1 && await p.locator('#vsheet.open').count() === 0, 'W3 a failed search says so and offers Try again');
+ok(await shelf(p, () => localStorage.getItem('shelf.podyt2')) === null, 'W3 a failed search is not remembered as a miss');
+const failCalls = await resultCalls(p);
+vq.mode = 'guess';
+await p.locator('#toast button', { hasText: 'Try again' }).click(); await p.waitForTimeout(2000);
+ok(await resultCalls(p) === failCalls + 1 && await p.locator('#vsheet.open').count() === 1 && await shelf(p, () => window.__lastId) === 'guessedvid1', 'W3 Try again searches at once and the video opens');
+await ctx.close();
+
+// an old miss saved by the broken search is forgotten at load, and the lookup runs again
+vq.mode = 'guess';
+({ ctx, p } = await appPage({ fakes: { fresh: false, vq }, shell: { hour: 13, device: true } }));
+await settle(p);
+await ctx.addInitScript((g) => { try { localStorage.setItem('shelf.podyt', JSON.stringify({ [g]: { id: '', at: Date.now() } })); } catch (e) {} }, vidG);
+await p.reload(); await settle(p);
+ok(await shelf(p, () => localStorage.getItem('shelf.podyt')) === null, 'W3 the old shelf.podyt key is gone after load');
+await openRome(p); await lookupDone(p, vidG);
+ok(await resultCalls(p) === 1 && await shelf(p, (g) => window.__shelf.podYt[g].id, vidG) === 'guessedvid1', 'W3 the old miss does not hold: the episode is looked up again and found');
+await ctx.close();
+
+// a guess with no other choice still has a way out (Search); None of these lets a guess go
+vq.mode = 'single';
+({ ctx, p } = await appPage({ fakes: { fresh: false, vq }, shell: { hour: 13, device: true } }));
+await settle(p);
+const oneG = await openRome(p);
+await lookupDone(p, oneG);
+await p.locator('#nVid').click(); await p.waitForTimeout(1500);
+ok(await p.locator('#vsheet.open').count() === 1 && /Not this episode\?/.test(await p.locator('#toast').textContent()) && await p.locator('#toast button', { hasText: 'Search' }).count() === 1 && await p.locator('#toast button', { hasText: 'Pick another' }).count() === 0, 'W3 a guess with no other choice offers Search instead of Pick another');
+await p.locator('#toast button', { hasText: 'Search' }).click(); await p.waitForTimeout(1200);
+ok(await shelf(p, () => window.__shelf.stack[window.__shelf.stack.length - 1].name) === 'search', 'W3 that Search opens Shelf\'s Search');
+await ctx.close();
+
+// several possible videos and no sure one: a list to pick from once; None of these goes to Shelf's own Search
+vq.mode = 'many';
+({ ctx, p } = await appPage({ fakes: { fresh: false, vq }, shell: { hour: 13, device: true } }));
+await settle(p);
+const manyG = await openRome(p);
+await lookupDone(p, manyG);
+await p.locator('#nVid').click(); await p.waitForTimeout(400);
+ok(await p.locator('#twinDlg[open]').count() === 1 && await p.locator('#twinBody [data-act="podvid-pick"]').count() === 2 && await p.locator('#vsheet.open').count() === 0 && !(await p.evaluate(() => document.querySelector('#audio').paused)), 'W3 not sure which of two: the list opens with nothing playing in Shelf yet, the podcast keeps going');
+await p.locator('#twinBody [data-act="podvid-search"]').click(); await p.waitForTimeout(1500);
+ok(await p.locator('#twinDlg[open]').count() === 0 && await shelf(p, () => window.__shelf.stack[window.__shelf.stack.length - 1].name) === 'search' && /Fall of Civilizations Podcast Rome/.test(await p.locator('#sq').inputValue()), 'W3 None of these opens Shelf\'s Search with the text: ' + await p.locator('#sq').inputValue());
+await ctx.close();
+
+console.log('\n== Z Top three rows, the course row and a show listed twice');
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true } }));
+await settle(p);
+await p.locator('.band.c3 .hd .tm').click();
+await p.locator('#page .item', { hasText: 'Rome' }).click(); await p.waitForTimeout(1200);
+await shelf(p, () => window.__shelf.engine.seek(90)); await p.waitForTimeout(1500);
+await p.locator('[data-act="close-night"]').click();
+await p.locator('[data-act="back"]').click(); await p.waitForTimeout(150);
+await p.locator('#todayBtn').click(); await p.waitForTimeout(150);
+await p.evaluate(() => window.__shelf.engine.pause()); await p.waitForTimeout(300);
+await p.evaluate(() => window.__shelf.handleText('https://youtu.be/dQw4w9WgXcQ')); await p.waitForTimeout(1500);
+await p.evaluate(() => window.__fake.advance(100)); await p.waitForTimeout(1200);
+await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
+await intoSec(p, 'dQw4w9WgXcQ', 'Breaking Points');
+const before2 = [await p.locator('#pk1T').textContent(), await p.locator('#pk2T').textContent()];
+await p.evaluate(() => window.__shelf.handleText('https://youtu.be/M7lc1UVf-VE')); await p.waitForTimeout(1500);
+await p.evaluate(() => window.__fake.advance(100)); await p.waitForTimeout(1200);
+await p.locator('.sh-top [data-act="close-video"]').click(); await p.waitForTimeout(400);
+await intoSec(p, 'M7lc1UVf-VE', 'Dirty Medicine');
+ok(before2[0] === await p.locator('#pk1T').textContent() && before2[1] === await p.locator('#pk2T').textContent(), 'Z a Medicine video changes neither the Sleep nor the Entertainment row');
+await p.evaluate((h) => { window.__hist = { html: h }; window.__shelf.refreshLastYT(true); }, histPage([{ id: 'dQw4w9WgXcQ', title: 'Never Gonna Give You Up', author: 'Rick', t: 140, dur: 213, pct: 65 }, { id: 'eeeeeeeeeee', title: 'PLAGUE Leaks From KNOWN Lab', author: 'Breaking Points', t: 893, dur: 2710, pct: 33 }])); await p.waitForTimeout(400);
+const zrows = await p.evaluate(() => ['#ytLast', '#pk1', '#pk2'].map((q) => { const e = document.querySelector(q); return { y: e.getBoundingClientRect().top, k: e.querySelector('.k').textContent, t: e.querySelector('b').textContent }; }));
+ok(zrows[0].y < zrows[1].y && zrows[1].y < zrows[2].y && /^Last in YouTube/.test(zrows[0].k) && /^Sleep · /.test(zrows[1].k) && /Rome/.test(zrows[1].t) && /at 1:\d\d/.test(zrows[1].t) && /^Entertainment · Breaking Points/.test(zrows[2].k) && /at \d+:\d\d/.test(zrows[2].t), 'Z after use the rows read ' + zrows.map((r) => r.k + ' / ' + r.t).join(' | '));
+ok(/PLAGUE/.test(zrows[0].t) && !/Never Gonna/.test(zrows[0].t), 'Z Last in YouTube skips the video that is already the Entertainment row (it is first in the history): ' + zrows[0].t);
+const snapKinds = await shelf(p, () => window.__shelf.watchSnap().pick.map((x) => x.kind));
+ok(snapKinds.join(',') === 'lastyt,bedtime,continue,upnext', 'Z the watch snapshot\'s pick kinds are in the order ' + snapKinds.join(','));
+await openMed(p);
+const firstIsCourse = await p.evaluate(() => { const b = document.querySelector('[data-act="toggle-band"][data-id="med"]').closest('section'); const r = b.querySelector('ul li:first-child .row'); return !!r && r.getAttribute('data-act') === 'ep-play'; });
+const cv = await p.locator('.row[data-act="ep-play"]').first().getAttribute('data-v');
+await p.locator('.row[data-act="ep-play"]').first().click(); await p.waitForTimeout(1500);
+ok(firstIsCourse && await shelf(p, () => window.__lastId) === cv && await p.locator('#vsheet.open').count() === 1 && await p.locator('#cont, #next').count() === 0, 'Z the course row is the first row of the open Medicine band and plays the next episode (' + cv + ')');
+await ctx.close();
+
+({ ctx, p } = await appPage({ fakes: { fresh: false }, shell: { hour: 13, device: true } }));
+await settle(p);
+const entTm = () => p.locator('[data-act="toggle-band"][data-id="ent"]').locator('xpath=ancestor::section[1]').locator('.tm').textContent();
+const entOpen = async () => { if (!(await p.locator('[data-act="toggle-band"][data-id="ent"]').getAttribute('aria-expanded') === 'true')) { await p.locator('[data-act="toggle-band"][data-id="ent"]').click(); await p.waitForTimeout(150); } };
+await entOpen();
+const entBefore = await entTm();
+await p.evaluate(() => window.__shelf.lib.add('https://feeds.example.com/ezra', 'ent').then(() => window.__shelf.renderAll()));
+await p.waitForTimeout(300);
+const ezraChans = () => p.locator('.chl button', { hasText: 'The Ezra Klein Show' }).count();
+const dupOk = await ezraChans() === 1 && await entTm() === entBefore;
+await p.locator('.chl button', { hasText: 'The Ezra Klein Show' }).click(); await p.waitForTimeout(300);
+const alsoBtn = p.locator('#page .more.quiet', { hasText: 'Also here as a podcast' });
+const hasAlso = await alsoBtn.count() === 1 && /episodes/.test(await alsoBtn.textContent());
+await alsoBtn.click(); await p.waitForTimeout(300);
+ok(dupOk && hasAlso && /Podcast/.test(await p.locator('#page .top').textContent()), 'Z a show listed twice: Today lists it once, the new count is the channel\'s alone (' + entBefore + '), the channel\'s page offers "Also here as a podcast" and it opens the podcast\'s page');
+await p.locator('#todayBtn').click().catch(() => {}); await p.waitForTimeout(150);
+await p.locator('.band [data-act="open-section"][data-id="ent"]').first().click(); await p.waitForTimeout(300);
+ok(await p.locator('#page .chrow', { hasText: 'The Ezra Klein Show' }).count() === 1, 'Z the section page\'s Channels fold lists the show once');
+// a private podcast of the same name is not hidden
+await p.evaluate(() => window.__shelf.lib.add('https://feeds.example.com/ezra?token=abc', 'ent').then(() => window.__shelf.renderAll()));
+await p.waitForTimeout(300);
+ok(await p.locator('#page .chrow', { hasText: 'The Ezra Klein Show' }).count() === 2, 'Z a private podcast of the same name is NOT hidden');
 await ctx.close();
 
 console.log('\n== S Subscriptions on Search, removing courses');
@@ -1204,10 +1357,11 @@ ok(await p.evaluate(() => !window.__shelf.engine.state().timer), 'night: a timer
 await p.evaluate(() => { document.querySelector('#audio').currentTime = 60; }); await p.waitForTimeout(600);
 await p.evaluate(() => { document.querySelector('#audio').pause(); window.__shelf.engine.capture(true); }); await p.waitForTimeout(200);
 await p.locator('[data-act="close-night"]').click(); await p.locator('#todayBtn').click(); await p.waitForTimeout(300);
-ok(await p.locator('#mini').isVisible() && await p.locator('#cont').isVisible() && /Rome/.test(await p.locator('#contTitle').textContent()), 'night: while the podcast bar holds it, Continue still shows it (no swap, no hiding)');
+ok(await p.locator('#mini').isVisible() && await p.locator('#pk1').isVisible() && /Rome/.test(await p.locator('#pk1T').textContent()), 'night: while the podcast bar holds it, the Sleep row still shows it (no swap, no hiding)');
 await p.waitForTimeout(5200); await p.reload(); await settle(p); await p.waitForTimeout(300);
-ok((await p.locator('#contK').textContent()).startsWith('Continue') && /Rome/.test(await p.locator('#contTitle').textContent()) && /^\d+:\d\d · .*left/.test(await p.locator('#contMeta').textContent()) && !/lights out/.test(await p.locator('#contMeta').textContent()), 'night: Continue offers the podcast like at any hour: ' + await p.locator('#contK').textContent() + ' / ' + await p.locator('#contMeta').textContent());
-ok(await p.locator('#next').isVisible() && (await p.locator('#nextK').textContent()).startsWith('Up next ·'), 'night: Up next is there at night too: ' + await p.locator('#nextK').textContent());
+ok((await p.locator('#pk1K').textContent()).startsWith('Sleep') && /Rome/.test(await p.locator('#pk1T').textContent()) && /^at \d+:\d\d$/.test(await p.locator('#pk1T .mono').textContent()), 'night: the Sleep row offers the podcast like at any hour: ' + await p.locator('#pk1K').textContent() + ' / ' + await p.locator('#pk1T').textContent());
+await openMed(p);
+ok(await p.locator('.row[data-act="ep-play"]').first().isVisible() && (await p.locator('.row[data-act="ep-play"]').first().locator('small').textContent()).startsWith('Up next ·'), 'night: the course row is there at night too: ' + await p.locator('.row[data-act="ep-play"]').first().locator('small').textContent());
 await ctx.close();
 
 console.log('\n== G Gemini');

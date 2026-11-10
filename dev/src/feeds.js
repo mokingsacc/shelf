@@ -135,6 +135,11 @@ var Feeds = (function () {
     m = t.replace(/[\s|:)\]-]+$/, '').match(/\s([ivx]+)$/);
     return m && ROMAN[m[1]] || 0;
   }
+  // Does this channel name hold the podcast's name (or the other way round)? pk is the podcast's nameKey.
+  function channelIsShow(channel, pk) {
+    var ck = nameKey(channel || '');
+    return pk.length >= 4 && ck.length >= 4 && (ck === pk || ck.indexOf(pk) >= 0 || pk.indexOf(ck) >= 0);
+  }
   // The YouTube video that is this podcast episode, among YouTube search results: most title words shared, a little
   // easier when the channel has the podcast's name, and never a different length when both are known. null when unsure.
   function videoFor(ep, results, podcast) {
@@ -148,13 +153,32 @@ var Feeds = (function () {
       var b = words(r.title, drop);
       var n = a.filter(function (w) { return b.indexOf(w) >= 0; }).length, sc = b.length ? n / Math.min(a.length, b.length) : 0;
       if (n < 2 || n < 0.5 * b.length || n < 0.5 * a.length) return; // a clip or a different episode
-      var ck = nameKey(r.channel || ''), own = pk.length >= 4 && ck.length >= 4 && (ck === pk || ck.indexOf(pk) >= 0 || pk.indexOf(ck) >= 0);
+      var own = channelIsShow(r.channel, pk);
       var d = ep.duration || 0, fits = d && r.dur ? Math.abs(d - r.dur) <= Math.max(600, 0.25 * d) : null;
       if (fits === false) return;
       var need = own ? (fits ? 0.6 : 0.75) : (fits ? 0.75 : 0.9), score = sc + (own ? 0.1 : 0) + (fits ? 0.05 : 0);
       if (sc >= need && score > bs) { bs = score; best = r; }
     });
     return best;
+  }
+  // For when no title matches: the videos that could be this episode, own channel first, at most 6.
+  // shows: the podcast cards of the search ({ title, channelId }), which name the show's channels.
+  function videoChoices(ep, results, podcast, shows) {
+    var pk = nameKey(podcast), d = (ep && ep.duration) || 0, ids = {}, out = [], others = 0;
+    (shows || []).forEach(function (sh) { if (pk.length >= 4 && nameKey(sh && sh.title) === pk && sh.channelId) ids[sh.channelId] = 1; });
+    (results || []).forEach(function (r) {
+      if (!r || r.kind !== 'video' || r.live) return;
+      var own = channelIsShow(r.channel, pk) || !!(r.channelId && ids[r.channelId]), fits = null;
+      if (d && r.dur) {
+        if (Math.abs(d - r.dur) > Math.max(300, 0.15 * d)) return;
+        fits = true;
+      } else if (!r.dur) {
+        if (!own) return;
+      } else if (!own && ++others > 3) return; // episode length unknown: the first 3 others
+      out.push({ id: r.id, title: r.title, channel: r.channel, channelId: r.channelId, dur: r.dur || 0, own: own, fits: fits });
+    });
+    var first = out.filter(function (x) { return x.own; });
+    return first.concat(out.filter(function (x) { return !x.own; })).slice(0, 6);
   }
 
   // ----- What did Mo paste into "Add channel"? -----
@@ -201,6 +225,6 @@ var Feeds = (function () {
 
   return { decode: decode, duration: duration, parseYouTube: parseYouTube, youtubeFeedUrls: youtubeFeedUrls, parsePodcast: parsePodcast,
     parseChannelInput: parseChannelInput, pageUrl: pageUrl, channelFromHtml: channelFromHtml, isConsentPage: isConsentPage, stripHtml: stripHtml,
-    podcastFor: podcastFor, episodeFor: episodeFor, videoFor: videoFor };
+    podcastFor: podcastFor, episodeFor: episodeFor, videoFor: videoFor, videoChoices: videoChoices };
 })();
 if (typeof module !== 'undefined') module.exports = Feeds;

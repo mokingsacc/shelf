@@ -59,5 +59,46 @@ const page = 'var ytInitialData = {"contents":[{"channelRenderer":{"channelId":"
     const r = await Search.run({ fetchText: async () => html }, 'fin vs history', '');
     assert.strictEqual(r.length, 1); assert.strictEqual(r[0].dur, 3723);
   }
+
+  // Real results pages (trimmed): joint bylines, lengths, Shorts, shows
+  {
+    const fs = require('fs');
+    const fx = (n) => fs.readFileSync(__dirname + '/fixtures/' + n, 'utf8');
+    const ezra = Search.fromPage(fx('yt-results-ezra.html')), vids = ezra.filter((x) => x.kind === 'video');
+    assert.deepStrictEqual(vids.map((x) => x.id), ['9GLdGc9OX-A', 'A_156w0aYtU', 'YW7T88lOitY', 'wvYKx-USiZQ', 'HjurAWAr_nY']);
+    assert.strictEqual(ezra[0].kind, 'channel'); assert.strictEqual(ezra[0].title, 'The Ezra Klein Show');
+    assert.strictEqual(vids[0].dur, 4015);
+    assert.strictEqual(vids[0].channel, 'The Ezra Klein Show'); assert.strictEqual(vids[0].channelId, 'UCnxuOd8obvLLtf5_-YKFbiQ');
+    assert.strictEqual(vids[1].channelId, 'UCnxuOd8obvLLtf5_-YKFbiQ');
+    assert.strictEqual(vids[2].channel, 'The Majority Report w/ Sam Seder'); assert.strictEqual(vids[2].channelId, 'UC-3jIAlnQmbbVMV6gR7K8aQ'); // single channel: browseEndpoint
+    assert.strictEqual(vids[2].dur, 1867);
+    assert.ok(vids.every((x) => x.dur > 0 && x.channelId && x.thumb.indexOf(x.id) > 0));
+    assert.deepStrictEqual(ezra.shows, []);
+    const fin = Search.fromPage(fx('yt-results-fin.html')), fv = fin.filter((x) => x.kind === 'video');
+    assert.deepStrictEqual(fv.map((x) => x.id), ['wCSVyeUoQIg', 'VHOh2OtXX3g', 'IKHL3Fy-EmI']);
+    assert.deepStrictEqual(fv.map((x) => x.dur), [2690, 3613, 1638]);
+    assert.strictEqual(fv[0].channel, 'FinTaylor'); assert.strictEqual(fv[0].channelId, 'UCcQdXzWsosXv_e_wpfZHZlw');
+    assert.strictEqual(fv[2].channel, 'Drew Binsky'); assert.strictEqual(fv[2].channelId, 'UC0Ize0RLIbGdH5x4wI45G-A');
+    assert.strictEqual(fin[0].kind, 'channel'); assert.strictEqual(fin[0].id, 'UCcQdXzWsosXv_e_wpfZHZlw');
+    assert.strictEqual(fin.shows.length, 1);
+    assert.strictEqual(fin.shows[0].title, 'Fin vs History'); assert.strictEqual(fin.shows[0].channelId, 'UCcQdXzWsosXv_e_wpfZHZlw');
+    assert.strictEqual(fin.shows[0].list, 'PLcolhncWEZ9lIkp2Y2QpoAkoR_gsTw-QF');
+    // No Short and no video from inside a show card comes out; every result is a video or a channel
+    for (const r of [ezra, fin]) {
+      assert.ok(r.every((x) => x.kind === 'video' || x.kind === 'channel'));
+      assert.ok(!r.some((x) => /^(S-sdqO_zR_E|pIZtaqPqxyM)$/.test(x.id)));
+    }
+    const shortIds = Array.from(new Set((fx('yt-results-ezra.html').match(/\/shorts\/[\w-]{11}/g) || []).map((t) => t.slice(8))));
+    assert.ok(shortIds.length > 0);
+    for (const id of shortIds) assert.ok(!ezra.some((x) => x.id === id), 'a Short came out: ' + id);
+    // The text route still serves bare fragments, and pageData reads both spellings
+    assert.strictEqual(Search.fromPage('"channelRenderer":{"channelId":"UCcccccccccccccccccccccc","title":{"simpleText":"Bare"}}')[0].title, 'Bare');
+    assert.strictEqual(Search.fromText('x').shows.length, 0);
+    assert.deepStrictEqual(Search.pageData('window["ytInitialData"] = {"a":"}\\"{","b":{}};'), { a: '}"{', b: {} });
+    assert.strictEqual(Search.pageData('var ytInitialData = {"a":'), null);
+    // A joint byline without its dialog: the name is cut, the id is found elsewhere in the renderer
+    const odd = Search.fromPage(JSON.stringify({ x: [{ videoRenderer: { videoId: 'zzzzzzzzzz1', title: { simpleText: 'Odd' }, ownerText: { runs: [{ text: 'Show A and 2 more' }] }, t: { browseId: 'UCeeeeeeeeeeeeeeeeeeeeee' } } }] }));
+    assert.strictEqual(odd[0].channel, 'Show A'); assert.strictEqual(odd[0].channelId, 'UCeeeeeeeeeeeeeeeeeeeeee'); assert.strictEqual(odd[0].dur, 0);
+  }
 console.log('search: all checks passed');
 })().catch((e) => { console.error(e); process.exit(1); });

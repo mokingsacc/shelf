@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="601edb05d936">
+<meta name="build" content="d14811cd4aab">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -96,18 +96,12 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .note{margin:0;padding:12px var(--g);font-size:13px;border-bottom:2px solid var(--hair);background:var(--soft)}
 .note button{font:inherit;font-weight:600;color:inherit;background:none;border:0;padding:0;margin:0;text-decoration:underline;cursor:pointer}
 
-/* Continue card and Up next */
-.now{display:grid;grid-template-columns:minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;padding:12px var(--g);border-bottom:3px solid var(--rule);position:relative}
+/* Pick up from rows */
 .th{display:block;aspect-ratio:16/9;width:100%;max-width:100%;position:relative;overflow:hidden;background:var(--soft)}
 .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .th .len{position:absolute;right:4px;bottom:4px;font:600 10px/1.3 var(--mono);background:rgba(0,0,0,.78);color:#fff;padding:1px 4px}
 .th.sq{aspect-ratio:16/9}
 .th.sq img{object-fit:contain;background:#000}
-.now .tx{min-width:0}
-.now b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:17px;line-height:1.1;font-weight:800;letter-spacing:-.02em;font-stretch:108%;margin-top:3px;overflow-wrap:anywhere}
-.now .meta{display:block;font-size:12px;line-height:1.35;color:var(--grey);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.now .bar{position:absolute;left:0;right:0;bottom:-3px;height:3px;background:var(--hair)}
-.now .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--cob);width:0}
 .next{display:grid;grid-template-columns:minmax(0,1fr) var(--tap);gap:12px;align-items:center;width:100%;min-height:60px;padding:8px var(--g);border-bottom:3px solid var(--rule)}
 .next .tx{min-width:0}
 .next b{display:block;font-size:15px;font-weight:800;margin-top:2px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -120,16 +114,16 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 
 /* Bands */
 .bands{display:flex;flex-direction:column}
-/* Pick up from: Continue, Up next and the last video in the YouTube app, folded under one heading */
+/* Pick up from: the last video in the YouTube app, then Sleep and Entertainment, folded under one heading */
 .band.pick{--bg:var(--paper);--fg:var(--ink);padding:0;border-bottom:3px solid var(--rule)}
 .band.pick .hd{padding:6px var(--g) 2px;width:auto}
 .band.pick .hd h2{font-size:22px}
 .band.pick:not(.open) .pickbody{display:none}
 .band.pick .pickbody>:last-child{border-bottom:0}
 /* a slot with nothing in it keeps its place, quiet */
-.now.ph,.next.ph{opacity:.62}
-.now.ph .playsq,.next.ph .playsq{visibility:hidden}
-.now:disabled,#ytLast.ph button{cursor:default}
+.next.ph{opacity:.62}
+.next.ph .playsq{visibility:hidden}
+.next:disabled,#ytLast.ph button{cursor:default}
 #ytLast .tx{display:block;min-width:0;text-align:left;padding:0}
 #ytLast .kl{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 #ytLast .hint{font-size:11px;font-weight:400;color:var(--grey);flex:none}
@@ -171,6 +165,9 @@ html.app.ph-dark:has(body.sheet-on)::before{display:none}
 .tw-ep.best{border-top:3px solid var(--ink)}
 .tw-ep b{display:block;font-size:15px;font-weight:800;line-height:1.25}
 .tw-ep small{display:block;font:400 12px var(--mono);color:var(--grey);margin-top:3px}
+.tw-ep.quiet{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.tw-ep.quiet b{font-weight:600;color:var(--grey)}
+.tw-ep.quiet small{margin-top:0;text-align:right}
 .band .chl button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;min-height:52px;border-top:2px solid currentColor;padding:6px 0;text-align:left}
 .band .chl.first button:first-child{margin-top:6px;border-top-width:3px}
 .band .chl b{display:block;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -582,19 +579,18 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   <section class="band pick open" id="pick" aria-label="Pick up from">
     <div class="hd"><button type="button" class="tg" data-act="toggle-band" data-id="_pickShut" aria-expanded="true"><h2>Pick up from</h2><span class="car" aria-hidden="true" id="pickCar"></span></button><span class="tm mono" id="pickN"></span></div>
     <div class="pickbody">
-  <button type="button" class="now" id="cont" data-act="resume">
-    <span class="tx"><span class="k" id="contK">Continue</span><b id="contTitle"></b><span class="meta mono" id="contMeta"></span></span>
-    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
-    <span class="bar" aria-hidden="true"><i id="contBar"></i></span>
-  </button>
-  <button type="button" class="next" id="next" data-act="ep-play">
-    <span class="tx"><span class="k" id="nextK">Up next</span><b id="nextT"></b></span>
-    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
-  </button>
   <div class="next" id="ytLast">
     <button type="button" class="tx" id="ytLastTx" data-act="yt-hist"><span class="kl"><span class="k" id="ytLastK">Last in YouTube</span><span class="hint mono" id="ytLastH">history ›</span></span><b id="ytLastT"></b></button>
     <button type="button" class="playsq" id="ytLastPlay" data-act="yt-last" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></button>
   </div>
+  <button type="button" class="next" id="pk1" data-act="open-section">
+    <span class="tx"><span class="k" id="pk1K"></span><b id="pk1T"></b></span>
+    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
+  </button>
+  <button type="button" class="next" id="pk2" data-act="open-section">
+    <span class="tx"><span class="k" id="pk2K"></span><b id="pk2T"></b></span>
+    <span class="playsq" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg></span>
+  </button>
     </div>
   </section>
   <div class="bands" id="bands"></div>
@@ -1444,6 +1440,11 @@ var Feeds = (function () {
     m = t.replace(/[\s|:)\]-]+$/, '').match(/\s([ivx]+)$/);
     return m && ROMAN[m[1]] || 0;
   }
+  // Does this channel name hold the podcast's name (or the other way round)? pk is the podcast's nameKey.
+  function channelIsShow(channel, pk) {
+    var ck = nameKey(channel || '');
+    return pk.length >= 4 && ck.length >= 4 && (ck === pk || ck.indexOf(pk) >= 0 || pk.indexOf(ck) >= 0);
+  }
   // The YouTube video that is this podcast episode, among YouTube search results: most title words shared, a little
   // easier when the channel has the podcast's name, and never a different length when both are known. null when unsure.
   function videoFor(ep, results, podcast) {
@@ -1457,13 +1458,32 @@ var Feeds = (function () {
       var b = words(r.title, drop);
       var n = a.filter(function (w) { return b.indexOf(w) >= 0; }).length, sc = b.length ? n / Math.min(a.length, b.length) : 0;
       if (n < 2 || n < 0.5 * b.length || n < 0.5 * a.length) return; // a clip or a different episode
-      var ck = nameKey(r.channel || ''), own = pk.length >= 4 && ck.length >= 4 && (ck === pk || ck.indexOf(pk) >= 0 || pk.indexOf(ck) >= 0);
+      var own = channelIsShow(r.channel, pk);
       var d = ep.duration || 0, fits = d && r.dur ? Math.abs(d - r.dur) <= Math.max(600, 0.25 * d) : null;
       if (fits === false) return;
       var need = own ? (fits ? 0.6 : 0.75) : (fits ? 0.75 : 0.9), score = sc + (own ? 0.1 : 0) + (fits ? 0.05 : 0);
       if (sc >= need && score > bs) { bs = score; best = r; }
     });
     return best;
+  }
+  // For when no title matches: the videos that could be this episode, own channel first, at most 6.
+  // shows: the podcast cards of the search ({ title, channelId }), which name the show's channels.
+  function videoChoices(ep, results, podcast, shows) {
+    var pk = nameKey(podcast), d = (ep && ep.duration) || 0, ids = {}, out = [], others = 0;
+    (shows || []).forEach(function (sh) { if (pk.length >= 4 && nameKey(sh && sh.title) === pk && sh.channelId) ids[sh.channelId] = 1; });
+    (results || []).forEach(function (r) {
+      if (!r || r.kind !== 'video' || r.live) return;
+      var own = channelIsShow(r.channel, pk) || !!(r.channelId && ids[r.channelId]), fits = null;
+      if (d && r.dur) {
+        if (Math.abs(d - r.dur) > Math.max(300, 0.15 * d)) return;
+        fits = true;
+      } else if (!r.dur) {
+        if (!own) return;
+      } else if (!own && ++others > 3) return; // episode length unknown: the first 3 others
+      out.push({ id: r.id, title: r.title, channel: r.channel, channelId: r.channelId, dur: r.dur || 0, own: own, fits: fits });
+    });
+    var first = out.filter(function (x) { return x.own; });
+    return first.concat(out.filter(function (x) { return !x.own; })).slice(0, 6);
   }
 
   // ----- What did Mo paste into "Add channel"? -----
@@ -1510,7 +1530,7 @@ var Feeds = (function () {
 
   return { decode: decode, duration: duration, parseYouTube: parseYouTube, youtubeFeedUrls: youtubeFeedUrls, parsePodcast: parsePodcast,
     parseChannelInput: parseChannelInput, pageUrl: pageUrl, channelFromHtml: channelFromHtml, isConsentPage: isConsentPage, stripHtml: stripHtml,
-    podcastFor: podcastFor, episodeFor: episodeFor, videoFor: videoFor };
+    podcastFor: podcastFor, episodeFor: episodeFor, videoFor: videoFor, videoChoices: videoChoices };
 })();
 if (typeof module !== 'undefined') module.exports = Feeds;
 </script>
@@ -2067,8 +2087,104 @@ var Search = (function () {
     });
   }
 
-  // Pull results out of the page's ytInitialData without a full JSON parse of the page
+  // The page's data as an object: find ytInitialData, cut out the {...} after it (counting braces, skipping
+  // strings) and parse it. null when anything is off.
+  function pageData(html) {
+    html = String(html || '');
+    var m = /ytInitialData["\]]*\s*=\s*/.exec(html);
+    if (!m) return null;
+    var start = m.index + m[0].length;
+    if (html.charAt(start) !== '{') return null;
+    var depth = 0, inStr = false, i, c;
+    for (i = start; i < html.length; i++) {
+      c = html.charAt(i);
+      if (inStr) {
+        if (c === '\\') i++;
+        else if (c === '"') inStr = false;
+      } else if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}' && --depth === 0) {
+        try { return JSON.parse(html.slice(start, i + 1)); } catch (e) { return null; }
+      }
+    }
+    return null;
+  }
+  var SKIP = { shortsLockupViewModel: 1, reelShelfRenderer: 1, reelItemRenderer: 1, adSlotRenderer: 1, searchPyvRenderer: 1, promotedSparklesWebRenderer: 1 };
+  function firstUC(node) { return (JSON.stringify(node || '').match(/"browseId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"/) || [])[1] || ''; }
+  function textOf(t) {
+    if (!t) return '';
+    if (t.simpleText != null) return String(t.simpleText);
+    return (t.runs || []).map(function (r) { return r && r.text || ''; }).join('');
+  }
+  // One videoRenderer -> a result (or null). Joint videos ("A and 2 more") name their channels in a dialog.
+  function readVideo(v) {
+    var id = v && v.videoId;
+    if (typeof id !== 'string' || id.length !== 11) return null;
+    var by = v.ownerText || v.longBylineText || v.shortBylineText, run = by && by.runs && by.runs[0] || {};
+    var be = run.navigationEndpoint && run.navigationEndpoint.browseEndpoint, channel = '', channelId = '';
+    if (be && /^UC/.test(be.browseId || '')) { channel = run.text || ''; channelId = be.browseId; }
+    else {
+      var items, li, dlg;
+      try { items = run.navigationEndpoint.showDialogCommand.panelLoadingStrategy.inlineContent.dialogViewModel.customContent.listViewModel.listItems; } catch (e) { items = null; }
+      li = items && items[0] && items[0].listItemViewModel;
+      if (li && li.title && li.title.content) { channel = li.title.content; channelId = firstUC(li); }
+      if (!channel || !channelId) {
+        if (!channel) channel = String(run.text || '').replace(/\s+and\s+(?:\d+\s+more|.+)$/, '');
+        if (!channelId) channelId = firstUC(v);
+      }
+    }
+    var out = { kind: 'video', id: id, title: textOf(v.title), channel: channel, channelId: channelId, thumb: 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg', dur: v.lengthText ? Feeds.duration(textOf(v.lengthText)) : 0 };
+    if (!v.lengthText && /LIVE/.test(JSON.stringify(v.badges || ''))) out.live = true;
+    return out;
+  }
+  // YouTube's newer card for a video
+  function readLockupVideo(l) {
+    var id = l.contentId;
+    if (typeof id !== 'string' || id.length !== 11) return null;
+    var md = l.metadata && l.metadata.lockupMetadataViewModel || {}, chan = '';
+    try { chan = md.metadata.contentMetadataViewModel.metadataRows[0].metadataParts[0].text.content || ''; } catch (e) {}
+    var badge = (JSON.stringify(l.contentImage || '').match(/"text"\s*:\s*"(\d+(?::\d\d)+)"/) || [])[1] || '';
+    return { kind: 'video', id: id, title: md.title && md.title.content || '', channel: chan, channelId: firstUC(l), thumb: 'https://i.ytimg.com/vi/' + id + '/mqdefault.jpg', dur: badge ? Feeds.duration(badge) : 0 };
+  }
+  function fromData(data) {
+    var vids = [], chans = [], shows = [], seen = {};
+    function walk(node, depth) {
+      if (!node || typeof node !== 'object' || depth > 80) return;
+      if (Array.isArray(node)) { for (var i = 0; i < node.length; i++) walk(node[i], depth + 1); return; }
+      Object.keys(node).forEach(function (k) {
+        var v = node[k];
+        if (SKIP[k]) return;
+        if (k === 'videoRenderer') {
+          var r = readVideo(v);
+          if (r) { if (!seen[r.id]) { seen[r.id] = 1; vids.push(r); } }
+          else walk(v, depth + 1);
+        } else if (k === 'channelRenderer') {
+          if (v && /^UC/.test(v.channelId || '') && chans.length < 3) chans.push({ kind: 'channel', id: v.channelId, title: textOf(v.title), thumb: '' });
+        } else if (k === 'lockupViewModel' && v && typeof v === 'object') {
+          if (v.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO') {
+            var lv = readLockupVideo(v);
+            if (lv && !seen[lv.id]) { seen[lv.id] = 1; vids.push(lv); }
+          } else if (v.contentType === 'LOCKUP_CONTENT_TYPE_PODCAST') {
+            var md = v.metadata && v.metadata.lockupMetadataViewModel;
+            shows.push({ title: md && md.title && md.title.content || '', channelId: firstUC(v), list: v.contentId || '' });
+          }
+        } else walk(v, depth + 1);
+      });
+    }
+    walk(data, 0);
+    var out = chans.concat(vids.slice(0, 20));
+    out.shows = shows;
+    return out;
+  }
+  // Pull results out of the page: as JSON when it parses, else by text patterns
   function fromPage(html) {
+    var data = pageData(html);
+    if (!data) { try { var t = String(html).trim(); if (t.charAt(0) === '{') data = JSON.parse(t); } catch (e) {} }
+    if (data) { var r = fromData(data); if (r.length) return r; }
+    return fromText(html);
+  }
+  // The old way: patterns over the raw text (also serves bare fragments)
+  function fromText(html) {
     var out = [], seen = {};
     var re = /"videoRenderer"\s*:\s*\{\s*"videoId"\s*:\s*"([A-Za-z0-9_-]{11})"([\s\S]{0,6000}?)"(?:ownerText|longBylineText)"\s*:\s*\{\s*"runs"\s*:\s*\[\s*\{\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"[\s\S]{0,600}?"browseId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"/g, m;
     while ((m = re.exec(html)) && out.length < 20) {
@@ -2080,7 +2196,9 @@ var Search = (function () {
     var cre = /"channelRenderer"\s*:\s*\{\s*"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"[\s\S]{0,400}?"title"\s*:\s*\{\s*"simpleText"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
     var chans = [];
     while ((m = cre.exec(html)) && chans.length < 3) chans.push({ kind: 'channel', id: m[1], title: unjson(m[2]), thumb: '' });
-    return chans.concat(out);
+    var res = chans.concat(out);
+    res.shows = [];
+    return res;
   }
   // The phone page keeps ytInitialData in a '\x7b\x22…' string: turn it back into plain JSON text
   function unescapePage(html) {
@@ -2094,6 +2212,7 @@ var Search = (function () {
       if (Feeds.isConsentPage(html)) throw new Error('YouTube showed its cookie page instead of results. Try again in a minute.');
       var r = fromPage(html);
       if (!r.length) { var plain = unescapePage(html); if (plain) r = fromPage(plain); }
+      if (!r.shows) r.shows = [];
       if (!r.length && !/ytInitialData/.test(html)) throw new Error("YouTube's results page has changed and basic search can't read it. Adding a Google key in Settings fixes this.");
       return r;
     });
@@ -2103,7 +2222,7 @@ var Search = (function () {
     if (!q) return Promise.resolve([]);
     return key ? withKey(io, key, q) : withoutKey(io, q);
   }
-  return { run: run, isoDuration: isoDuration, fromPage: fromPage, unescapePage: unescapePage };
+  return { run: run, isoDuration: isoDuration, fromPage: fromPage, fromText: fromText, pageData: pageData, unescapePage: unescapePage };
 })();
 if (typeof module !== 'undefined') module.exports = Search;
 </script>
@@ -3197,9 +3316,18 @@ if (typeof module !== 'undefined') module.exports = AI;
   function started(e) { var p = prog(e); return !!p && !p.done && p.t > 5; }
   function isDoneE(e) { var p = prog(e); return !!p && !!p.done; }
   function isNew(e) { var s = lib.source(e.src), p = prog(e); return !!s && e.published > (s.seenUpTo || 0) && !(p && (p.t > 5 || p.done)); }
+  // The same show twice (a podcast and a YouTube channel of the same name in one section) shows once: the channel stands
+  // for both. A private podcast is never hidden, it has episodes the channel doesn't. A channel that fails to load
+  // hides nothing.
+  function shadowOf(s) {
+    if (!s || s.type !== 'podcast' || s.private) return null;
+    var nm = String(s.name || '').trim().toLowerCase();
+    return lib.sources(s.section).filter(function (t) { var st = lib.status(t.id); return t.type === 'youtube' && String(t.name || '').trim().toLowerCase() === nm && (!st || st.ok); })[0] || null;
+  }
+  function visSources(sectionId) { return lib.sources(sectionId).filter(function (x) { return !shadowOf(x); }); }
   function feedEntries(sectionId) {
     var out = [];
-    lib.sources(sectionId).forEach(function (s) { itemsOf(s).forEach(function (it) { out.push(entryFromItem(s, it)); }); });
+    visSources(sectionId).forEach(function (s) { itemsOf(s).forEach(function (it) { out.push(entryFromItem(s, it)); }); });
     return out.sort(function (a, b) { return b.published - a.published; });
   }
   // A video opened from a podcast episode (v.ep) is that episode's twin while the episode's record exists: lists show the episode
@@ -3338,18 +3466,27 @@ if (typeof module !== 'undefined') module.exports = AI;
     $('#monthName').textContent = MONTHS[d.getMonth()] + ' ' + d.getFullYear();
     var allNew = 0;
     var html = '';
+    var pk = pickState();
     daySections().forEach(function (sec) {
-      var br = bandRows(sec.id, 3), fresh = br.fresh, list = br.rows;
+      // The course on the go gives the Medicine band its first row
+      var cr = sec.id === Courses.SEED.section && pk.nx && pk.nc ? pk : null;
+      var br = bandRows(sec.id, cr ? 2 : 3), fresh = br.fresh, list = br.rows, rest = br.rest;
+      if (cr) {
+        var had = list.length;
+        list = list.filter(function (e) { return e.key !== cr.nx.id; });
+        if (list.length < had && fresh.some(function (f) { return f.key === cr.nx.id; })) rest = Math.max(0, rest - 1);
+      }
       allNew += fresh.length;
-      var rest = br.rest, srcs = lib.sources(sec.id).length, open = isOpenBand(sec.id);
+      var srcs = visSources(sec.id).length, open = isOpenBand(sec.id);
       html += bandHead(sec.id, bandClass(sec.id), sec.name, fresh.length ? fresh.length + ' new' : srcs ? srcs + (srcs === 1 ? ' channel' : ' channels') : 'empty', 'open-section', open);
       if (!open) { html += '</section>'; return; }
-      if (list.length) html += '<ul>' + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
+      var crow = cr ? '<li><button type="button" class="row" data-act="ep-play" data-id="' + esc(cr.nc.id) + '" data-v="' + esc(cr.nx.id) + '"><span class="tx"><b>' + esc(epLabel(cr.nx, cr.ni) + ' · ' + shortTitle(cr.nx.title)) + '</b><small>Up next · ' + esc(cr.nc.name) + ' · ' + (cr.ni + 1) + ' of ' + cr.npr.total + '</small></span><span class="n mono">' + (cr.nx.dur ? esc(Core.fmt(cr.nx.dur)) : '') + '</span></button></li>' : '';
+      if (list.length || crow) html += '<ul>' + crow + list.map(function (e) { return bandRow(e, 'h'); }).join('') + '</ul>';
       else if (!srcs && !feedsOn) html += '<p class="empty">' + (isPhone ? 'Your channels show here in the Shelf app on your iPhone.' : 'Your channels show here once the Shelf extension is set up.') + '</p>';
       else if (!srcs) html += '<p class="empty">No channels yet. <button type="button" data-act="add-channel" data-id="' + esc(sec.id) + '">Add one</button></p>';
       if (rest > 0) html += '<button type="button" class="more" data-act="open-section" data-id="' + esc(sec.id) + '"><span>+' + rest + ' more in ' + esc(sec.name) + '</span><span aria-hidden="true">›</span></button>';
       // Its channels, one line each: tap one for its videos, newest first
-      if (srcs) html += '<div class="chl' + (list.length ? '' : ' first') + '">' + lib.sources(sec.id).filter(function (x) { return !brokenDup(x); }).map(bandChannel).join('') + '</div>';
+      if (srcs) html += '<div class="chl' + (list.length || crow ? '' : ' first') + '">' + visSources(sec.id).filter(function (x) { return !brokenDup(x); }).map(bandChannel).join('') + '</div>';
       html += '</section>';
     });
     // Pasted videos that belong to no section
@@ -3368,39 +3505,24 @@ if (typeof module !== 'undefined') module.exports = AI;
     html += '<button type="button" class="addcat" data-act="add-section"><span>+ Add category</span><span aria-hidden="true">›</span></button>';
     $('#bands').innerHTML = html;
     fitAll($('#bands'));
-    // Pick up from: always three rows in the same order (Continue, Up next, Last in YouTube); an empty one says so quietly
-    var pk = pickState(), top = pk.top, cb = $('#cont');
-    cb.classList.toggle('ph', !top); cb.disabled = !top;
-    if (top) {
-      var p = prog(top);
-      cb.setAttribute('data-e', regE('h', top));
-      $('#contK').textContent = 'Continue' + (top.srcName ? ' · ' + top.srcName : '');
-      $('#contTitle').textContent = top.title;
-      $('#contMeta').textContent = Core.fmt(p.t) + (p.dur ? ' · ' + leftText(p) : '');
-      $('#contBar').style.width = Core.pct(p).toFixed(1) + '%';
-      cb.setAttribute('aria-label', 'Continue ' + top.title + ' from ' + Core.fmt(p.t));
-    } else {
-      cb.removeAttribute('data-e');
-      $('#contK').textContent = 'Continue';
-      $('#contTitle').textContent = 'Nothing on the go';
-      $('#contMeta').textContent = 'Whatever you start waits here';
-      $('#contBar').style.width = '0%';
-      cb.setAttribute('aria-label', 'Continue: nothing on the go');
-    }
-    var nc = pk.nc, npr = pk.npr, nx = pk.nx, nb = $('#next');
-    nb.classList.toggle('ph', !nx);
-    if (nx) {
-      nb.setAttribute('data-act', 'ep-play'); nb.setAttribute('data-id', nc.id); nb.setAttribute('data-v', nx.id);
-      $('#nextK').textContent = 'Up next · ' + nc.name + ' · ' + (pk.ni + 1) + ' of ' + npr.total;
-      $('#nextT').innerHTML = '<span class="tt">' + esc(epLabel(nx, pk.ni)) + ' · ' + esc(shortTitle(nx.title)) + '</span>' + (nx.dur ? ' <span class="mono">' + Core.fmt(nx.dur) + '</span>' : '');
-      nb.setAttribute('aria-label', 'Play next in ' + nc.name + ': ' + epLabel(nx, pk.ni));
-    } else {
-      nb.setAttribute('data-act', 'goto-courses'); nb.removeAttribute('data-id'); nb.removeAttribute('data-v');
-      $('#nextK').textContent = 'Up next';
-      $('#nextT').textContent = 'No course on the go';
-      nb.setAttribute('aria-label', 'Up next: no course on the go. Open Courses');
-    }
-    // Last in YouTube: the newest video in the account's watch history (not Continue's), at the spot YouTube saved
+    // Pick up from: always three rows in the same order (Last in YouTube, Sleep, Entertainment); an empty one says so quietly
+    PICK_SECS.forEach(function (sid, i) {
+      var r = pk.rows[i], b = $('#pk' + (i + 1)), name = r.sec ? r.sec.name : (sid === 'sleep' ? 'Sleep' : 'Entertainment');
+      b.classList.toggle('ph', !r.e);
+      if (r.e) {
+        var pp = prog(r.e), at = Core.fmt(pp.t);
+        b.disabled = false; b.setAttribute('data-act', 'play'); b.setAttribute('data-e', regE('h', r.e)); b.removeAttribute('data-id');
+        $('#pk' + (i + 1) + 'K').textContent = name + (r.e.srcName ? ' · ' + r.e.srcName : '');
+        $('#pk' + (i + 1) + 'T').innerHTML = '<span class="tt">' + esc(r.e.title) + '</span> <span class="mono">at ' + esc(at) + '</span>';
+        b.setAttribute('aria-label', name + ': ' + r.e.title + ' at ' + at + '. Play');
+      } else {
+        b.disabled = !r.sec; b.setAttribute('data-act', 'open-section'); b.setAttribute('data-id', sid); b.removeAttribute('data-e');
+        $('#pk' + (i + 1) + 'K').textContent = name;
+        $('#pk' + (i + 1) + 'T').textContent = 'Nothing on the go';
+        b.setAttribute('aria-label', name + ': nothing on the go. Open ' + name);
+      }
+    });
+    // Last in YouTube: the newest video in the account's watch history (not the Sleep or Entertainment row's), at the spot YouTube saved
     // (exact when the history has the second, else from its red bar, "about"). The text opens the history, the square plays.
     var ly = pk.ly, lyOut = !!(Native.yt && ytOut), yl = $('#ytLast');
     yl.classList.toggle('ph', !lyOut && !ly);
@@ -3423,7 +3545,7 @@ if (typeof module !== 'undefined') module.exports = AI;
       $('#ytLastPlay').setAttribute('aria-label', 'Play');
     }
     // The three fold under "Pick up from" (open unless closed with its heading); folded, it counts the filled ones
-    var pickN = [!!top, !!nx, lyOut || !!ly].filter(Boolean).length, pickOpen = !isOpenBand('_pickShut');
+    var pickN = [!!pk.rows[0].e, !!pk.rows[1].e, lyOut || !!ly].filter(Boolean).length, pickOpen = !isOpenBand('_pickShut');
     $('#pick').classList.toggle('open', pickOpen);
     $('#pick .tg').setAttribute('aria-expanded', String(pickOpen));
     $('#pickCar').innerHTML = I.down;
@@ -3436,7 +3558,9 @@ if (typeof module !== 'undefined') module.exports = AI;
       else wn.innerHTML = 'Channels, search and history need the Shelf extension in Chrome. <button type="button" data-act="ext-setup">Set it up</button>';
     } else wn.hidden = true;
   }
-  // Pick up from (Home, and the watch): always the same three: Continue, Up next, Last in YouTube
+  // Pick up from (Home, and the watch): always the same three rows: Last in YouTube, then the last thing played in Sleep and in
+  // Entertainment. The course's next episode is the first row of the Medicine band.
+  var PICK_SECS = ['sleep', 'ent'];
   // The video ids that stand for the same thing as an entry (an episode and its video)
   function twinIds(e) {
     if (!e) return {};
@@ -3445,20 +3569,18 @@ if (typeof module !== 'undefined') module.exports = AI;
     return out;
   }
   function pickState() {
-    // Continue: the most recent unfinished thing played in Shelf, a video or a podcast
-    var all = startedEntries(undefined).concat(Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return started(e) && !twinOf(videos[e.key]); }))
-      .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
-    var top = all[0] || null, mine = twinIds(top);
-    // Up next: the next episode of the course on the go; the same video as Continue gives way to the next unticked one
+    var rows = PICK_SECS.map(function (id) { return { id: id, sec: lib.section(id) || null, e: startedEntries(id)[0] || null }; }), mine = {};
+    rows.forEach(function (r) { var t = twinIds(r.e); Object.keys(t).forEach(function (k) { mine[k] = 1; }); });
+    // The next episode of the course on the go; the same video as a top row gives way to the next unticked one
     var nc = upNextCourse(), npr = nc && cs.progress(nc.id), nx = npr && npr.next, ni = npr ? npr.notch : -1;
     if (nx && mine[nx.id]) {
       var arr = cs.items(nc.id), j;
       nx = null;
       for (j = npr.notch + 1; j < arr.length; j++) if (!cs.isDone(nc.id, arr[j].id) && !mine[arr[j].id]) { nx = arr[j]; ni = j; break; }
     }
-    // Last in YouTube: the newest video in the history that isn't Continue
+    // Last in YouTube: the newest video in the history that isn't one of the other rows
     var ly = ytHist.filter(function (h) { return !mine[h.id]; })[0] || null;
-    return { top: top, nc: nc || null, npr: npr || null, nx: nx || null, ni: ni, ly: ly };
+    return { ly: ly, rows: rows, nc: nc || null, npr: npr || null, nx: nx || null, ni: ni };
   }
   // "11:57 pm"
   function clockText(t) { return SleepTimer.clock(t).replace('about ', ''); }
@@ -3585,7 +3707,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (v.name === 'section') {
       var sec = lib.section(v.id);
       if (!sec) { stack.pop(); return renderPage(); }
-      var srcs = lib.sources(sec.id), nn = newCountFor(sec.id), med = sec.id === Courses.SEED.section && cs && cs.list().length;
+      var srcs = visSources(sec.id), nn = newCountFor(sec.id), med = sec.id === Courses.SEED.section && cs && cs.list().length;
       html += topHTML(bandClass(sec.id), sec.name, '<b>' + srcs.length + (srcs.length === 1 ? ' channel' : ' channels') + '</b>' + (nn ? ' · ' + nn + ' new' : ''),
         ib('add-channel', sec.id, I.plus, 'Add channel') + (nn ? ib('seen-section', sec.id, I.check, 'Mark all seen') : '') + (med ? ib('open-marks', null, I.mark, 'Marks') : '') + ib('edit-section', sec.id, I.dots, 'Edit section'));
       var misses = lib.seedMisses.filter(function (m) { return m.section === sec.id && !alreadyHave(m.input); });
@@ -3620,6 +3742,8 @@ if (typeof module !== 'undefined') module.exports = AI;
       if (!list.length) html += '<p class="pnote">' + (st2 && !st2.ok ? 'Nothing loaded. Tap ↻ to try again.' : 'Loading…') + '</p>';
       else html += pageListHTML(list, 'p', function (e) { return { fresh: chanNew[e.key] }; }, s.type === 'podcast' ? 'Episodes' : 'Videos', list.concat(startedOfSource(s)));
       if (s.type === 'youtube') html += '<button type="button" class="more" data-act="chan-playlists" data-id="' + esc(s.id) + '" data-t="' + esc(s.name) + '"><span>Playlists</span><span class="mono">all of ' + esc(s.name) + '\'s ›</span></button><p class="pnote">YouTube lists only the latest 15 uploads here. For older ones, use Search.</p>';
+      var also = s.type === 'youtube' && lib.sources(s.section).filter(function (t) { var sh = shadowOf(t); return sh && sh.id === s.id; })[0];
+      if (also) html += '<button type="button" class="more quiet" data-act="open-channel" data-id="' + esc(also.id) + '"><span>Also here as a podcast</span><span class="mono">episodes ›</span></button>';
     } else if (v.name === 'pasted') {
       var vids = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !twinOf(videos[e.key]); })
         .sort(function (a, b) { return (isDoneE(a) - isDoneE(b)) || (b.updated || 0) - (a.updated || 0); });
@@ -4143,6 +4267,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     if (r.none) { toast("This channel doesn't put its videos out as a podcast. Play locked opens it in YouTube instead.", '', { label: 'Play locked', fn: function () { $('#ytLink').click(); } }, 8000); return; }
     var fit = r.ep && twinFits(v, r.ep), list = (r.ep ? [r.ep] : []).concat(r.items || []);
     twinPick = { vid: v.id, list: list };
+    $('#twinH').textContent = 'Podcast version';
     var h = '<p>' + (fit ? 'This looks like the same episode:' : r.ep ? 'Closest episode (a different length, so it may be a longer cut):' : "Shelf isn't sure which episode this is. Pick it:") + '</p><div class="tw-list">';
     list.forEach(function (ep, i) {
       h += '<button type="button" class="tw-ep' + (i === 0 && r.ep ? ' best' : '') + '" data-act="twin-pick" data-i="' + i + '"><b>' + esc(ep.title) + '</b><small class="mono">' +
@@ -4178,24 +4303,47 @@ if (typeof module !== 'undefined') module.exports = AI;
   // ---------- The other way: a podcast episode's own YouTube video ----------
   // The episode a Listen started knows its video; others are looked up once (YouTube search, matched by title, the
   // channel's name and length), remembered in the episode's record (yt), and a miss is asked again a day later.
-  // Kept apart from the episode records (localStorage shelf.podyt, { guid: { id, at } }), so a lookup never makes an episode
-  // look started. A match is kept; a miss is asked again after a week; an error after an hour (quota, key) or 5 minutes.
-  var PODYT_KEY = 'shelf.podyt', podYt = {}, podYtSaved = null;
+  // Kept apart from the episode records (localStorage shelf.podyt2, { guid: { id, guess, list, at } }), so a lookup never makes
+  // an episode look started. A match is kept; a list with no sure match is asked again after a week; nothing found after a day;
+  // an error after an hour (quota, key) or 5 minutes. The old shelf.podyt held misses made by a search that could not read
+  // joint videos, so it is dropped.
+  var PODYT_KEY = 'shelf.podyt2', podYt = {}, podYtSaved = null;
+  try { localStorage.removeItem('shelf.podyt'); } catch (e) {}
   function podYtStore() { if (!podYtSaved) { try { podYtSaved = JSON.parse(rawGet(PODYT_KEY) || '{}') || {}; } catch (e) { podYtSaved = {}; } } return podYtSaved; }
-  function podYtLook(ep) {
+  // The words YouTube is asked: the show and the title, without the marks that only get in its way
+  function podQuery(ep) {
     var r = arec[ep.guid] || {};
+    return ((ep.podcast || r.podcast || '') + ' ' + (ep.title || '')).replace(/[\u0022\u201c\u201d\u201e\u00ab\u00bb|()\[\]{}<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140).trim();
+  }
+  function podYtFresh(c) {
+    if (!c) return false;
+    if (c.busy || c.id) return true;
+    var age = Date.now() - (c.at || 0);
+    if (c.err) return age < (c.wait || 300e3);
+    return age < ((c.list && c.list.length) ? 7 : 1) * 864e5;
+  }
+  function podYtKeep(guid, c) {
+    var all = podYtStore(); all[guid] = { id: c.id || '', guess: !!c.guess, list: c.list || [], at: c.at || Date.now() };
+    rawSet(PODYT_KEY, JSON.stringify(all), false);
+  }
+  function podYtLook(ep, force) {
+    var r = arec[ep.guid] || {}, c = podYt[ep.guid] || podYtStore()[ep.guid];
     if (r.video) return { id: r.video };
-    if (r.yt) return { id: r.yt };
-    var c = podYt[ep.guid] || podYtStore()[ep.guid];
-    if (c && (c.busy || c.id || Date.now() - c.at < (c.wait || 7 * 864e5))) return c;
+    if (r.yt) return { id: r.yt, guess: !!r.ytg, list: c && c.list || [] };
+    if (c && c.busy) return c;
+    if (!force && podYtFresh(c)) return c;
     if (!ep.title) return null;
     var podcast = ep.podcast || r.podcast || '', dur = ep.duration || r.dur || 0;
     c = podYt[ep.guid] = { busy: true, at: Date.now() };
-    Search.run({ fetchJSON: fetchJSON, fetchText: fetchText }, (podcast + ' ' + ep.title).trim(), prefs.apiKey).then(function (res) {
-      var v = Feeds.videoFor({ title: ep.title, duration: dur }, res, podcast);
-      c.id = v ? v.id : '';
-      var all = podYtStore(); all[ep.guid] = { id: c.id, at: Date.now() }; rawSet(PODYT_KEY, JSON.stringify(all), false);
-    }, function (e) { c.wait = /allowance|key|Data API/i.test(e && e.message || '') ? 3600e3 : 300e3; })
+    Search.run({ fetchJSON: fetchJSON, fetchText: fetchText }, podQuery(ep), prefs.apiKey).then(function (res) {
+      var v = Feeds.videoFor({ title: ep.title, duration: dur }, res, podcast), list = Feeds.videoChoices({ title: ep.title, duration: dur }, res, podcast, res.shows), sure = list.filter(function (x) { return x.own && x.fits === true; });
+      c.list = list.map(function (x) { return { id: x.id, title: x.title, channel: x.channel, dur: x.dur }; });
+      if (v) c.id = v.id;
+      else if (sure.length === 1) { c.id = sure[0].id; c.guess = true; }
+      else c.id = '';
+      c.at = Date.now();
+      podYtKeep(ep.guid, c);
+    }).catch(function (e) { c.err = (e && e.message) || 'Search failed.'; c.wait = /allowance|key|Data API/i.test(c.err) ? 3600e3 : 300e3; })
       .then(function () { c.busy = false; c.at = Date.now(); renderAudio(); });
     return c;
   }
@@ -4209,27 +4357,68 @@ if (typeof module !== 'undefined') module.exports = AI;
     v.t = t; v.updated = Date.now(); saveVideos();
   }
   // The podcast player's Video: the episode's own YouTube video, inside Shelf, at the same spot. While the lookup still runs the
-  // button says so and carries on when it lands; a miss offers Shelf's own Search.
-  var podVidWait = '';
-  function podVideo() {
+  // button says so and carries on when it lands. A video Shelf is only fairly sure of plays with a way to pick another; when
+  // it can't tell, a short list is offered once and the pick is remembered; a failed search says so and can be retried.
+  var podVidWait = '', vidPick = null;
+  function podVideo(force) {
     var st = engine && engine.state(), ep = st && st.episode;
     if (!ep) return;
-    var f = podYtLook(ep);
+    var f = podYtLook(ep, force === true);
     if (f && f.busy) { podVidWait = ep.guid; renderAudio(); return; }
     podVidWait = '';
-    if (f && f.id) { startPodVideo(ep, f.id); return; }
-    var q = ((ep.podcast || '') + ' ' + (ep.title || '')).trim();
-    toast("Couldn't find this episode's video.", 'warn', { label: 'Search', fn: function () { if (nightOpen) closeNight(); unwind(function () { push({ name: 'search', q: q }); runSearch(q); }); } }, 8000);
+    var q = podQuery(ep);
+    if (f && f.id) {
+      startPodVideo(ep, f.id, !!f.guess);
+      if (f.guess) {
+        var more = (f.list || []).filter(function (x) { return x.id !== f.id; }), name = (f.list || []).filter(function (x) { return x.id === f.id; })[0], shown = videos[f.id] && videos[f.id].title;
+        toast('Playing \u201c' + ((name && name.title) || shown || ep.title) + '\u201d. Not this episode?', '', more.length ? { label: 'Pick another', fn: function () { offerVideoPick(ep, f.list, q); } } : { label: 'Search', fn: function () { searchFor(q); } }, 8000);
+      }
+      return;
+    }
+    if (f && f.list && f.list.length) { offerVideoPick(ep, f.list, q); return; }
+    if (f && f.err) { toast("Couldn't reach YouTube to look for this episode's video.", 'warn', { label: 'Try again', fn: function () { podVideo(true); } }, 8000); return; }
+    toast('Shelf found no video of this episode on YouTube.', '', { label: 'Search', fn: function () { searchFor(q); } }, 8000);
   }
-  function startPodVideo(ep, id) {
+  function searchFor(q) { if (nightOpen) closeNight(); unwind(function () { push({ name: 'search', q: q }); runSearch(q); }); }
+  // The pick list: the videos that could be this episode. Reuses the podcast-version sheet.
+  function offerVideoPick(ep, list, q) {
+    vidPick = { ep: ep, list: list || [], q: q };
+    $('#twinH').textContent = 'Which video is it?';
+    var h = "<p>Shelf isn't sure which video is this episode. Pick it once and Shelf remembers.</p><div class=\"tw-list\">";
+    vidPick.list.forEach(function (x, i) {
+      h += '<button type="button" class="tw-ep" data-act="podvid-pick" data-i="' + i + '"><b>' + esc(x.title) + '</b><small class="mono">' +
+        esc([x.channel, x.dur ? Core.fmt(x.dur) : ''].filter(Boolean).join(' · ')) + '</small></button>';
+    });
+    h += '<button type="button" class="tw-ep quiet" data-act="podvid-search"><b>None of these</b><small class="mono">Search YouTube in Shelf</small></button></div>';
+    $('#twinBody').innerHTML = h; openDlg($('#twinDlg'));
+  }
+  function pickPodVideo(i) {
+    var vp = vidPick, x = vp && vp.list[i];
+    $('#twinDlg').close();
+    if (!x) return;
+    unlinkPodVideo(vp.ep.guid, (arec[vp.ep.guid] || {}).yt, x.id);
+    startPodVideo(vp.ep, x.id);
+    var c = podYt[vp.ep.guid] = Object.assign({}, podYt[vp.ep.guid] || podYtStore()[vp.ep.guid] || {}, { id: x.id, guess: false, list: vp.list, busy: false, at: Date.now() });
+    delete c.err; delete c.wait;
+    podYtKeep(vp.ep.guid, c);
+  }
+  // A wrongly guessed video stops being this episode's: a record Shelf made for the guess goes, any other keeps its place
+  function unlinkPodVideo(guid, old, keep) {
+    var ov = old && old !== keep && videos[old];
+    if (!ov || ov.ep !== guid) return;
+    if (ov.guessed) delete videos[old]; else delete ov.ep;
+    saveVideos();
+  }
+  function startPodVideo(ep, id, guess) {
     var st = engine.state(), t = st.episode && st.episode.guid === ep.guid ? st.t || 0 : 0;
     engine.capture(true);
     engine.pause();
     if (st.timer) engine.setTimer(null); // it runs on the clock: it would stop the podcast as soon as it played again
     var r = arec[ep.guid] = Object.assign({}, aMeta[ep.guid] || {}, arec[ep.guid] || {}, { url: ep.url, title: ep.title, podcast: ep.podcast, image: ep.image || (arec[ep.guid] || {}).image || '', updated: Date.now() });
     if (!r.dur && (st.dur || ep.duration)) r.dur = st.dur || ep.duration;
-    r.t = t; r.yt = id; r.as = 'video'; saveAudio();
-    var v = ensureVideo({ id: id, title: ep.title, author: ep.podcast });
+    r.t = t; r.yt = id; r.as = 'video'; if (guess) r.ytg = 1; else delete r.ytg; saveAudio();
+    var had = !!videos[id], v = ensureVideo({ id: id, title: ep.title, author: ep.podcast });
+    if (guess && !had) v.guessed = 1; else if (!guess) delete v.guessed;
     v.t = t; v.done = false; v.ep = ep.guid; v.updated = Date.now();
     nightOpen = false; closeSheet('#nsheet');
     openVideo({ id: id, title: ep.title, author: ep.podcast });
@@ -5526,18 +5715,20 @@ if (typeof module !== 'undefined') module.exports = AI;
   }
   function watchSnap() {
     var pk = pickState(), night = isNight(), pick = [];
-    if (pk.top) pick.push({ kind: 'continue', entry: watchEntry(pk.top) });
-    if (pk.nx) pick.push({ kind: 'upnext', label: pk.nc.name + ' · ' + (pk.ni + 1) + ' of ' + pk.npr.total, entry: watchCourseEntry(pk.nc, pk.nx, pk.ni) });
     var wly = pk.ly;
     if (wly && !(Native.yt && ytOut)) {
       var lyDone = wly.pct != null && wly.pct >= 97;
       pick.push({ kind: 'lastyt', entry: { type: 'video', key: wly.id, title: wly.title || 'YouTube video', srcName: wly.author || '', src: '', dur: Math.round(wly.dur || 0),
         t: lyDone ? 0 : Math.round(wly.t || 0), done: lyDone, isNew: false, section: '', about: wly.exact === false } });
     }
+    // The watch app knows these kinds: the Sleep row goes as 'bedtime', the Entertainment row as 'continue'
+    if (pk.rows[0].e) pick.push({ kind: 'bedtime', entry: watchEntry(pk.rows[0].e) });
+    if (pk.rows[1].e) pick.push({ kind: 'continue', entry: watchEntry(pk.rows[1].e) });
+    if (pk.nx) pick.push({ kind: 'upnext', label: pk.nc.name + ' · ' + (pk.ni + 1) + ' of ' + pk.npr.total, entry: watchCourseEntry(pk.nc, pk.nx, pk.ni) });
     var sections = daySections().map(function (sec) {
       var br = bandRows(sec.id, 6), fresh = br.fresh, items = br.rows.map(function (e) { return watchEntry(e); });
       return { id: sec.id, name: sec.name, newCount: fresh.length, more: br.rest, items: items,
-        channels: lib.sources(sec.id).filter(function (x) { return !brokenDup(x); }).map(function (x) { return { id: x.id, name: x.name, podcast: x.type === 'podcast', newCount: srcNewCount(x.id) }; }) };
+        channels: visSources(sec.id).filter(function (x) { return !brokenDup(x); }).map(function (x) { return { id: x.id, name: x.name, podcast: x.type === 'podcast', newCount: srcNewCount(x.id) }; }) };
     });
     var loose = Object.keys(videos).map(function (id) { return entryFromVideo(videos[id]); }).filter(function (e) { return !e.section && !isDoneE(e) && !twinOf(videos[e.key]); })
       .sort(function (a, b) { return (b.updated || 0) - (a.updated || 0); });
@@ -5886,6 +6077,8 @@ if (typeof module !== 'undefined') module.exports = AI;
       case 'lock-setup': openLockDlg(); break;
       case 'lock-toggle': prefs.autoLock = !prefs.autoLock; savePrefs(); renderLockDlg(); syncYtOpen(); if (prefs.autoLock) toast('Auto-lock on. Try Play locked on any video.'); break;
       case 'twin-pick': pickTwin(+b.getAttribute('data-i')); break;
+      case 'podvid-pick': pickPodVideo(+b.getAttribute('data-i')); break;
+      case 'podvid-search': $('#twinDlg').close(); if (vidPick) searchFor(vidPick.q); break;
       case 'ai-sum':
         aiSumOpen = !aiSumOpen; renderAiUI();
         if (aiSumOpen && aiKey && current && ai.status(current, 'summary').state === 'none' && !aiAsk[current + 'summary']) aiStart('summary');
@@ -6031,7 +6224,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     engine.capture(true);
     var t = st.t || 0, found = podYtLook(ep), id = found && found.id, web;
     if (id) web = 'https://www.youtube.com/watch?v=' + id + (t > 5 ? '&t=' + Math.floor(t) + 's' : '');
-    else web = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(((ep.podcast || '') + ' ' + ep.title).trim());
+    else web = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(podQuery(ep));
     this.href = ytApp(web, false);
     catchSeq++;
     appFallbackTo(web);
@@ -6449,7 +6642,7 @@ if (typeof module !== 'undefined') module.exports = AI;
     refreshLastYT(true);
     watchBoot();
     // Test hook
-    window.__shelf = { get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
+    window.__shelf = { renderAll: renderAll, get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
       get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, get podYt() { return podYt; }, syncTwin: syncTwin, renderHome: renderHome, push: push, get ytHist() { return ytHist; }, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did
