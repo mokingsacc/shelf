@@ -160,7 +160,10 @@ var Courses = (function () {
       if (/reelWatchEndpoint|\/shorts\/|LOCKUP_CONTENT_TYPE_(?!VIDEO)/.test(item)) continue;
       var idm = item.match(/"contentId":"([\w-]{11})"/) || item.match(/"watchEndpoint":\{"videoId":"([\w-]{11})"/) || item.match(/"videoId":"([\w-]{11})"/);
       if (!idm) continue;
-      out.push(readItem(item, idm[1]));
+      var it = readItem(item, idm[1]);
+      // Safety net behind the markup check: a #shorts title, or a length known to be under 90 s, is a Short
+      if (/#shorts?\b/i.test(it.title || '') || (it.dur > 0 && it.dur < 90)) continue;
+      out.push(it);
     }
     return out;
   }
