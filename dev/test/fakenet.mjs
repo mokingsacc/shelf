@@ -33,12 +33,33 @@ function plPage(pid, k) {
 export const PODCASTS = {
   'https://feeds.megaphone.fm/finvshistory': { title: 'Fin vs History', eps: [['Ep. 212: The Shortest War in History', 3851, 6 * H], ['Ep. 211: The Great Emu War', 3420, 7 * D]] },
   'https://feeds.example.com/ezra': { title: 'The Ezra Klein Show', eps: [['Why the Housing Market Is Stuck', 840, 20 * H], ['The Case for Boredom', 3810, 4 * D]] },
+  'https://feeds.example.com/ezra?token=abc': { title: 'The Ezra Klein Show', eps: [['A Private Bonus Episode', 1800, 2 * D]] },
   'https://feeds.example.com/foc': { title: 'Fall of Civilizations Podcast', eps: [['Rome: The Fall of the Western Empire', 13732, 30 * D], ['The Bronze Age Collapse', 12010, 60 * D]] }
 };
 const ITUNES = { 'The Ezra Klein Show': 'https://feeds.example.com/ezra', 'Fall of Civilizations': 'https://feeds.example.com/foc' };
 const COLS = ['#B8334A', '#1C8A99', '#D08A2B', '#1E6B52', '#6E4FB3', '#2F6FB0', '#9A5A2B', '#4B5868'];
 const xmlEsc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const vidId = (ch, i) => ch.id.slice(2, 10) + 'v' + i + 'x';
+// A results page the way YouTube really serves it: a joint video names its channels in a dialog, a podcast card names the show
+const FOC_ID = 'UC' + 'f'.repeat(22), OTHER_ID = 'UC' + 'o'.repeat(22);
+const jointVideo = (name, cid, vid, title, len) => {
+  const person = { listItemViewModel: { title: { content: name }, rendererContext: { commandContext: { onTap: { innertubeCommand: { browseEndpoint: { browseId: cid } } } } } } };
+  const dialog = { showDialogCommand: { panelLoadingStrategy: { inlineContent: { dialogViewModel: { customContent: { listViewModel: { listItems: [person] } } } } } } };
+  return { videoRenderer: { videoId: vid, title: { runs: [{ text: title }] }, lengthText: { simpleText: len }, longBylineText: { runs: [{ text: name + ' and 1 more', navigationEndpoint: dialog }] } } };
+};
+const soloVideo = (name, cid, vid, title, len) => ({ videoRenderer: { videoId: vid, title: { runs: [{ text: title }] }, lengthText: { simpleText: len },
+  ownerText: { runs: [{ text: name, navigationEndpoint: { browseEndpoint: { browseId: cid } } }] } } });
+const showCard = (title, cid) => ({ lockupViewModel: { contentId: 'PLshow0000000000000000000000000000', contentType: 'LOCKUP_CONTENT_TYPE_PODCAST',
+  metadata: { lockupMetadataViewModel: { title: { content: title }, metadata: { contentMetadataViewModel: { metadataRows: [{ metadataParts: [{ text: { content: 'The channel', commandRuns: [{ onTap: { innertubeCommand: { browseEndpoint: { browseId: cid } } } }] } }] }] } } } } } });
+// For the Rome episode of "Fall of Civilizations Podcast" (3:48:52 long), by opts.vq.mode:
+//   guess: its video has another title and a joint byline, the show card names the channel, one other long video is there too
+//   many: two long videos from other channels, no show card
+//   fail: YouTube answers 500
+//   single: only the show's own video (a guess with no other choice)
+const romeSearch = (mode) => mode === 'single' ? [showCard('Fall of Civilizations Podcast', FOC_ID), jointVideo('FoC Official', FOC_ID, 'guessedvid1', 'A Wholly Different Title', '3:48:20')]
+  : mode === 'guess'
+  ? [showCard('Fall of Civilizations Podcast', FOC_ID), jointVideo('FoC Official', FOC_ID, 'guessedvid1', 'A Wholly Different Title', '3:48:20'), soloVideo('Some Other Channel', OTHER_ID, 'otherchan01', 'Another Long Documentary', '3:47:00')]
+  : [soloVideo('Alpha Channel', 'UC' + 'a'.repeat(22), 'manyvid0001', 'First Long Thing', '3:48:00'), soloVideo('Beta Channel', 'UC' + 'b'.repeat(22), 'manyvid0002', 'Second Long Thing', '3:49:00')];
 
 function ytFeed(ch, now, hideNewest) {
   const vids = ch.videos.map((v, i) => ({ id: vidId(ch, i), title: v[0], at: now - v[1] })).slice(hideNewest ? 1 : 0);
@@ -260,6 +281,11 @@ export async function installFakes(ctx, opts = {}) {
       if (u.searchParams.get('sp')) { // channel search
         const ch = yt.find((c) => c.name.toLowerCase().includes(q));
         return r.fulfill({ contentType: 'text/html', headers: cors, body: ch ? `"channelRenderer":{"channelId":"${ch.id}","title":{"simpleText":"${ch.name}"}}` : 'var ytInitialData = {};' });
+      }
+      const vq = opts.vq;
+      if (vq && vq.mode !== 'normal' && /fall of civilizations podcast/.test(q)) {
+        if (vq.mode === 'fail') return r.fulfill({ status: 500, headers: cors, body: '' });
+        return r.fulfill({ contentType: 'text/html', headers: cors, body: '<html><script>var ytInitialData = ' + JSON.stringify({ contents: romeSearch(vq.mode) }) + ';</script></html>' });
       }
       const hits = [];
       yt.forEach((c) => c.videos.forEach((v, i) => { if (v[0].toLowerCase().includes(q) || c.name.toLowerCase().includes(q)) hits.push({ c, v, i }); }));
