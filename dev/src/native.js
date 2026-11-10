@@ -2,6 +2,25 @@
 var Native = (function () {
   var Cap = window.Capacitor;
   var inApp = !!(Cap && typeof Cap.isNativePlatform === 'function' && Cap.isNativePlatform());
+  // The Shelf extension for Chrome (extension/) marks the page before its scripts run, and reads other sites for it.
+  // ext is its version, or '' in the phone shell and in a browser without it.
+  var ext = !inApp && document.documentElement.getAttribute('data-shelf-ext') || '';
+  var extSeq = 0, extWait = {};
+  if (ext) window.addEventListener('message', function (e) {
+    var m = e.data, w = m && m.shelfExt === 'answer' && extWait[m.id];
+    if (e.source !== window || !w) return;
+    delete extWait[m.id]; clearTimeout(w.timer);
+    if (m.error) w.rej(new Error(String(m.error))); else w.res(m.r);
+  });
+  // One question to the extension (fetch, pass, state); rejects with its error, or after 30 seconds
+  function extAsk(op, args) {
+    return new Promise(function (res, rej) {
+      var id = 'x' + (++extSeq) + '-' + Date.now();
+      extWait[id] = { res: res, rej: rej, timer: setTimeout(function () { delete extWait[id]; rej(new Error('The Shelf extension did not answer.')); }, 30000) };
+      window.postMessage({ shelfExt: 'ask', id: id, op: op, args: args }, location.origin);
+    });
+  }
+  function extRead(r) { var d = r && r.text; return { status: (r && r.status) || 0, ok: !!(r && r.ok), text: d == null ? '' : d, unreadable: d == null }; }
 
   function call(plugin, method, opts) {
     try {
@@ -46,6 +65,7 @@ var Native = (function () {
   function httpGet(url, headers) {
     var h = { 'User-Agent': /^https:\/\/(www\.|m\.)?youtube\.com\/(?!feeds\/)/.test(url) ? DESKTOP_UA : SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9' };
     for (var k in headers || {}) h[k] = headers[k];
+    if (ext) return extAsk('fetch', { url: url, method: 'GET', headers: h }).then(extRead);
     return call('CapacitorHttp', 'request', { url: url, method: 'GET', headers: h, responseType: 'text' }).then(function (r) {
       var d = r && r.data;
       if (d != null && typeof d !== 'string') d = JSON.stringify(d); // iOS pre-parses JSON replies
@@ -57,6 +77,7 @@ var Native = (function () {
   function httpPost(url, body, headers) {
     var h = { 'User-Agent': SAFARI_UA, 'Accept-Language': 'en-GB,en;q=0.9', 'Content-Type': 'application/json' };
     for (var k in headers || {}) h[k] = headers[k];
+    if (ext) return extAsk('fetch', { url: url, method: 'POST', headers: h, body: typeof body === 'string' ? body : JSON.stringify(body) }).then(extRead);
     return call('CapacitorHttp', 'request', { url: url, method: 'POST', headers: h, data: body, responseType: 'text' }).then(function (r) {
       var d = r && r.data;
       if (d != null && typeof d !== 'string') d = JSON.stringify(d);
@@ -65,9 +86,9 @@ var Native = (function () {
   }
 
   // Can the app read a podcast feed? (needs the shell's native networking: feeds don't allow browser reads)
-  var feedStatus = { state: inApp ? 'wait' : 'web', text: '' };
+  var feedStatus = { state: inApp || ext ? 'wait' : 'web', text: '' };
   function testFeed() {
-    if (!inApp) return;
+    if (!inApp && !ext) return;
     var done = false;
     setTimeout(function () { if (!done) { feedStatus = { state: 'bad', text: "Couldn't reach the Fin vs History feed in 20 seconds. Check your internet." }; } }, 20000);
     httpGet('https://feeds.megaphone.fm/finvshistory').then(function (r) {
@@ -135,10 +156,11 @@ var Native = (function () {
   function hasPlugin(name) {
     try { return (Cap.PluginHeaders || []).some(function (h) { return h.name === name; }) || !!(Cap.Plugins && Cap.Plugins[name]); } catch (e) { return false; }
   }
-  var ytAccount = { state: !inApp ? 'web' : hasPlugin('ShelfSignIn') ? 'wait' : 'old' };
+  // With the extension there is no sheet: the account is whatever the browser is signed in as, settled by the first YouTube page read
+  var ytAccount = { state: ext ? 'wait' : !inApp ? 'web' : hasPlugin('ShelfSignIn') ? 'wait' : 'old' };
   function setYT(r) { ytAccount = { state: r && r.signedIn ? 'in' : 'out' }; return ytAccount; }
   function checkYT() {
-    if (ytAccount.state === 'web' || ytAccount.state === 'old') return Promise.resolve(ytAccount);
+    if (ext || ytAccount.state === 'web' || ytAccount.state === 'old') return Promise.resolve(ytAccount);
     var done = false;
     return new Promise(function (res) {
       setTimeout(function () { if (!done) { done = true; ytAccount = { state: 'unknown' }; res(ytAccount); } }, 5000);
@@ -162,7 +184,16 @@ var Native = (function () {
   function dim(on) { return dev('dim', { on: !!on }); }
   function statusBar(style, look) { return dev('statusBar', Object.assign({ style: style }, look || {})); }
   // A youtube.com page read as the signed-in account (null when this copy of the app can't): {status, data, signedIn, host}
-  function youtubeGet(url) { return device ? call('ShelfDevice', 'youtubeGet', { url: url }) : Promise.resolve(null); }
+  // With the extension the page is read with the browser's own YouTube cookies; signedIn is whether the page says the account is logged in
+  function youtubeGet(url) {
+    if (ext) return extAsk('fetch', { url: url, method: 'GET', headers: { 'Accept-Language': 'en-GB,en;q=0.9' } }).then(function (r) {
+      // Signed in when the page says so; a page that doesn't say either way but carries its data counts as signed in too
+      var t = (r && r.text) || '', signedIn = /"LOGGED_IN":\s*true/.test(t) || (!/"LOGGED_IN":\s*false/.test(t) && t.indexOf('ytInitialData') >= 0);
+      if (r && r.status === 200) ytAccount = { state: signedIn ? 'in' : 'out' };
+      return { status: (r && r.status) || 0, data: t, signedIn: signedIn, host: 'www.youtube.com', ext: true };
+    });
+    return device ? call('ShelfDevice', 'youtubeGet', { url: url }) : Promise.resolve(null);
+  }
   // Shells from 12 Oct 2026 can renew the YouTube sign-in by themselves: a hidden web view opens YouTube's sign-in
   // link on the same cookie jar for a few seconds (signed in to Google still, YouTube signs in again with no typing).
   // Settles with {signedIn} (null when this shell can't, or it took over 30 s). The method is checked in the
@@ -199,6 +230,7 @@ var Native = (function () {
     } catch (e) {}
   }
 
+  if (ext) setTimeout(testFeed, 1500);
   if (inApp) {
     document.documentElement.classList.add('in-app');
     try { consentCookies(); } catch (e) {}
@@ -206,7 +238,7 @@ var Native = (function () {
     checkYT();
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkYT(); });
   }
-  return { inApp: inApp, call: call, httpGet: httpGet, httpPost: httpPost, get pageSheet() { return pageSheet; }, openPage: openPage, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
+  return { inApp: inApp, ext: ext, net: inApp || !!ext, yt: device || !!ext, extAsk: extAsk, call: call, httpGet: httpGet, httpPost: httpPost, get pageSheet() { return pageSheet; }, openPage: openPage, prefGet: prefGet, prefSet: prefSet, get prefError() { return prefError; },
     readClipboard: readClipboard, get feedStatus() { return feedStatus; }, playTone: playTone, stopTone: stopTone,
     get toneResult() { return toneResult(); }, get tonePlaying() { return !!tone; },
     get ytAccount() { return ytAccount; }, checkYT: checkYT, signInYT: signInYT, signOutYT: signOutYT, openSettings: openSettings,

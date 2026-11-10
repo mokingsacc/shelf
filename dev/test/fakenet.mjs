@@ -166,6 +166,45 @@ export const CAP = (seed, clip, shell) => { shell = Object.assign({ ytSignedIn: 
     }
   })();`; };
 
+// The Shelf extension for Chrome, faked: marks the page like extension/bridge.js does and answers the same postMessage
+// protocol ({ shelfExt: 'ask', id, op, args } -> { shelfExt: 'answer', id, r | error }). Reads go to the page's own
+// fetch (so installFakes' routes answer them) and YouTube's account pages come from the same canned values the fake
+// phone shell uses (window.__hist, __subs, __mypls, __privpl); a page counts as signed in by carrying "LOGGED_IN":true,
+// as YouTube's own pages do. Every read lands in window.__extCalls. ext.down: every read fails.
+export const EXT = (ext) => { ext = Object.assign({ version: '1.0.0' }, ext); return `window.__extCalls = [];
+  (function () {
+    var mark = function () { if (!document.documentElement) return false; document.documentElement.setAttribute('data-shelf-ext', ${JSON.stringify(ext.version)}); return true; };
+    if (!mark()) { var wait = new MutationObserver(function () { if (mark()) wait.disconnect(); }); wait.observe(document, { childList: true }); }
+    var webFetch = window.fetch.bind(window);
+    function canned(u, headers) {
+      var ytPage = function (data, signedIn) { return { status: 200, data: data, signedIn: signedIn }; };
+      if (u.includes('/feed/channels') && window.__subs) return ytPage(window.__subs, true);
+      if (u.includes('/feed/playlists') && window.__mypls) return window.__mypls === 'out' ? ytPage('', false) : ytPage(window.__mypls, true);
+      var pm = u.indexOf('/playlist?list=') >= 0 ? u.split('list=')[1] : '';
+      // youtubeGet sends no User-Agent; a plain read of the same address (Courses) does
+      if (pm) return window.__privpl && window.__privpl[pm] && !(headers && headers['User-Agent']) ? ytPage(window.__privpl[pm], true) : null;
+      if (u.includes('/feed/history')) {
+        var h = Array.isArray(window.__hist) ? (window.__hist.length > 1 ? window.__hist.shift() : window.__hist[0]) : window.__hist;
+        return h ? { status: h.status || 200, data: h.html || h.data || '', signedIn: h.signedIn !== false } : ytPage('', false);
+      }
+      return null;
+    }
+    window.addEventListener('message', function (e) {
+      var m = e.data;
+      if (e.source !== window || !m || m.shelfExt !== 'ask') return;
+      var answer = function (o) { o.shelfExt = 'answer'; o.id = m.id; window.postMessage(o, location.origin); };
+      if (m.op !== 'fetch') return answer({ r: m.op === 'state' ? { bounceOffUntil: 0 } : {} });
+      var a = m.args || {};
+      window.__extCalls.push({ url: a.url, method: a.method, headers: a.headers, body: a.body });
+      if (${!!ext.down}) return answer({ error: 'Failed to fetch' });
+      var c = canned(a.url, a.headers);
+      if (c) return answer({ r: { status: c.status, ok: c.status >= 200 && c.status < 300, text: c.data + (c.signedIn ? '"LOGGED_IN":true' : ''), url: a.url } });
+      webFetch(a.url, a.method === 'POST' ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: a.body } : undefined).then(function (r) {
+        return r.text().then(function (t) { answer({ r: { status: r.status, ok: r.ok, text: t, url: r.url } }); });
+      }, function (err) { answer({ error: String(err && err.message || err) }); });
+    });
+  })();`; };
+
 // opts.fresh: hide the newest item on the first fetch of each feed, so a later refresh shows "new"
 export async function installFakes(ctx, opts = {}) {
   const now = Date.now(), seen = {};
