@@ -1277,6 +1277,8 @@
   // The recent videos of the same history (no Shorts), for the YouTube history page; Last in YouTube is the newest of them
   try { ytHist = JSON.parse(rawGet(YH_KEY) || 'null') || []; ytHistAt = +rawGet(YH_KEY + 'at') || 0; } catch (e) {}
   if (!ytHist.length && lastYT) ytHist = [lastYT];
+  // A list saved before Shorts of up to 3 minutes were told apart may still hold some
+  ytHist = ytHist.filter(function (h) { return !Courses.shortLike(h); }); if (lastYT && Courses.shortLike(lastYT)) lastYT = ytHist[0] || null;
   // YouTube can stop accepting Shelf's sign-in on its side while the phone still holds the cookies: its pages then
   // come back with no data (a redirect to Google's sign-in, or a page without ytInitialData). Shells from 12 Oct
   // 2026 heal that by themselves (readYT); otherwise the card says so and offers one tap to sign in again.
