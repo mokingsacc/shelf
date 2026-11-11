@@ -300,10 +300,12 @@ function setup(store, opts = {}) {
   assert.strictEqual(Courses.historyLatest(HS).title, 'OpenAI CEO says', 'the video title, not a menu item');
   assert.strictEqual(Courses.historyItems(HR).length, 2);
 
-  // Safety net: a #shorts title or a length under 90 s is a Short even when the markup looks like a video
+  // Safety net: a #shorts title, a SHORTS badge or a length up to 3 minutes is a Short even when the markup looks like a video
   const vrs = (id, title, len) => ({ videoRenderer: { videoId: id, title: { runs: [{ text: title }] }, lengthText: { simpleText: len } } });
-  const HN = hist([vrs('sssssssssss', 'Funny cat #Shorts', '5:00'), vrs('tttttttttt1', 'Quick clip', '0:45'), vrs('uuuuuuuuuuu', 'Real talk', '12:00'), vrs('vvvvvvvvvvv', 'Edge', '1:30')]);
-  assert.deepStrictEqual(Courses.historyItems(HN, 10).map((x) => x.id), ['uuuuuuuuuuu', 'vvvvvvvvvvv'], '#shorts titles and clips under 90 s are dropped, 1:30 stays');
+  const badge = vrs('bbbbbbbbbbb', 'No length shown', '9:00'); delete badge.videoRenderer.lengthText; badge.videoRenderer.thumbnailOverlays = [{ thumbnailOverlayTimeStatusRenderer: { text: { simpleText: 'SHORTS' }, style: 'SHORTS' } }];
+  const HN = hist([vrs('sssssssssss', 'Funny cat #Shorts', '5:00'), vrs('tttttttttt1', 'Quick clip', '0:45'), badge, vrs('wwwwwwwwwww', 'A long Short', '2:59'), vrs('xxxxxxxxxxx', 'Three minutes', '3:00'), vrs('uuuuuuuuuuu', 'Real talk', '12:00'), vrs('vvvvvvvvvvv', 'Edge', '3:02')]);
+  assert.deepStrictEqual(Courses.historyItems(HN, 10).map((x) => x.id), ['uuuuuuuuuuu', 'vvvvvvvvvvv'], '#shorts titles, a SHORTS badge and anything up to 3 minutes are dropped; 3:02 stays');
+  assert.strictEqual(Courses.shortLike({ title: 'x', dur: 0 }), false, 'an unknown length alone is not a Short');
   assert.strictEqual(Courses.historyLatest(HN).id, 'uuuuuuuuuuu');
 
   // Mo's report (6 Oct 15:40): a Shorts shelf (shortsLockupViewModel, menu "Add to queue") sits above the first video
