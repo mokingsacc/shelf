@@ -157,16 +157,18 @@ var Courses = (function () {
     for (var i = 0; i < starts.length && out.length < (max || 10); i++) {
       ITEM.lastIndex = starts[i] + 2; var nx = ITEM.exec(html);
       var item = html.slice(starts[i], nx ? nx.index : Math.min(html.length, starts[i] + 20000));
-      if (/reelWatchEndpoint|\/shorts\/|LOCKUP_CONTENT_TYPE_(?!VIDEO)/.test(item)) continue;
+      if (/reelWatchEndpoint|\/shorts\/|LOCKUP_CONTENT_TYPE_(?!VIDEO)|"(?:text|simpleText|style)":"SHORTS"/.test(item)) continue;
       var idm = item.match(/"contentId":"([\w-]{11})"/) || item.match(/"watchEndpoint":\{"videoId":"([\w-]{11})"/) || item.match(/"videoId":"([\w-]{11})"/);
       if (!idm) continue;
       var it = readItem(item, idm[1]);
-      // Safety net behind the markup check: a #shorts title, or a length known to be under 90 s, is a Short
-      if (/#shorts?\b/i.test(it.title || '') || (it.dur > 0 && it.dur < 90)) continue;
+      if (shortLike(it)) continue;
       out.push(it);
     }
     return out;
   }
+  // Safety net behind the markup check. A Short opened from a link or a channel list is logged like any video, so its
+  // length is the only sign left: YouTube lets a Short run up to 3 minutes. A #shorts title counts too.
+  function shortLike(it) { return !!it && (/#shorts?\b/i.test(it.title || '') || (it.dur > 0 && it.dur <= 181)); }
   function readItem(item, id) {
     function str(rx) { var r = item.match(rx); if (!r) return ''; try { return JSON.parse('"' + r[1] + '"'); } catch (e) { return r[1]; } }
     var title = str(/"lockupMetadataViewModel":\{"title":\{"content":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"/) || str(/"title":\{"simpleText":"((?:[^"\\]|\\.)*)"/);
@@ -570,7 +572,7 @@ var Courses = (function () {
       get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
     };
   }
-  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName,
+  return { create: create, KEY: KEY, IKEY: IKEY, SEED: SEED, EXAM: EXAM_DEFAULT, exam: exam, setExam: setExam, perDay: perDay, epNumber: epNumber, playlistId: playlistId, shortName: shortName, shortLike: shortLike,
     initialData: initialData, readVideos: readVideos, channelVideos: channelVideos, agoTime: agoTime, readPlaylists: readPlaylists, fmtHours: fmtHours, historySpot: historySpot, historyLatest: historyLatest, historyItems: historyItems, subChannels: subChannels };
 })();
 if (typeof module !== 'undefined') module.exports = Courses;
