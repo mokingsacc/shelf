@@ -12,6 +12,8 @@ struct PlayOnView: View {
     @State private var lookedUp = false
     @State private var busy: String?            // "phone" or "watch" while it starts
     @State private var problem: String?
+    @State private var fromPhone = false        // the problem shown is from a play on the iPhone (it may start after all)
+    @State private var askedAt: Double = 0      // when that play was tapped (ms)
     @State private var ticked: Bool?
     @State private var undo: String?
 
@@ -35,6 +37,8 @@ struct PlayOnView: View {
                 choice(b)
                 if let problem {
                     Text(problem).font(.shelf(12, .semibold)).foregroundStyle(Ink.wait).fixedSize(horizontal: false, vertical: true).padding(.top, 6)
+                } else if busy == "phone" {
+                    Text("Starting on your iPhone…").font(.shelf(12, .semibold)).foregroundStyle(b.fg.opacity(0.85)).fixedSize(horizontal: false, vertical: true).padding(.top, 6)
                 }
                 extras(b)
             }
@@ -44,6 +48,14 @@ struct PlayOnView: View {
         .screen(b.bg)
         .overlay(alignment: .bottom) { if let undo { UndoBar(text: undo, color: b.fg) { await untick() } } }
         .task { await findTwin() }
+        // The iPhone didn't answer in time but started it after all: the problem goes and Now shows it
+        .onChange(of: store.phoneNow) { _, now in
+            guard fromPhone, problem != nil, Command.startedAnyway(key: entry.key, now: now, since: askedAt) else { return }
+            problem = nil
+            fromPhone = false
+            Haptic.start()
+            store.showNow()
+        }
     }
 
     private var heading: String {
@@ -134,14 +146,16 @@ struct PlayOnView: View {
     }
 
     private func playPhone() async {
-        busy = "phone"; problem = nil
+        busy = "phone"; problem = nil; fromPhone = false
+        askedAt = Date().timeIntervalSince1970 * 1000
         problem = await Act.onPhone(entry)
+        fromPhone = problem != nil
         busy = nil
     }
 
     private func playWatch() async {
         guard let it = watchItem else { return }
-        busy = "watch"; problem = nil
+        busy = "watch"; problem = nil; fromPhone = false
         let from: Double
         if let twin { from = twin.linked ? max(twin.start, entry.t) : twin.start } else { from = Act.start(entry) }
         problem = await Act.onWatch(it, from: from)
@@ -150,7 +164,7 @@ struct PlayOnView: View {
 
     private func tick(_ course: String, _ label: String, _ on: Bool) async {
         let r = await Act.tick(course: course, key: entry.key, on: on)
-        if r.ok { ticked = on; undo = on ? "Ticked " + label + (r.queued ? " · waits for iPhone" : "") : nil } else { problem = r.problem }
+        if r.ok { ticked = on; undo = on ? "Ticked " + label + (r.queued ? " · waits for iPhone" : "") : nil } else { problem = r.problem; fromPhone = false }
     }
 
     private func untick() async {

@@ -51,8 +51,11 @@ enum Act {
     static func onPhone(_ e: Entry, from: Double? = nil) async -> String? {
         var f: [String: Any] = ["entry": Command.fields(e)]
         if let from { f["from"] = from }
+        let asked = Date().timeIntervalSince1970 * 1000
         let r = await Store.shared.send("play", f)
-        if r.ok {
+        var started = r.ok
+        if !started && (r.why == "timeout" || r.why == "unreachable") { started = await startedAnyway(e.key, since: asked) }
+        if started {
             // One thing plays at a time
             if WatchPlayer.shared.playing { WatchPlayer.shared.pause() }
             if WatchPlayer.shared.active { WatchPlayer.shared.stop() }
@@ -62,6 +65,18 @@ enum Act {
         }
         Haptic.warn()
         return r.problem
+    }
+
+    /// The iPhone's answer never came, but it may be playing: ask once and give it a moment before saying so
+    private static func startedAnyway(_ key: String, since: Double) async -> Bool {
+        let store = Store.shared
+        if store.demo { return false }
+        store.hello()
+        for _ in 0..<8 {
+            if Command.startedAnyway(key: key, now: store.phoneNow, since: since) { return true }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+        return Command.startedAnyway(key: key, now: store.phoneNow, since: since)
     }
 
     /// Plays an episode, or a video's podcast version, on the watch; nil when it started, else what to say
@@ -111,8 +126,10 @@ enum Act {
         if s.onWatch { s.playing ? Haptic.stop() : Haptic.start(); WatchPlayer.shared.toggle(); return nil }
         var f: [String: Any] = ["key": s.key]
         if !s.playing, let e = entry(s) { f["entry"] = Command.fields(e) }
+        let asked = Date().timeIntervalSince1970 * 1000
         let r = await Store.shared.send(s.playing ? "pause" : "resume", f)
         if r.ok { (r.now?.playing ?? false) ? Haptic.start() : Haptic.stop(); return nil }
+        if !s.playing && (r.why == "timeout" || r.why == "unreachable"), await startedAnyway(s.key, since: asked) { Haptic.start(); return nil }
         Haptic.warn()
         return r.problem
     }
