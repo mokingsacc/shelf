@@ -254,7 +254,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
                 self.queue.async {
                     let work = DispatchWorkItem { [weak self] in self?.noAnswer(id: id, name: name) }
                     self.waiting[id] = work
-                    self.queue.asyncAfter(deadline: .now() + (page == nil ? 0 : max(2.5, Command.patience(name) - 1.5)), execute: work)
+                    self.queue.asyncAfter(deadline: .now() + (page == nil ? 0 : max(2.5, min(Command.patience(name), 8) - 1.5)), execute: work)
                 }
             }
         }
@@ -603,7 +603,15 @@ final class PocketPlayer: NSObject {
 
     // MARK: Playing
 
-    private func play(_ e: [String: Any], from: Double?, done: @escaping (Bool) -> Void) {
+    private func play(_ e: [String: Any], from: Double?, done answer: @escaping (Bool) -> Void) {
+        // One clock for the whole start and one answer, whichever comes first: it plays, it fails, or its time is up
+        let began = DispatchTime.now()
+        var answered = false
+        let done: (Bool) -> Void = { ok in
+            guard !answered else { return }
+            answered = true
+            answer(ok)
+        }
         let key = e["key"] as? String ?? ""
         // Where it starts: the watch's own choice, else where this player is in it, else the newest place waiting for Shelf, else Shelf's
         let start = from ?? (active && guid == key ? t : nil) ?? WatchLink.shared.newestSpot(key) ?? ((e["done"] as? Bool) == true ? 0 : Self.num(e["t"]) ?? 0)
@@ -613,14 +621,20 @@ final class PocketPlayer: NSObject {
         url = e["url"] as? String ?? ""; image = e["image"] as? String ?? ""; dur = Self.num(e["dur"]) ?? 0
         rate = Self.num(e["rate"]).flatMap { $0 > 0 ? $0 : nil } ?? 1
         guard let u = URL(string: url) else { done(false); return }
-        // In the background the iPhone only lets an app start sound that mixes with others (so the lock screen may not show it;
-        // the watch is the remote). On screen it never gets here: the page plays it.
+        // The lock screen and Control Centre only show a player that doesn't mix. In the background iOS allows that only at times
+        // (Shelf was the last thing playing); when it refuses, mixing still plays and the watch is the remote
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .spokenAudio, options: UIApplication.shared.applicationState == .active ? [] : [.mixWithOthers])
+            try session.setCategory(.playback, mode: .spokenAudio, options: [])
             try session.setActive(true)
         } catch {
-            done(false); return
+            guard UIApplication.shared.applicationState != .active else { done(false); return }
+            do {
+                try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+                try session.setActive(true)
+            } catch {
+                done(false); return
+            }
         }
         let item = AVPlayerItem(url: u)
         let p = AVPlayer(playerItem: item)
@@ -639,8 +653,13 @@ final class PocketPlayer: NSObject {
                 self.nowPlaying(); self.sendNow()
             }
         }
-        // Seek once the episode has loaded, then play. The watch waits 8 s, so loading gets 5 s and starting 2 s
-        var tries = 0
+        // Out of time (the watch waits a little longer): it stops here and never starts later
+        DispatchQueue.main.asyncAfter(deadline: began + Command.pocketStart) { [weak self] in
+            guard !answered else { return }
+            if self?.player === p { self?.finish(keepPlace: false) }
+            done(false)
+        }
+        // Seek once the episode has loaded, then play. Loading, seeking and starting all share the time above
         func wait() {
             guard player === p else { done(false); return }
             if item.status == .readyToPlay {
@@ -648,15 +667,14 @@ final class PocketPlayer: NSObject {
                     guard self.player === p else { done(false); return }
                     p.playImmediately(atRate: Float(self.rate))
                     self.confirm(p) { ok in
-                        if ok { self.armed = true; self.started() } else { self.finish(keepPlace: false) }
+                        if ok { self.armed = true; self.started() } else if self.player === p { self.finish(keepPlace: false) }
                         done(ok)
                     }
                 }
                 if start > 1 { p.seek(to: CMTime(seconds: start, preferredTimescale: 600)) { _ in DispatchQueue.main.async(execute: go) } } else { go() }
-            } else if item.status == .failed || tries >= 20 {
+            } else if item.status == .failed {
                 finish(keepPlace: false); done(false)
             } else {
-                tries += 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: wait)
             }
         }

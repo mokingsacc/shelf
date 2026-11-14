@@ -79,15 +79,27 @@ public struct Command: Sendable {
         }
     }
 
-    /// How long the watch waits for the page's answer before it says the iPhone didn't answer
+    /// How long the watch waits for the iPhone's answer before it says the iPhone didn't answer. A play or resume may
+    /// be started by the iPhone's own player, woken in the background, so it waits longer than that player may take
     public static func patience(_ name: String) -> TimeInterval {
         switch name {
         case "twin": return 16
+        case "play", "resume": return 20
         case "channel", "section": return 10
-        case "play", "next", "resume", "pause", "toggle": return 8
+        case "next", "pause", "toggle": return 8
         case "notes": return 6
         default: return 5
         }
+    }
+
+    /// How long the iPhone's own player may take to start a podcast for the watch (always under the watch's patience)
+    public static let pocketStart: TimeInterval = 12
+
+    /// A play the watch gave up on did start after all: the iPhone now plays (or loads) that very thing, and said so after
+    /// the tap (`since`, ms; the two clocks may differ by a moment), not in something older the watch still shows
+    public static func startedAnyway(key: String, now: NowState?, since: Double) -> Bool {
+        guard key != "", let n = now, n.key == key, n.at >= since - 2000 else { return false }
+        return n.playing || n.buffering
     }
 
     /// The command's name inside its JSON (what the iPhone plugin reads)
