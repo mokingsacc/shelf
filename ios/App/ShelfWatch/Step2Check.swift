@@ -123,13 +123,14 @@ struct CheckPage: View {
         if store.live { out.append(Line(id: 1, ok: true, text: "iPhone connected, Shelf open")) }
         else if store.reachable { out.append(Line(id: 1, ok: true, text: "iPhone connected. Shelf is closed there: podcasts play from here, a video needs one tap on the iPhone")) }
         else { out.append(Line(id: 1, ok: false, text: "iPhone out of reach. Showing " + shown)) }
-        if store.waiting > 0 { out.append(Line(id: 2, ok: false, text: "\(store.waiting) change" + (store.waiting == 1 ? "" : "s") + " wait for your iPhone")) }
-        else { out.append(Line(id: 2, ok: true, text: "Synced " + (store.heardAt.map { Words.ago($0) } ?? "not yet"))) }
-        if player.headphones { out.append(Line(id: 3, ok: true, text: (player.lastRoute.isEmpty ? "AirPods" : player.lastRoute) + " connected to this watch")) }
-        else { out.append(Line(id: 3, ok: nil, text: "To listen on the watch, connect AirPods to it in Control Centre.")) }
-        if let p = player.problem, p != "noairpods" { out.append(Line(id: 4, ok: false, text: Words.why(p))) }
+        if let trouble = store.linkTrouble { out.append(Line(id: 2, ok: nil, text: "Last link trouble: " + trouble)) }   // quiet, just after the iPhone line
+        if store.waiting > 0 { out.append(Line(id: 3, ok: false, text: "\(store.waiting) change" + (store.waiting == 1 ? "" : "s") + " wait for your iPhone")) }
+        else { out.append(Line(id: 3, ok: true, text: "Synced " + (store.heardAt.map { Words.ago($0) } ?? "not yet"))) }
+        if player.headphones { out.append(Line(id: 4, ok: true, text: (player.lastRoute.isEmpty ? "AirPods" : player.lastRoute) + " connected to this watch")) }
+        else { out.append(Line(id: 4, ok: nil, text: "To listen on the watch, connect AirPods to it in Control Centre.")) }
+        if let p = player.problem, p != "noairpods" { out.append(Line(id: 5, ok: false, text: Words.why(p))) }
         let v = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") + " (" + (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1") + ")"
-        out.append(Line(id: 5, ok: nil, text: "Watch " + v + (store.snap.map { $0.build.isEmpty ? "" : " · iPhone " + String($0.build.prefix(7)) } ?? "")))
+        out.append(Line(id: 6, ok: nil, text: "Watch " + v + (store.snap.map { $0.build.isEmpty ? "" : " · iPhone " + String($0.build.prefix(7)) } ?? "")))
         return out
     }
 

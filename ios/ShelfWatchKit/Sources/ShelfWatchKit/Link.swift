@@ -95,6 +95,9 @@ public struct Command: Sendable {
     /// How long the iPhone's own player may take to start a podcast for the watch (always under the watch's patience)
     public static let pocketStart: TimeInterval = 12
 
+    /// How long the link may be down before the watch says the iPhone is out of reach (it often takes a moment to come up)
+    public static let reachGrace: TimeInterval = 4
+
     /// A play the watch gave up on did start after all: the iPhone now plays (or loads) that very thing, and said so after
     /// the tap (`since`, ms; the two clocks may differ by a moment), not in something older the watch still shows
     public static func startedAnyway(key: String, now: NowState?, since: Double) -> Bool {

@@ -191,6 +191,12 @@ final class ShelfWatchKitTests: XCTestCase {
         XCTAssertEqual(Command.patience("pause"), 8)
     }
 
+    func testReachGraceUnderEveryPatience() {
+        let names = ["play", "resume", "twin", "channel", "section", "course", "next", "pause", "toggle", "notes", "seek", "seekTo", "rate",
+                     "timer", "mark", "stop", "tick", "snap"]
+        XCTAssertLessThan(Command.reachGrace, names.map(Command.patience).min() ?? 0, "a tap waiting for the link still has time for its answer")
+    }
+
     func testStartedAnyway() {
         let playing = NowState(kind: "audio", key: "ep1", title: "Ep", playing: true, at: 10_000)
         let loading = NowState(kind: "audio", key: "ep1", title: "Ep", buffering: true, at: 10_000)

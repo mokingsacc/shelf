@@ -24,7 +24,8 @@ final class Store: ObservableObject {
 
     @Published private(set) var snap: Snapshot?
     @Published private(set) var phoneNow: NowState?
-    @Published private(set) var reachable = false
+    @Published private(set) var reachable = false       // settled: the link down only a moment still counts as in reach
+    @Published private(set) var linkTrouble: String?    // the last message the link lost, with its time ("7:41 am · WCErrorDomain 7007")
     @Published private(set) var page = true            // Shelf's page answered the last tap (false: open Shelf on the iPhone)
     @Published private(set) var heardAt: Date?          // the last snapshot or message from the iPhone
     @Published private(set) var waiting = 0             // ticks and spots queued for the iPhone
@@ -41,6 +42,8 @@ final class Store: ObservableObject {
     private var volBusy = false                         // one volume message on its way at a time
     private var volWant: Double?                        // the newest level the Crown asked for, sent when the last one lands
     private var volSent = 0                             // each volume message's number, so a lost one's watchdog can let the next go
+    private var linkDownSince: Date?                    // when the link went down (nil while it's up)
+    private var reachCheck: Task<Void, Never>?          // the one check that runs while the link is down
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
@@ -52,17 +55,47 @@ final class Store: ObservableObject {
     func start() {
         guard !demo else { return }
         PhoneLink.shared.start()
-        hello()
+        hello(woke: true)
     }
 
-    /// Ask the iPhone for the latest at once (the app opened or came back)
-    func hello() {
+    /// Ask the iPhone for the latest at once (the app opened or came back: woke)
+    func hello(woke: Bool = false) {
         guard !demo else { return }
-        reachable = PhoneLink.shared.reachable
+        if woke {
+            // The link often takes a moment to come up after the app wakes: in reach for now, out of reach only if it stays down
+            linkDownSince = nil
+            if !PhoneLink.shared.reachable { reachable = true }
+        }
+        settleReach()
         waiting = PhoneLink.shared.waiting
         checkedAt = Date()
         if let d = PhoneLink.shared.latest(), let s = Snapshot.decode(d) { receive(s) }
-        _ = PhoneLink.shared.send(Command("hello"), ack: { page in Task { @MainActor in Store.shared.page = page; Store.shared.heardAt = Date() } }, failed: {})
+        _ = PhoneLink.shared.send(Command("hello"), ack: { page in Task { @MainActor in Store.shared.page = page; Store.shared.heardAt = Date() } }, failed: { _ in })
+    }
+
+    /// What the screens show for reach: in reach while the link is up, out of reach once it has been down for reachGrace.
+    /// While it's down one check runs every half second (asking the link to start), until it's up or 30 s have gone
+    private func settleReach() {
+        guard !demo else { return }
+        if PhoneLink.shared.reachable {
+            linkDownSince = nil
+            if !reachable { reachable = true }
+            return
+        }
+        let since = linkDownSince ?? Date()
+        linkDownSince = since
+        if reachable && Date().timeIntervalSince(since) >= Command.reachGrace { reachable = false }
+        guard reachCheck == nil else { return }
+        reachCheck = Task { @MainActor in
+            while true {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                PhoneLink.shared.start()
+                let s = Store.shared
+                s.settleReach()
+                guard let down = s.linkDownSince, Date().timeIntervalSince(down) < 30 else { break }
+            }
+            Store.shared.reachCheck = nil
+        }
     }
 
     // MARK: From the iPhone
@@ -82,7 +115,7 @@ final class Store: ObservableObject {
     }
 
     func linkChanged(reachable r: Bool) {
-        reachable = r
+        settleReach()
         waiting = PhoneLink.shared.waiting
         if r { hello() }
     }
@@ -146,14 +179,18 @@ final class Store: ObservableObject {
     func send(_ name: String, _ fields: [String: Any] = [:]) async -> Reply {
         if demo { return Demo.reply(name, fields, store: self) }
         let c = Command(name, fields)
+        // The link often takes a moment to come up (the app just woke): the tap waits for it a little, then goes whatever the state
+        if !PhoneLink.shared.reachable {
+            // (only a second when the screens already say it's out of reach)
+            let end = Date().addingTimeInterval(reachable ? Command.reachGrace : 1)
+            while !PhoneLink.shared.reachable && Date() < end {
+                PhoneLink.shared.start()
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+        }
         let r: Reply = await withCheckedContinuation { (k: CheckedContinuation<Reply, Never>) in
             pending[c.id] = k
-            let sent = PhoneLink.shared.send(c, ack: { page in
-                Task { @MainActor in Store.shared.heardAt = Date(); if !page { Store.shared.page = false } }
-            }, failed: {
-                Task { @MainActor in Store.shared.finish(c.id, Reply(ok: false, why: "unreachable", queued: c.durable)) }
-            })
-            switch sent {
+            switch transmit(c, again: false) {
             case .sent:
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: UInt64(Command.patience(name) * 1e9))
@@ -166,8 +203,39 @@ final class Store: ObservableObject {
             }
         }
         waiting = PhoneLink.shared.waiting
-        if r.why == "unreachable" { reachable = PhoneLink.shared.reachable }
+        if r.why == "unreachable" { settleReach() }
         return r
+    }
+
+    /// Hands one tap to the link (again: the second try of a message that seemed lost, never queued twice)
+    private func transmit(_ c: Command, again: Bool) -> PhoneLink.Sent {
+        PhoneLink.shared.send(c, queue: !again, ack: { page in
+            Task { @MainActor in Store.shared.heardAt = Date(); if !page { Store.shared.page = false } }
+        }, failed: { why in
+            Task { @MainActor in Store.shared.lost(c, why, again: again) }
+        })
+    }
+
+    /// A tap's message failed, often only its reply timing out while iOS woke Shelf: once more after a moment if the link is
+    /// up (the same id, so the iPhone acts on it once; the tap's patience runs on from the first send), else "unreachable"
+    private func lost(_ c: Command, _ why: String, again: Bool) {
+        linkTrouble = Self.clock(Date()) + " · " + why
+        guard !again, pending[c.id] != nil else { finish(c.id, Reply(ok: false, why: "unreachable", queued: c.durable)); return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            let s = Store.shared
+            // A failed message often leaves the link down for a moment: it gets 3 s to come back
+            var waits = 0
+            while !PhoneLink.shared.reachable && waits < 12 && s.pending[c.id] != nil {
+                PhoneLink.shared.start()
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                waits += 1
+            }
+            guard s.pending[c.id] != nil else { return }
+            if !PhoneLink.shared.reachable || s.transmit(c, again: true) != .sent {
+                s.finish(c.id, Reply(ok: false, why: "unreachable", queued: c.durable))
+            }
+        }
     }
 
     /// A podcast spot from the watch's own playback: queued, so it reaches the iPhone even later
@@ -175,7 +243,7 @@ final class Store: ObservableObject {
         guard !demo else { return }
         let c = s.command
         if PhoneLink.shared.reachable {
-            _ = PhoneLink.shared.send(c, ack: { _ in }, failed: {})
+            _ = PhoneLink.shared.send(c, ack: { _ in }, failed: { _ in })
         } else {
             PhoneLink.shared.queue(c)
         }

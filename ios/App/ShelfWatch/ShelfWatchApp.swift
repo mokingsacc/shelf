@@ -17,7 +17,7 @@ struct ShelfWatchApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Ink.ink)
                 .onAppear { store.start(); Demo.open(store) }
-                .onChange(of: phase) { _, p in if p == .active { store.hello() } }
+                .onChange(of: phase) { _, p in if p == .active { store.hello(woke: true) } }
         }
     }
 }
