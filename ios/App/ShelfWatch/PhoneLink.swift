@@ -29,21 +29,24 @@ final class PhoneLink: NSObject, WCSessionDelegate, @unchecked Sendable {
 
     enum Sent { case sent, queued, failed }
 
-    /// One tap: a message while the iPhone is in reach (its ack says whether Shelf's page is there), else queued if it must arrive
-    func send(_ c: Command, ack: @escaping @Sendable (_ page: Bool) -> Void, failed: @escaping @Sendable () -> Void) -> Sent {
+    /// One tap: a message while the iPhone is in reach (its ack says whether Shelf's page is there), else queued if it must arrive.
+    /// `failed` hears why a message failed (the error's domain and code). A second try passes queue false: the first already queued it
+    func send(_ c: Command, queue: Bool = true, ack: @escaping @Sendable (_ page: Bool) -> Void, failed: @escaping @Sendable (_ why: String) -> Void) -> Sent {
         guard let s = session, s.activationState == .activated else { return .failed }
         let msg: [String: Any] = [LinkKey.command: c.json, LinkKey.id: c.id]
+        let durable = c.durable && queue
         if s.isReachable {
             s.sendMessage(msg, replyHandler: { r in
                 if let snap = r[LinkKey.snapshot] as? Data, let d = LinkData.unpack(snap) { Self.deliver(snapshot: d) }
                 ack(r["page"] as? Bool ?? true)
-            }, errorHandler: { _ in
-                if c.durable { s.transferUserInfo(msg) }
-                failed()
+            }, errorHandler: { e in
+                if durable { s.transferUserInfo(msg) }
+                let n = e as NSError
+                failed(n.domain + " " + String(n.code))
             })
             return .sent
         }
-        if c.durable { s.transferUserInfo(msg); return .queued }
+        if durable { s.transferUserInfo(msg); return .queued }
         return .failed
     }
 
