@@ -116,6 +116,13 @@ function setup(store, opts = {}) {
   assert.strictEqual(c.progress(peds).done, 100);
   c.restore(peds, undo);
   assert.strictEqual(c.progress(peds).done, 91, 'undo puts it back');
+  // A tick made after "tick up to here" (here or brought in from another device) is not taken away by its Undo
+  const undo2 = c.tickUpTo(peds, 95);
+  c.tick(peds, arr[110].id, true);
+  c.restore(peds, undo2);
+  assert.strictEqual(c.progress(peds).done, 92, 'undo only takes back its own ticks');
+  c.tick(peds, arr[110].id, false);
+  assert.strictEqual(c.progress(peds).done, 91);
   assert.deepStrictEqual(c.findNumber(peds, 1203), [102]);
   // Exam clock and pace (the fake clock is 4 Oct 2026, 16:30 UTC; the exam 22 Dec)
   {

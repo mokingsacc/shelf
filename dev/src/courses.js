@@ -331,6 +331,7 @@ var Courses = (function () {
       return out;
     }
     function touch(c) { c.touched = now(); }
+    var lastUp = null; // what the last "tick up to here" turned on, for its Undo
     // When each tick was turned on (onAt) or off (offAt), for merging with another device's copy (sync.js).
     // An untick in the same millisecond as its tick still counts as the later of the two.
     function stampTick(c, vid, on) {
@@ -350,14 +351,23 @@ var Courses = (function () {
     function tickUpTo(id, i) {
       var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
       var before = Object.assign({}, c.ticks);
-      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) stampTick(c, arr[j].id, true); c.ticks[arr[j].id] = 1; }
+      var on = [];
+      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) { stampTick(c, arr[j].id, true); on.push(arr[j].id); } c.ticks[arr[j].id] = 1; }
       touch(c); save();
+      lastUp = { before: before, on: on };
       return before;
     }
+    // Undo of "tick up to here": only the ones that tick turned on go off again. Anything ticked since, here or
+    // on another device (sync), stays ticked.
     function restore(id, ticks) {
       var c = get(id); if (!c || !ticks) return;
-      Object.keys(Object.assign({}, c.ticks, ticks)).forEach(function (v) { var was = c.ticks[v] === 1, will = ticks[v] === 1; if (was !== will) stampTick(c, v, will); });
-      c.ticks = ticks; save();
+      var on = lastUp && lastUp.before === ticks ? lastUp.on : Object.keys(c.ticks).filter(function (v) { return ticks[v] !== 1; });
+      on.forEach(function (v) {
+        if (c.ticks[v] !== 1) return;
+        stampTick(c, v, false);
+        if (v in ticks) c.ticks[v] = ticks[v]; else delete c.ticks[v];
+      });
+      save();
     }
     function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; c.pinAt = c.pinAt || {}; c.pinAt[vid] = now(); save(); }
     // Episode number from the titles -> positions (first match first)
@@ -544,6 +554,23 @@ var Courses = (function () {
     // A "not found" line Mo doesn't want: gone for good
     function dropMiss(name) { state.dropped = state.dropped || {}; state.dropped[name] = 1; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); save(); }
     function fixMiss(name, c) { c.seedName = name; c.m = now(); state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
+    // ----- Sync (synclink.js) -----
+    function exportState() { return JSON.parse(JSON.stringify(state)); }
+    // A copy merged with another device's takes the state's place, with no new times. A course already here is
+    // emptied and refilled rather than replaced, so code holding it keeps working. The episode lists (cache) stay
+    // as they are; misses and saved stay this device's.
+    function adopt(merged) {
+      var m = JSON.parse(JSON.stringify(merged || {})), mine = { misses: 1, saved: 1 }, have = state.courses;
+      var mc = m.courses && typeof m.courses === 'object' ? m.courses : {};
+      Object.keys(have).forEach(function (id) { if (!mc[id]) delete have[id]; });
+      Object.keys(mc).forEach(function (id) {
+        var c = mc[id]; c.ticks = c.ticks && typeof c.ticks === 'object' ? c.ticks : {}; c.pins = c.pins && typeof c.pins === 'object' ? c.pins : {};
+        if (have[id]) { var o = have[id]; Object.keys(o).forEach(function (k) { delete o[k]; }); Object.assign(o, c); } else have[id] = c;
+      });
+      Object.keys(state).forEach(function (k) { if (!mine[k] && k !== 'courses' && !(k in m)) delete state[k]; });
+      Object.keys(m).forEach(function (k) { if (!mine[k] && k !== 'courses') state[k] = m[k]; });
+      save(); return true;
+    }
     function loadAll(force, onEach) {
       var ids = list().map(function (c) { return c.id; }), i = 0;
       function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }
@@ -588,6 +615,7 @@ var Courses = (function () {
       list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
       tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, move: move, remove: remove, dropMiss: dropMiss,
       load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists, peek: fetchList,
+      exportState: exportState, adopt: adopt,
       get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
     };
   }

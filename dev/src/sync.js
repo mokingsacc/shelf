@@ -1,5 +1,5 @@
 // Sync: merges two copies of each store (this device's and the server's) so both devices end with the same thing.
-// Pure: no storage, no clock (now is passed in), and the arguments are never changed. Nothing calls it yet.
+// Pure: no storage, no clock (now is passed in), and the arguments are never changed. The sync engine (synclink.js) calls it.
 // Rules for every store: nothing on either side is lost unless the other side removed it later than its newest
 // change; ties and copies with no times go to remote (the server's copy), so every device ends the same;
 // removal records older than 180 days are dropped. Tested in test/sync.test.cjs.
@@ -241,9 +241,21 @@ var Sync = (function () {
     Object.keys(x).forEach(function (k) { if ((DEVICE[kind] || []).indexOf(k) < 0) o[k] = x[k]; });
     return o;
   }
-  function same(x, y, kind) { return JSON.stringify(canon(shared(x, kind))) === JSON.stringify(canon(shared(y, kind))); }
+  function canonText(x, kind) { return JSON.stringify(canon(shared(x, kind))); }
+  function same(x, y, kind) { return canonText(x, kind) === canonText(y, kind); }
+
+  // An empty copy of a store, for "Replace" (this device ends as the shelf is). With from, the device-only fields
+  // of that copy stay (for prefs: everything that isn't shared).
+  function empty(kind, from) {
+    var o = kind === 'videos' ? { items: {}, gone: { v: {} } } : kind === 'library' ? { sections: [], sources: {} }
+      : kind === 'courses' ? { courses: {} } : kind === 'marks' ? { items: [] } : {};
+    from = obj(clone(from));
+    if (kind === 'prefs') { var sh = PREF_FIELDS.concat(['rates', 'at']); Object.keys(from).forEach(function (k) { if (sh.indexOf(k) < 0) o[k] = from[k]; }); }
+    else (DEVICE[kind] || []).forEach(function (k) { if (has(from, k)) o[k] = from[k]; });
+    return o;
+  }
 
   return { mergeVideos: mergeVideos, mergeAudio: mergeAudio, mergeLibrary: mergeLibrary, mergeCourses: mergeCourses, mergeMarks: mergeMarks, mergePrefs: mergePrefs,
-    same: same, KEEP: KEEP, PREF_FIELDS: PREF_FIELDS };
+    same: same, canon: canonText, empty: empty, KEEP: KEEP, PREF_FIELDS: PREF_FIELDS, DEVICE: DEVICE };
 })();
 if (typeof module !== 'undefined') module.exports = Sync;
