@@ -34,7 +34,9 @@ export const PODCASTS = {
   'https://feeds.megaphone.fm/finvshistory': { title: 'Fin vs History', eps: [['Ep. 212: The Shortest War in History', 3851, 6 * H], ['Ep. 211: The Great Emu War', 3420, 7 * D]] },
   'https://feeds.example.com/ezra': { title: 'The Ezra Klein Show', eps: [['Why the Housing Market Is Stuck', 840, 20 * H], ['The Case for Boredom', 3810, 4 * D]] },
   'https://feeds.example.com/ezra?token=abc': { title: 'The Ezra Klein Show', eps: [['A Private Bonus Episode', 1800, 2 * D]] },
-  'https://feeds.example.com/foc': { title: 'Fall of Civilizations Podcast', eps: [['Rome: The Fall of the Western Empire', 13732, 30 * D], ['The Bronze Age Collapse', 12010, 60 * D]] }
+  'https://feeds.example.com/foc': { title: 'Fall of Civilizations Podcast', eps: [['Rome: The Fall of the Western Empire', 13732, 30 * D], ['The Bronze Age Collapse', 12010, 60 * D]] },
+  'https://rss.libsyn.com/shows/58274/destinations/220957.xml': { title: 'Bedside Rounds', eps: [['The Fever Chart', 2710, 5 * D], ['A Short History of the Stethoscope', 2480, 19 * D]] },
+  'https://rss.libsyn.com/shows/270773/destinations/2065688.xml': { title: 'The Curious Clinicians', eps: [['Why Does Hypoglycemia Cause Sweating?', 1520, 3 * D], ['The Mystery of the Vasovagal Faint', 1390, 17 * D]] }
 };
 const ITUNES = { 'The Ezra Klein Show': 'https://feeds.example.com/ezra', 'Fall of Civilizations': 'https://feeds.example.com/foc' };
 const COLS = ['#B8334A', '#1C8A99', '#D08A2B', '#1E6B52', '#6E4FB3', '#2F6FB0', '#9A5A2B', '#4B5868'];
@@ -108,6 +110,9 @@ YT.Player = function (el, opts) {
   self.playVideo = function () { if (state !== 1) { t0 = Date.now(); set(1); } };
   self.pauseVideo = function () { if (state === 1) { base = now(); set(2); } };
   self.advance = function (n) { base += n; };
+  // A speed picked in YouTube's own menu, and a short stall (buffering, then playing again)
+  self.menuRate = function (r) { rate = r; opts.events.onPlaybackRateChange && opts.events.onPlaybackRateChange({ data: r, target: self }); };
+  self.stall = function () { base = now(); set(3); setTimeout(function () { t0 = Date.now(); set(1); }, 300); };
   self.seekTo = function (s) { base = s; t0 = Date.now(); if (s >= dur) { base = dur; set(0); } };
   setTimeout(function () { opts.events.onReady && opts.events.onReady({ target: self }); if (window.__errOnCreate) opts.events.onError({ data: 2 }); }, 30);
 };
@@ -307,6 +312,7 @@ export async function installFakes(ctx, opts = {}) {
   };
   await ctx.route('https://feeds.megaphone.fm/**', podRoute);
   await ctx.route('https://feeds.example.com/**', podRoute);
+  await ctx.route('https://rss.libsyn.com/**', podRoute);
   await ctx.route('https://audio.example.com/**', (r) => r.fulfill({ contentType: 'audio/wav', headers: { ...cors, 'accept-ranges': 'bytes' }, body: WAV }));
   await ctx.route(/https:\/\/(i\.ytimg\.com|img\.example\.com|yt3\.example\.com)\/.*/, (r) => {
     const u = r.request().url(); let n = 0; for (const c of u) n = (n * 31 + c.charCodeAt(0)) % 997;
