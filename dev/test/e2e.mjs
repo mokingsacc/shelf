@@ -1721,6 +1721,27 @@ const fp = await fctx.newPage(); await fp.goto('file://' + root + 'index.html');
 await fp.locator('#statusBtn').click(); await fp.waitForTimeout(150);
 ok((await fp.locator('#checkList').textContent()).includes('opened the file directly'), 'file: opened-as-file is explained');
 
+console.log('\n== Sync: removals and speed changes are written down');
+({ ctx, p } = await appPage());
+await settle(p);
+const goneOf = (pg) => shelf(pg, () => ((JSON.parse(localStorage.getItem('shelf.sync.gone') || 'null') || {}).v || {}).syncgone01x);
+const pasteOne = (pg) => shelf(pg, () => { window.__shelf.videos.syncgone01x = { id: 'syncgone01x', t: 30, dur: 600, updated: Date.now(), title: 'Sync test video', author: 'Nobody' }; window.__shelf.push({ name: 'pasted' }); });
+await pasteOne(p); await p.waitForTimeout(150);
+await p.locator('#page [data-act="remove-video"][data-id="syncgone01x"]').click(); await p.waitForTimeout(150);
+const goneAt = await goneOf(p);
+await p.locator('#toast button', { hasText: 'Undo' }).click(); await p.waitForTimeout(150);
+ok(goneAt > 0 && await goneOf(p) === undefined && await shelf(p, () => !!window.__shelf.videos.syncgone01x), 'sync: removing a video writes its removal to shelf.sync.gone, and Undo takes it out again');
+await shelf(p, () => window.__shelf.push({ name: 'pasted' })); await p.waitForTimeout(150); // the last pasted video going took the page back
+await p.locator('#page [data-act="remove-video"][data-id="syncgone01x"]').click(); await p.waitForTimeout(150);
+ok(await goneOf(p) > 0 && await shelf(p, () => !window.__shelf.videos.syncgone01x), 'sync: a removal without Undo stays in shelf.sync.gone');
+ok(await shelf(p, () => !!window.__prefs && !('shelf.sync.gone' in window.__prefs)), 'sync: shelf.sync.gone is not mirrored to the phone');
+await playFrom('Medicine', 'Mehlman Medical', 'Renal');
+const rateT = await shelf(p, () => Date.now());
+await p.locator('#vRate [data-r="1.75"]').click(); await p.waitForTimeout(200);
+const stamped = await shelf(p, () => ({ live: (window.__shelf.prefs.at || {})['rates.v:UCMehlmanMedicalxxxxxxxx'], saved: (JSON.parse(localStorage.getItem('resume.prefs.v1')).at || {})['rates.v:UCMehlmanMedicalxxxxxxxx'], rate: window.__shelf.prefs.rates['v:UCMehlmanMedicalxxxxxxxx'] }));
+ok(stamped.rate === 1.75 && stamped.live >= rateT && stamped.saved === stamped.live, 'sync: changing a channel speed stamps prefs.at[\'rates.v:…\'] (and saves it): ' + JSON.stringify(stamped));
+await ctx.close();
+
 console.log('\n== X Desktop Chrome with the Shelf extension (faked)');
 async function extPage({ url = URL0, ext = {}, fakes = {}, ctxOpts = {}, bridge = true, init = '' } = {}) {
   const c = await browser.newContext({ viewport: { width: 1280, height: 820 }, permissions: ['clipboard-read', 'clipboard-write'], ...ctxOpts });

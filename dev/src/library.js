@@ -42,6 +42,15 @@ var Library = (function () {
     // rev counts saves, so the phone's copy and the web view's copy can tell which is newer; born marks a
     // list started from scratch, so a fresh list made while the phone couldn't be read never beats the real one
     function save() { state.rev = (state.rev || 0) + 1; io.save(KEY, JSON.stringify(state)); }
+    // When each channel, section and the order last changed, and what was removed when, so another device's copy
+    // can be merged (sync.js). Old lists have none of this; it is written from the first change on.
+    function stamp(kind, id) {
+      var a = state.at = state.at || { src: {}, sec: {} };
+      if (kind === 'order') { a.order = now(); return; }
+      a[kind] = a[kind] || {}; a[kind][id] = now();
+      if (state.gone && state.gone[kind]) delete state.gone[kind][id]; // a change means it is here again
+    }
+    function bury(kind, id) { var g = state.gone = state.gone || { src: {}, sec: {} }; g[kind] = g[kind] || {}; g[kind][id] = now(); }
 
     // ----- Sections -----
     function sections() { return state.sections.slice(); }
@@ -53,26 +62,26 @@ var Library = (function () {
       var id = slug(name), n = 2;
       while (section(id)) id = slug(name) + '-' + n++;
       var s = { id: id, name: name, kind: kind === 'audio' ? 'audio' : 'video' };
-      state.sections.push(s); save(); return s;
+      state.sections.push(s); stamp('sec', id); stamp('order'); save(); return s;
     }
     function renameSection(id, name) {
       var s = section(id); name = String(name || '').trim();
       if (!s || !name) return false;
-      s.name = name; save(); return true;
+      s.name = name; stamp('sec', id); save(); return true;
     }
-    function setKind(id, kind) { var s = section(id); if (!s) return false; s.kind = kind === 'audio' ? 'audio' : 'video'; save(); return true; }
+    function setKind(id, kind) { var s = section(id); if (!s) return false; s.kind = kind === 'audio' ? 'audio' : 'video'; stamp('sec', id); save(); return true; }
     // Channels in a removed section move to the first remaining one, so nothing is lost by accident
     function removeSection(id) {
       if (state.sections.length < 2) throw new Error("Shelf needs at least one section.");
       state.sections = state.sections.filter(function (s) { return s.id !== id; });
       var to = state.sections[0].id;
-      Object.keys(state.sources).forEach(function (k) { if (state.sources[k].section === id) state.sources[k].section = to; });
-      save(); return to;
+      Object.keys(state.sources).forEach(function (k) { if (state.sources[k].section === id) { state.sources[k].section = to; stamp('src', k); } });
+      bury('sec', id); stamp('order'); save(); return to;
     }
     function moveSection(id, delta) {
       var i = state.sections.findIndex(function (s) { return s.id === id; }), j = i + delta;
       if (i < 0 || j < 0 || j >= state.sections.length) return false;
-      var t = state.sections[i]; state.sections[i] = state.sections[j]; state.sections[j] = t; save(); return true;
+      var t = state.sections[i]; state.sections[i] = state.sections[j]; state.sections[j] = t; stamp('order'); save(); return true;
     }
 
     // ----- Sources (YouTube channels and podcasts) -----
@@ -82,10 +91,10 @@ var Library = (function () {
         .sort(function (a, b) { return a.added - b.added; });
     }
     function source(id) { return state.sources[id] || null; }
-    function setSection(id, sectionId) { var s = source(id); if (!s || !section(sectionId)) return false; s.section = sectionId; save(); return true; }
+    function setSection(id, sectionId) { var s = source(id); if (!s || !section(sectionId)) return false; s.section = sectionId; stamp('src', id); save(); return true; }
     // Shorts and clips under 90 s stay off the sheet unless this is turned off for the channel
-    function setHideShorts(id, on) { var s = source(id); if (!s) return false; s.hideShorts = !!on; save(); return true; }
-    function remove(id) { if (!state.sources[id]) return false; delete state.sources[id]; delete cache[id]; save(); return true; }
+    function setHideShorts(id, on) { var s = source(id); if (!s) return false; s.hideShorts = !!on; stamp('src', id); save(); return true; }
+    function remove(id) { if (!state.sources[id]) return false; delete state.sources[id]; delete cache[id]; bury('src', id); save(); return true; }
     // A private feed (Patreon) is never put in Send links or shown in full
     function isPrivate(url) { return /patreon|[?&](auth|token|key)=/i.test(url); }
 
@@ -181,7 +190,8 @@ var Library = (function () {
     function twinEpisode(who, video) { return twinLookup(who, video).then(function (r) { return r.ep || null; }).catch(function () { return null; }); }
 
     // Add whatever Mo pasted: a channel link, @handle, video link, podcast feed, or a name.
-    // Resolves to the stored source. opts: { audio: true } makes a bare name search podcasts.
+    // Resolves to the stored source. opts: { audio: true } makes a bare name search podcasts; { seed: true } (the seed
+    // list) writes no time, since Shelf adding its defaults is not Mo's change and must not beat what he did elsewhere.
     function add(input, sectionId, opts) {
       opts = opts || {};
       var sec = section(sectionId) || state.sections[0];
@@ -198,7 +208,7 @@ var Library = (function () {
               private: isPrivate(url), added: (state.sources[id] && state.sources[id].added) || now(), seenUpTo: newest(f.items)
             });
             cache[id] = { fetched: now(), ok: true, items: f.items };
-            save(); return s;
+            if (!opts.seed) stamp('src', id); save(); return s;
           });
         });
       }
@@ -212,7 +222,7 @@ var Library = (function () {
             seenUpTo: prior ? prior.seenUpTo : newest(f.items)
           });
           cache[c.id] = { fetched: now(), ok: true, items: f.items };
-          save(); return s;
+          if (!opts.seed) stamp('src', c.id); save(); return s;
         });
       });
     }
@@ -237,7 +247,7 @@ var Library = (function () {
       var out = [];
       return todo.reduce(function (p, s) {
         return p.then(function () {
-          return add(s.input, s.section, { audio: s.audio, keepSection: true }).then(function () { out.push({ input: s.input, ok: true }); },
+          return add(s.input, s.section, { audio: s.audio, keepSection: true, seed: true }).then(function () { out.push({ input: s.input, ok: true }); },
             function (e) { out.push({ input: s.input, section: s.section, ok: false, error: e.message }); });
         });
       }, Promise.resolve()).then(function () {
