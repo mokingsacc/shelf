@@ -6,6 +6,8 @@
 const MAX_REQ = 1600000; // request bytes
 const MAX_BODY = 1400000; // body characters
 const MAX_SHELVES = 8; // one person needs one; a few spare for the probe
+const DAY = 864e5;
+const STALE = 30 * DAY; // when the store is full, a shelf nobody has used for this long makes room for a new one
 const MAX_DOCS = 12;
 const HEX = /^[0-9a-f]{32,64}$/;
 const DOC = /^[a-z]{1,12}$/;
@@ -32,7 +34,7 @@ let ready = null;
 function setup(db) {
   if (!ready) {
     ready = db.batch([
-      db.prepare('CREATE TABLE IF NOT EXISTS shelves (id TEXT PRIMARY KEY, tok TEXT, born INTEGER)'),
+      db.prepare('CREATE TABLE IF NOT EXISTS shelves (id TEXT PRIMARY KEY, tok TEXT, born INTEGER, seen INTEGER)'),
       db.prepare('CREATE TABLE IF NOT EXISTS docs (shelf TEXT, doc TEXT, slot INTEGER, ver INTEGER, body TEXT, at INTEGER, PRIMARY KEY (shelf, doc, slot))'),
     ]).catch((e) => { ready = null; throw e; });
   }
@@ -44,11 +46,31 @@ async function sha256(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// 'ok', 'none' (no such shelf) or 'denied' (wrong token)
+// 'ok', 'none' (no such shelf) or 'denied' (wrong token). A call with the right token marks the shelf as seen
+// (at most once a day, so most calls write nothing).
 async function shelfState(db, shelf, tok) {
-  const row = await db.prepare('SELECT tok FROM shelves WHERE id = ?').bind(shelf).first();
+  const row = await db.prepare('SELECT tok, seen FROM shelves WHERE id = ?').bind(shelf).first();
   if (!row) return 'none';
-  return row.tok === tok ? 'ok' : 'denied';
+  if (row.tok !== tok) return 'denied';
+  const now = Date.now();
+  if (!(row.seen > now - DAY)) await db.prepare('UPDATE shelves SET seen = ?2 WHERE id = ?1 AND tok = ?3').bind(shelf, now, tok).run();
+  return 'ok';
+}
+
+// A first put into a full store: the shelf seen longest ago goes, with its docs, if nobody has used it for 30 days,
+// and the new shelf takes its place. Returns whether the new shelf was made.
+async function makeRoom(db, shelf, tok) {
+  const now = Date.now(), cut = now - STALE;
+  const old = await db.prepare('SELECT id FROM shelves ORDER BY COALESCE(seen, born, 0) ASC LIMIT 1').first();
+  if (!old) return false;
+  const stale = 'EXISTS (SELECT 1 FROM shelves WHERE id = ?1 AND COALESCE(seen, born, 0) < ?2)';
+  const [, , r] = await db.batch([
+    db.prepare(`DELETE FROM docs WHERE shelf = ?1 AND ${stale}`).bind(old.id, cut),
+    db.prepare('DELETE FROM shelves WHERE id = ?1 AND COALESCE(seen, born, 0) < ?2').bind(old.id, cut),
+    db.prepare('INSERT OR IGNORE INTO shelves (id, tok, born, seen) SELECT ?1, ?2, ?3, ?3 WHERE (SELECT COUNT(*) FROM shelves) < ?4')
+      .bind(shelf, tok, now, MAX_SHELVES),
+  ]);
+  return !!r.meta.changes;
 }
 
 async function opGet(db, shelf, msg) {
@@ -71,14 +93,19 @@ async function opPut(db, shelf, tok, msg) {
   if (typeof body !== 'string') return bad();
   if (body.length > MAX_BODY) return big();
 
-  // Make the shelf if it is new, unless there are already 8
+  // Make the shelf if it is new, unless there are already 8 (and none of them has gone unused for 30 days)
   let state = await shelfState(db, shelf, tok);
   if (state === 'none') {
-    const made = await db.prepare('INSERT OR IGNORE INTO shelves (id, tok, born) SELECT ?1, ?2, ?3 WHERE (SELECT COUNT(*) FROM shelves) < ?4')
+    const made = await db.prepare('INSERT OR IGNORE INTO shelves (id, tok, born, seen) SELECT ?1, ?2, ?3, ?3 WHERE (SELECT COUNT(*) FROM shelves) < ?4')
       .bind(shelf, tok, Date.now(), MAX_SHELVES).run();
     if (!made.meta.changes) {
       state = await shelfState(db, shelf, tok); // another call may have made it just now
-      if (state === 'none') return full();
+      if (state === 'none') {
+        if (!(await makeRoom(db, shelf, tok))) {
+          state = await shelfState(db, shelf, tok);
+          if (state === 'none') return full();
+        } else state = 'ok';
+      }
     } else state = 'ok';
   }
   if (state === 'denied') return denied();

@@ -8,7 +8,7 @@ var Sync = (function () {
   var PREF_FIELDS = ['rate', 'arate', 'autoNext', 'goal']; // shared prefs, plus each entry of prefs.rates
   var AUDIO_FILL = ['url', 'title', 'podcast', 'image', 'source'];
   // Fields that stay on their device: left as local's, and not compared by same()
-  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved'], marks: ['saved'] };
+  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved', 'auto'], marks: ['saved'] };
 
   function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
   function obj(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
@@ -172,7 +172,10 @@ var Sync = (function () {
       // device (no time, so the untick wins) comes out the same as it would against any other copy
       var c = ca[pid] && cb[pid] ? mergeCourse(ca[pid], cb[pid]) : mergeCourse(ca[pid] || cb[pid], ca[pid] || cb[pid]);
       // Removed on a device after its last change there: it goes, and its ticks are kept for a re-add
-      if (has(removedAt, pid) && removedAt[pid] > newest(c)) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
+      // A course with no change time at all (the seed list's, untouched) goes too when a copy holds it as removed,
+      // even by a removal with no time: Mo removed it, and nobody has done anything with it since
+      var t = newest(c);
+      if ((has(removedAt, pid) && removedAt[pid] > t) || (!t && has(removed, pid))) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
       courses[pid] = c;
     });
     Object.keys(courses).forEach(function (pid) {

@@ -26,11 +26,14 @@
     if (!canSave) { mem[k] = s; return Native.inApp; }
     try { localStorage.setItem(k, s); lastSaveError = ''; return true; } catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
   }
-  // Forgets a key here and on the phone (the phone keeps the word null, which a restore ignores)
+  // Forgets a key here and on the phone (the phone keeps the word null, which a restore ignores). The sync link goes
+  // from the phone even before its copy was read: a link left there would turn sync back on at the next start.
+  var linkGone = false;
   function rawDel(k) {
     if (holdWrites) return;
     delete mem[k]; try { localStorage.removeItem(k); } catch (e) {}
-    if (!guarded(k)) Native.prefSet(k, 'null');
+    if (k === LINK_KEY) linkGone = true;
+    if (!guarded(k) || k === LINK_KEY) Native.prefSet(k, 'null');
   }
   function load(k, d) { try { var v = JSON.parse(rawGet(k) || 'null'); return v && typeof v === 'object' ? v : d; } catch (e) { return d; } }
   function store(k, v) { return rawSet(k, JSON.stringify(v)); }
@@ -1212,7 +1215,7 @@
   function unlinkPodVideo(guid, old, keep) {
     var ov = old && old !== keep && videos[old];
     if (!ov || ov.ep !== guid) return;
-    if (ov.guessed) { delete videos[old]; markGone(old, true); } else delete ov.ep;
+    if (ov.guessed) { delete videos[old]; markGone(old, true); } else { delete ov.ep; ov.updated = Date.now(); }
     saveVideos();
   }
   function startPodVideo(ep, id, guess) {
@@ -2266,7 +2269,7 @@
     cs.tick(cid, vid, on);
     var v = videos[vid];
     if (v && on && !v.done) { v.done = true; v.updated = Date.now(); saveVideos(); }
-    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; saveVideos(); } // keeps a half-watched spot
+    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; v.updated = Date.now(); saveVideos(); } // keeps a half-watched spot
     renderAll();
   }
   function playEp(cid, vid) {
@@ -3465,7 +3468,7 @@
         return Promise.all(keys.filter(function (k) { return k !== GKEY; }).map(function (k) {
           var v = b.keys[k];
           return (v == null ? Native.call('Preferences', 'remove', { key: k }) : Native.call('Preferences', 'set', { key: k, value: v })).catch(function () {});
-        }));
+        }).concat([Native.call('Preferences', 'set', { key: LINK_KEY, value: 'null' }).catch(function () {})]));
       });
       toast('Putting this device back as it was…');
       phone.then(function () { writeWeb(); setTimeout(function () { location.reload(); }, 300); });
@@ -3498,7 +3501,9 @@
       var n = syncCounts();
       h = '<p>Join your shelf on this device? It has ' + n.ch + ' channel' + (n.ch === 1 ? '' : 's') + ' and ' + n.ticked + ' ticked episode' + (n.ticked === 1 ? '' : 's') + ' of its own.</p>' + msg +
         '<button type="button" class="primary" data-act="sync-join" data-id="add">Add them to my shelf</button>' +
+        '<p class="small">For a device you already use Shelf on.</p>' +
         '<button type="button" class="ghost" data-act="sync-join" data-id="replace">Replace them with my shelf</button>' +
+        '<p class="small">For a new device, or one with nothing worth keeping. A copy is kept first.</p>' +
         '<button type="button" class="ghost" data-act="sync-close">Not now</button>';
     } else if (!st.on) {
       h = '<p>Keep this device the same as your others: channels, sections, spots, course ticks, marks and speeds.</p>' + msg +
@@ -3586,7 +3591,7 @@
         if (ph[6]) { var lg = load(AI.KEY, null); if (!lg || (ph[6].saved || 0) > (lg.saved || 0)) writes.push([AI.KEY, r[6]]); }
         // The sync link, when the web view lost it. Its versions are dropped, so the first check takes every store
         // from the sync store and merges it before anything is put back (the data here came from the phone too)
-        if (ph[7] && /^[0-9a-f]{64}$/.test(ph[7].key || '') && !rawGet(LINK_KEY)) { var lk = ph[7]; lk.docs = {}; writes.push([LINK_KEY, JSON.stringify(lk)]); }
+        if (ph[7] && /^[0-9a-f]{64}$/.test(ph[7].key || '') && !rawGet(LINK_KEY) && !linkGone) { var lk = ph[7]; lk.docs = {}; writes.push([LINK_KEY, JSON.stringify(lk)]); }
         writes.forEach(function (w) { rawSet(w[0], w[1], false); });
         restored = true; restoreFailed = false;
       } catch (e) { restoreFailed = true; }
@@ -3596,9 +3601,10 @@
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one.
+    // Shelf's own fix, not Mo's change, so it gets no time (made before the snapshot, saved with no stamp)
+    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; store(PREF, prefs); }
     prefSnap = prefShared(prefs);
-    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one
-    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; savePrefs(); }
     applyGoal(); applyLook();
     lib = Library.create({
       load: rawGet,

@@ -37,6 +37,9 @@ const plHtml = (url) => {
   return 'var ytInitialData = ' + JSON.stringify({ metadata: { playlistMetadataRenderer: { title: 'HY USMLE Qs - ' + PL[pid] } }, contents: { list: { contents: vidsOf(pid).map(vr) } } }) + ';';
 };
 const plUrl = (pid) => 'https://www.youtube.com/playlist?list=' + pid;
+// The channel's Playlists page, for the seed list (Courses.seed)
+const lockup = (id, title) => ({ lockupViewModel: { contentId: id, contentType: 'LOCKUP_CONTENT_TYPE_PLAYLIST', metadata: { lockupMetadataViewModel: { title: { content: title } } }, contentImage: { badge: { text: '8 videos' } } } });
+const chanHtml = 'var ytInitialData = ' + JSON.stringify({ tabs: Object.keys(PL).map((pid) => lockup(pid, 'HY USMLE Qs - ' + PL[pid])) }) + ';';
 
 (async () => {
   const { onRequest } = await import('../../sync-server/functions/api/sync.js');
@@ -57,7 +60,8 @@ const plUrl = (pid) => 'https://www.youtube.com/playlist?list=' + pid;
     const dv = { name, store, posts: [], statuses: [], net: 'ok', hook: null, backups: 0, backupOk: true, adopts: {}, saves: 0 };
     const sio = { load: (k) => (k in store ? store[k] : null), save: (k, v) => { store[k] = v; dv.saves++; }, now: () => clock };
     dv.lib = Library.create(Object.assign({}, sio, { fetchText: async (url) => feedXml(url) }));
-    dv.cs = Courses.create(Object.assign({}, sio, { fetchText: async (url) => plHtml(url), apiKey: () => '', watched: () => false }));
+    // dv.chanGate: a promise the seed list's channel page waits for (a seed still loading)
+    dv.cs = Courses.create(Object.assign({}, sio, { fetchText: async (url) => { if (/\/playlists$/.test(url)) { if (dv.chanGate) await dv.chanGate; return chanHtml; } return plHtml(url); }, apiKey: () => '', watched: () => false }));
     dv.mk = Marks.create(sio);
     dv.videos = {}; dv.gone = { v: {} }; dv.audio = {};
     dv.prefs = { look: 'dark', apiKey: 'SECRETKEY123', open: { med: true } };
@@ -433,6 +437,65 @@ const plUrl = (pid) => 'https://www.youtube.com/playlist?list=' + pid;
     big.forEach((t, i) => { delete A.videos['big' + String(i).padStart(8, '0')]; }); A.engine.touched('videos');
     tick(100000); await A.engine.check();
     ok(!A.engine.state().lastErr, 'too big: once smaller, the error clears');
+  }
+
+  // ================================================================ A new device that seeded itself joins: removals and unticks hold
+  // A removed the seeded course Paeds and unticked three seeded OBGYN episodes. A fresh device seeds itself (the seed
+  // list's ticks carry no times and the course no change time), then joins: none of it comes back, on either device.
+  {
+    const PE = 'PLpeds0000000000', OB = 'PLobgyn000000000', OFF = [1, 2, 3];
+    const seedNow = async (dv) => { await dv.cs.seed(); await dv.cs.loadAll(); dv.engine.touched('courses'); };
+    const setUpA = async () => {
+      const A = device('A');
+      await seedNow(A);
+      ok(A.cs.get(PE) && A.cs.get(OB) && [0, 1, 2, 3, 4, 5, 6, 7].every((i) => isTicked(A, OB, i)) && isTicked(A, PE, 0), 'seeded join: A has both seeded courses, OBGYN all ticked');
+      await A.engine.start();
+      tick(60000); A.cs.remove(PE); A.engine.touched('courses');
+      OFF.forEach((i) => A.tick(OB, i, false));
+      await A.engine.flush();
+      return A;
+    };
+    const holds = (x, what) => {
+      ok(!x.cs.get(PE) && !x.cs.list().some((c) => c.id === PE), what + ': Paeds stays removed on ' + x.name);
+      ok(OFF.every((i) => !isTicked(x, OB, i)), what + ': the three unticked OBGYN episodes stay unticked on ' + x.name + ': ' + JSON.stringify(x.cs.get(OB) && x.cs.get(OB).ticks));
+      ok([0, 4, 5, 6, 7].every((i) => isTicked(x, OB, i)), what + ': the other OBGYN ticks stay on ' + x.name);
+    };
+    // Add: B seeded fully first
+    wipe(); tick(60000);
+    let A = await setUpA();
+    tick(3 * 864e5);
+    const B = device('B');
+    await seedNow(B);
+    ok(B.cs.get(PE) && isTicked(B, OB, 1) && Object.keys(JSON.parse(B.store[Courses.KEY]).auto || {}).length === 2, 'seeded join add: B seeded both courses itself and knows which ticks the seed list made');
+    tick(1000);
+    const r = await B.engine.join(A.key(), 'add');
+    ok(r.ok, 'seeded join add: joined ' + JSON.stringify(r));
+    for (let i = 0; i < 2; i++) { tick(10000); await A.engine.check(); await B.engine.check(); }
+    for (const x of [A, B]) holds(x, 'seeded join add');
+    ok(allSame([A, B]), 'seeded join add: both the same: ' + diffDocs(A, B));
+    ok(!/"auto"/.test(stored(A.key(), 'courses')), 'seeded join add: the seed list\'s record of its own ticks is never sent');
+    // B ticks one of them on purpose: that one is Mo's and goes everywhere
+    tick(5000); B.tick(OB, 2, true); await B.engine.flush(); await A.engine.check();
+    ok(isTicked(A, OB, 2) && isTicked(B, OB, 2) && !isTicked(A, OB, 1), 'seeded join add: a tick made on purpose afterwards still crosses');
+    await B.cs.seed(); await B.cs.loadAll();
+    ok(!B.cs.get(PE), 'seeded join add: seeding again on B leaves Paeds removed');
+
+    // Replace, while the new device's seed is still loading
+    wipe(); tick(60000);
+    A = await setUpA();
+    tick(3 * 864e5);
+    const C = device('C');
+    let open; C.chanGate = new Promise((res) => { open = res; });
+    const seeding = seedNow(C);
+    await new Promise((res) => setImmediate(res));
+    tick(1000);
+    const rc = await C.engine.join(A.key(), 'replace');
+    ok(rc.ok, 'seeded join replace: joined while the seed list was still loading ' + JSON.stringify(rc));
+    open(); await seeding;
+    ok(!C.cs.get(PE), 'seeded join replace: the seed list, finishing after the join, does not add back the course Mo removed');
+    for (let i = 0; i < 2; i++) { tick(10000); await C.engine.check(); await A.engine.check(); }
+    for (const x of [A, C]) holds(x, 'seeded join replace');
+    ok(allSame([A, C]), 'seeded join replace: both the same: ' + diffDocs(A, C));
   }
 
   // ================================================================ Real modules: exportState and adopt

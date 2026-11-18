@@ -111,13 +111,16 @@ var SyncLink = (function () {
       r.docs[d] = { ver: ver, sum: sum(Sync.canon(remote, d)) };
       return !Sync.same(merged, remote, d);
     }
-    // Joining with Add counts as ticking now every tick this device has with no time, so an older untick elsewhere can't take it away
+    // Joining with Add counts as ticking now every tick this device has with no time, so an older untick elsewhere can't
+    // take it away. Not the ones the seed list made here (auto): they stay untimed, so an untick made elsewhere wins.
     function tickedNow(local, now) {
       var c = JSON.parse(JSON.stringify(local || {})), all = c.courses && typeof c.courses === 'object' ? c.courses : {};
+      var auto = c.auto && typeof c.auto === 'object' ? c.auto : {};
       Object.keys(all).forEach(function (pid) {
-        var x = all[pid]; if (!x || typeof x !== 'object' || !x.ticks || typeof x.ticks !== 'object') return;
+        var x = all[pid], au = auto[pid] && typeof auto[pid] === 'object' ? auto[pid] : {};
+        if (!x || typeof x !== 'object' || !x.ticks || typeof x.ticks !== 'object') return;
         Object.keys(x.ticks).forEach(function (v) {
-          if (x.ticks[v] !== 1 || (x.onAt && x.onAt[v] != null)) return;
+          if (x.ticks[v] !== 1 || (x.onAt && x.onAt[v] != null) || au[v]) return;
           x.onAt = x.onAt && typeof x.onAt === 'object' ? x.onAt : {}; x.onAt[v] = now;
         });
       });

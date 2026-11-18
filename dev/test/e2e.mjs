@@ -709,9 +709,10 @@ ok(/^Dark until \d{1,2}:\d\d am tomorrow, then light\.$/.test(await p.locator('#
 await p.keyboard.press('Escape');
 ok((await shelf(p, () => window.__shelf.checks().map((c) => c.text).join('|'))).includes('Look: dark by the sun, using Leeds\'s sun times'), 'D the self-check names the look and the town');
 // A goal saved with the old 30 Nov date moves to 22 Dec
-await p.evaluate(() => { const k = 'resume.prefs.v1', v = JSON.parse(localStorage.getItem(k) || '{}'); v.goal = { name: 'Step 2 CK', date: '2026-11-30' }; localStorage.setItem(k, JSON.stringify(v)); });
+await p.evaluate(() => { const k = 'resume.prefs.v1', v = JSON.parse(localStorage.getItem(k) || '{}'); v.goal = { name: 'Step 2 CK', date: '2026-11-30' }; if (v.at) delete v.at.goal; localStorage.setItem(k, JSON.stringify(v)); });
 await p.reload(); await settle(p);
 ok(await shelf(p, () => window.__shelf.prefs.goal.date) === '2026-12-22' && await shelf(p, () => window.__shelf.courses.daysLeft()) === Math.round((new Date(2026, 11, 22) - new Date(new Date().toDateString())) / 864e5), 'D an old Step 2 CK goal on 30 Nov becomes 22 Dec');
+ok(await shelf(p, () => { const v = JSON.parse(localStorage.getItem('resume.prefs.v1')); return v.goal.date === '2026-12-22' && !(v.at && v.at.goal); }), 'D ...saved, with no change time (it is Shelf\'s fix, not Mo\'s)');
 await ctx.close();
 
 console.log('\n== N Phone helpers (shells from 6 Oct 2026)');
@@ -1834,6 +1835,7 @@ ok(fs.readFileSync(root + 'index.html', 'utf8').includes("var SYNC_URL = '" + SY
   ok(await M.locator('#syncDlg[open]').count() === 1 && (await body(M)).startsWith('Join your shelf on this device? It has 0 channels and 0 ticked episodes of its own.'), 'join: opening the link asks: ' + (await body(M)).slice(0, 86));
   ok(await M.evaluate(() => location.hash) === '', 'join: the link is cleared from the address');
   ok(await M.locator('#syncBody button', { hasText: 'Add them to my shelf' }).count() === 1 && await M.locator('#syncBody button', { hasText: 'Replace them with my shelf' }).count() === 1 && await M.locator('#syncBody button', { hasText: 'Not now' }).count() === 1, 'join: Add, Replace and Not now');
+  ok(/Add them to my shelfFor a device you already use Shelf on\.Replace them with my shelfFor a new device, or one with nothing worth keeping\. A copy is kept first\.Not now/.test(await body(M)), 'join: a line under Add and under Replace says which to pick');
   await watchBody(M);
   await M.locator('#syncBody button', { hasText: 'Add them to my shelf' }).click();
   ok(await waitBody(M, /In sync · checked \d\d:\d\d/) && (await seen(M)).some((t) => /Checking…/.test(t)), 'join add: Checking…, then ' + await status(M));
@@ -1980,6 +1982,21 @@ ok(fs.readFileSync(root + 'index.html', 'utf8').includes("var SYNC_URL = '" + SY
   ok(await M.locator('#syncBody [data-act="sync-back"]').count() === 1, 'join replace: Put this device back is offered');
   await mc.close();
   await ctx.close();
+
+  // A phone whose start failed (its storage could not be read): turning sync off still takes the link off the phone,
+  // so sync doesn't turn itself back on at the next start
+  {
+    const lk = JSON.stringify({ key: 'ab'.repeat(32), joined: 0, docs: {} });
+    const t3 = await appPage({ prefs: { 'shelf.sync.link': lk }, shell: { prefFail: true, web: { 'shelf.sync.link': lk } } });
+    await t3.p.waitForTimeout(1500);
+    ok((await sstate(t3.p)).on && await t3.p.evaluate(() => window.__prefs['shelf.sync.link']) !== 'null', 'failed phone start: sync is on, and the phone holds the link');
+    await t3.p.evaluate(() => window.__shelf.sync.off()); await t3.p.waitForTimeout(500);
+    ok(!(await sstate(t3.p)).on && await t3.p.evaluate(() => window.__prefs['shelf.sync.link']) === 'null', 'failed phone start: Turn sync off clears the link on the phone too');
+    await t3.p.evaluate(() => localStorage.setItem('fake.prefFail', '0'));
+    await t3.p.reload(); await t3.p.waitForTimeout(1500);
+    ok(!(await sstate(t3.p)).on && !(await t3.p.evaluate(() => localStorage.getItem('shelf.sync.link'))), 'failed phone start: after the next start (phone readable again) sync stays off');
+    await t3.ctx.close();
+  }
 }
 
 console.log('\n== X Desktop Chrome with the Shelf extension (faked)');

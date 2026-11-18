@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="111dbf7c4b0a">
+<meta name="build" content="dabe8b7c45a9">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -2597,6 +2597,13 @@ var Courses = (function () {
       return out;
     }
     function touch(c) { c.touched = now(); }
+    // auto: { pid: { vid: 1 } }, the ticks the seed list turned on here (this device only, never synced). A tick
+    // Mo makes or takes off himself stops being one of them.
+    function setAuto(pid, vid, on) {
+      var a = state.auto = state.auto || {};
+      if (on) { a[pid] = a[pid] || {}; a[pid][vid] = 1; return; }
+      if (a[pid] && a[pid][vid]) { delete a[pid][vid]; if (!Object.keys(a[pid]).length) delete a[pid]; }
+    }
     var lastUp = null; // what the last "tick up to here" turned on, for its Undo
     // When each tick was turned on (onAt) or off (offAt), for merging with another device's copy (sync.js).
     // An untick in the same millisecond as its tick still counts as the later of the two.
@@ -2607,7 +2614,7 @@ var Courses = (function () {
     }
     function tick(id, vid, on) {
       var c = get(id); if (!c) return;
-      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on);
+      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on); setAuto(id, vid, false);
       // When each one was ticked, for the day's tally and the pace (ticking a block with Set place doesn't count)
       c.ticksAt = c.ticksAt || {};
       if (on) c.ticksAt[vid] = now(); else delete c.ticksAt[vid];
@@ -2618,7 +2625,7 @@ var Courses = (function () {
       var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
       var before = Object.assign({}, c.ticks);
       var on = [];
-      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) { stampTick(c, arr[j].id, true); on.push(arr[j].id); } c.ticks[arr[j].id] = 1; }
+      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) { stampTick(c, arr[j].id, true); setAuto(id, arr[j].id, false); on.push(arr[j].id); } c.ticks[arr[j].id] = 1; }
       touch(c); save();
       lastUp = { before: before, on: on };
       return before;
@@ -2630,7 +2637,7 @@ var Courses = (function () {
       var on = lastUp && lastUp.before === ticks ? lastUp.on : Object.keys(c.ticks).filter(function (v) { return ticks[v] !== 1; });
       on.forEach(function (v) {
         if (c.ticks[v] !== 1) return;
-        stampTick(c, v, false);
+        stampTick(c, v, false); setAuto(id, v, false);
         if (v in ticks) c.ticks[v] = ticks[v]; else delete c.ticks[v];
       });
       save();
@@ -2722,18 +2729,19 @@ var Courses = (function () {
       var s = c.seed; if (!s) return;
       var ch = cache[c.id], arr = items(c.id);
       if (!ch || ch.partial || !arr.length) return;
-      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times, so a later untick anywhere beats them
+      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times and the course no new touched,
+      // so a later untick or removal anywhere beats them
       delete c.seed;
-      if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
+      function on(vid) { if (c.ticks[vid] !== 1) { c.ticks[vid] = 1; setAuto(c.id, vid, true); } }
+      if (s.all) arr.forEach(function (x) { on(x.id); });
       if (s.upTo) {
         var hitsN = findNumber(c.id, s.upTo), at = hitsN[0];
-        if (at != null) { for (var j = 0; j <= at; j++) c.ticks[arr[j].id] = 1; c.note = hitsN.length > 1 ? s.upTo + ' appears ' + hitsN.length + ' times in this playlist, so it is ticked up to the first one. Check where you are.' : ''; }
+        if (at != null) { for (var j = 0; j <= at; j++) on(arr[j].id); c.note = hitsN.length > 1 ? s.upTo + ' appears ' + hitsN.length + ' times in this playlist, so it is ticked up to the first one. Check where you are.' : ''; }
         else if (s.pct) {
           var k = Math.round(arr.length * s.pct / 100);
-          for (var q = 0; q < k; q++) c.ticks[arr[q].id] = 1;
+          for (var q = 0; q < k; q++) on(arr[q].id);
           c.note = "Couldn't find episode " + s.upTo + ' in this playlist, so the first ' + s.pct + '% are ticked. Check where you are.';
         }
-        touch(c);
       }
       if (s.pin) { var p = findNumber(c.id, s.pin)[0]; if (p != null) c.pins[arr[p].id] = 1; }
     }
@@ -2805,7 +2813,8 @@ var Courses = (function () {
         var misses = [];
         todo.forEach(function (s) {
           var p = pick(all, s.match);
-          if (!p || get(p.id)) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
+          // A course Mo removed (here, or on another device before a sync) stays removed; he can add it back by hand
+          if (!p || get(p.id) || (state.removed && state.removed[p.id])) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
           var c = addCourse(p.id, { name: s.name, title: p.title, channel: 'Mehlman Medical', section: SEED.section, seed: { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin } });
           c.seedName = s.name;
         });
@@ -2824,9 +2833,9 @@ var Courses = (function () {
     function exportState() { return JSON.parse(JSON.stringify(state)); }
     // A copy merged with another device's takes the state's place, with no new times. A course already here is
     // emptied and refilled rather than replaced, so code holding it keeps working. The episode lists (cache) stay
-    // as they are; misses and saved stay this device's.
+    // as they are; misses, saved and auto stay this device's.
     function adopt(merged) {
-      var m = JSON.parse(JSON.stringify(merged || {})), mine = { misses: 1, saved: 1 }, have = state.courses;
+      var m = JSON.parse(JSON.stringify(merged || {})), mine = { misses: 1, saved: 1, auto: 1 }, have = state.courses;
       var mc = m.courses && typeof m.courses === 'object' ? m.courses : {};
       Object.keys(have).forEach(function (id) { if (!mc[id]) delete have[id]; });
       Object.keys(mc).forEach(function (id) {
@@ -3344,7 +3353,7 @@ var Sync = (function () {
   var PREF_FIELDS = ['rate', 'arate', 'autoNext', 'goal']; // shared prefs, plus each entry of prefs.rates
   var AUDIO_FILL = ['url', 'title', 'podcast', 'image', 'source'];
   // Fields that stay on their device: left as local's, and not compared by same()
-  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved'], marks: ['saved'] };
+  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved', 'auto'], marks: ['saved'] };
 
   function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
   function obj(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
@@ -3508,7 +3517,10 @@ var Sync = (function () {
       // device (no time, so the untick wins) comes out the same as it would against any other copy
       var c = ca[pid] && cb[pid] ? mergeCourse(ca[pid], cb[pid]) : mergeCourse(ca[pid] || cb[pid], ca[pid] || cb[pid]);
       // Removed on a device after its last change there: it goes, and its ticks are kept for a re-add
-      if (has(removedAt, pid) && removedAt[pid] > newest(c)) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
+      // A course with no change time at all (the seed list's, untouched) goes too when a copy holds it as removed,
+      // even by a removal with no time: Mo removed it, and nobody has done anything with it since
+      var t = newest(c);
+      if ((has(removedAt, pid) && removedAt[pid] > t) || (!t && has(removed, pid))) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
       courses[pid] = c;
     });
     Object.keys(courses).forEach(function (pid) {
@@ -3709,13 +3721,16 @@ var SyncLink = (function () {
       r.docs[d] = { ver: ver, sum: sum(Sync.canon(remote, d)) };
       return !Sync.same(merged, remote, d);
     }
-    // Joining with Add counts as ticking now every tick this device has with no time, so an older untick elsewhere can't take it away
+    // Joining with Add counts as ticking now every tick this device has with no time, so an older untick elsewhere can't
+    // take it away. Not the ones the seed list made here (auto): they stay untimed, so an untick made elsewhere wins.
     function tickedNow(local, now) {
       var c = JSON.parse(JSON.stringify(local || {})), all = c.courses && typeof c.courses === 'object' ? c.courses : {};
+      var auto = c.auto && typeof c.auto === 'object' ? c.auto : {};
       Object.keys(all).forEach(function (pid) {
-        var x = all[pid]; if (!x || typeof x !== 'object' || !x.ticks || typeof x.ticks !== 'object') return;
+        var x = all[pid], au = auto[pid] && typeof auto[pid] === 'object' ? auto[pid] : {};
+        if (!x || typeof x !== 'object' || !x.ticks || typeof x.ticks !== 'object') return;
         Object.keys(x.ticks).forEach(function (v) {
-          if (x.ticks[v] !== 1 || (x.onAt && x.onAt[v] != null)) return;
+          if (x.ticks[v] !== 1 || (x.onAt && x.onAt[v] != null) || au[v]) return;
           x.onAt = x.onAt && typeof x.onAt === 'object' ? x.onAt : {}; x.onAt[v] = now;
         });
       });
@@ -3904,11 +3919,14 @@ if (typeof module !== 'undefined') module.exports = SyncLink;
     if (!canSave) { mem[k] = s; return Native.inApp; }
     try { localStorage.setItem(k, s); lastSaveError = ''; return true; } catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
   }
-  // Forgets a key here and on the phone (the phone keeps the word null, which a restore ignores)
+  // Forgets a key here and on the phone (the phone keeps the word null, which a restore ignores). The sync link goes
+  // from the phone even before its copy was read: a link left there would turn sync back on at the next start.
+  var linkGone = false;
   function rawDel(k) {
     if (holdWrites) return;
     delete mem[k]; try { localStorage.removeItem(k); } catch (e) {}
-    if (!guarded(k)) Native.prefSet(k, 'null');
+    if (k === LINK_KEY) linkGone = true;
+    if (!guarded(k) || k === LINK_KEY) Native.prefSet(k, 'null');
   }
   function load(k, d) { try { var v = JSON.parse(rawGet(k) || 'null'); return v && typeof v === 'object' ? v : d; } catch (e) { return d; } }
   function store(k, v) { return rawSet(k, JSON.stringify(v)); }
@@ -5090,7 +5108,7 @@ if (typeof module !== 'undefined') module.exports = SyncLink;
   function unlinkPodVideo(guid, old, keep) {
     var ov = old && old !== keep && videos[old];
     if (!ov || ov.ep !== guid) return;
-    if (ov.guessed) { delete videos[old]; markGone(old, true); } else delete ov.ep;
+    if (ov.guessed) { delete videos[old]; markGone(old, true); } else { delete ov.ep; ov.updated = Date.now(); }
     saveVideos();
   }
   function startPodVideo(ep, id, guess) {
@@ -6144,7 +6162,7 @@ if (typeof module !== 'undefined') module.exports = SyncLink;
     cs.tick(cid, vid, on);
     var v = videos[vid];
     if (v && on && !v.done) { v.done = true; v.updated = Date.now(); saveVideos(); }
-    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; saveVideos(); } // keeps a half-watched spot
+    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; v.updated = Date.now(); saveVideos(); } // keeps a half-watched spot
     renderAll();
   }
   function playEp(cid, vid) {
@@ -7343,7 +7361,7 @@ if (typeof module !== 'undefined') module.exports = SyncLink;
         return Promise.all(keys.filter(function (k) { return k !== GKEY; }).map(function (k) {
           var v = b.keys[k];
           return (v == null ? Native.call('Preferences', 'remove', { key: k }) : Native.call('Preferences', 'set', { key: k, value: v })).catch(function () {});
-        }));
+        }).concat([Native.call('Preferences', 'set', { key: LINK_KEY, value: 'null' }).catch(function () {})]));
       });
       toast('Putting this device back as it was…');
       phone.then(function () { writeWeb(); setTimeout(function () { location.reload(); }, 300); });
@@ -7376,7 +7394,9 @@ if (typeof module !== 'undefined') module.exports = SyncLink;
       var n = syncCounts();
       h = '<p>Join your shelf on this device? It has ' + n.ch + ' channel' + (n.ch === 1 ? '' : 's') + ' and ' + n.ticked + ' ticked episode' + (n.ticked === 1 ? '' : 's') + ' of its own.</p>' + msg +
         '<button type="button" class="primary" data-act="sync-join" data-id="add">Add them to my shelf</button>' +
+        '<p class="small">For a device you already use Shelf on.</p>' +
         '<button type="button" class="ghost" data-act="sync-join" data-id="replace">Replace them with my shelf</button>' +
+        '<p class="small">For a new device, or one with nothing worth keeping. A copy is kept first.</p>' +
         '<button type="button" class="ghost" data-act="sync-close">Not now</button>';
     } else if (!st.on) {
       h = '<p>Keep this device the same as your others: channels, sections, spots, course ticks, marks and speeds.</p>' + msg +
@@ -7464,7 +7484,7 @@ if (typeof module !== 'undefined') module.exports = SyncLink;
         if (ph[6]) { var lg = load(AI.KEY, null); if (!lg || (ph[6].saved || 0) > (lg.saved || 0)) writes.push([AI.KEY, r[6]]); }
         // The sync link, when the web view lost it. Its versions are dropped, so the first check takes every store
         // from the sync store and merges it before anything is put back (the data here came from the phone too)
-        if (ph[7] && /^[0-9a-f]{64}$/.test(ph[7].key || '') && !rawGet(LINK_KEY)) { var lk = ph[7]; lk.docs = {}; writes.push([LINK_KEY, JSON.stringify(lk)]); }
+        if (ph[7] && /^[0-9a-f]{64}$/.test(ph[7].key || '') && !rawGet(LINK_KEY) && !linkGone) { var lk = ph[7]; lk.docs = {}; writes.push([LINK_KEY, JSON.stringify(lk)]); }
         writes.forEach(function (w) { rawSet(w[0], w[1], false); });
         restored = true; restoreFailed = false;
       } catch (e) { restoreFailed = true; }
@@ -7474,9 +7494,10 @@ if (typeof module !== 'undefined') module.exports = SyncLink;
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one.
+    // Shelf's own fix, not Mo's change, so it gets no time (made before the snapshot, saved with no stamp)
+    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; store(PREF, prefs); }
     prefSnap = prefShared(prefs);
-    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one
-    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; savePrefs(); }
     applyGoal(); applyLook();
     lib = Library.create({
       load: rawGet,

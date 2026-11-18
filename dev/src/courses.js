@@ -331,6 +331,13 @@ var Courses = (function () {
       return out;
     }
     function touch(c) { c.touched = now(); }
+    // auto: { pid: { vid: 1 } }, the ticks the seed list turned on here (this device only, never synced). A tick
+    // Mo makes or takes off himself stops being one of them.
+    function setAuto(pid, vid, on) {
+      var a = state.auto = state.auto || {};
+      if (on) { a[pid] = a[pid] || {}; a[pid][vid] = 1; return; }
+      if (a[pid] && a[pid][vid]) { delete a[pid][vid]; if (!Object.keys(a[pid]).length) delete a[pid]; }
+    }
     var lastUp = null; // what the last "tick up to here" turned on, for its Undo
     // When each tick was turned on (onAt) or off (offAt), for merging with another device's copy (sync.js).
     // An untick in the same millisecond as its tick still counts as the later of the two.
@@ -341,7 +348,7 @@ var Courses = (function () {
     }
     function tick(id, vid, on) {
       var c = get(id); if (!c) return;
-      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on);
+      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on); setAuto(id, vid, false);
       // When each one was ticked, for the day's tally and the pace (ticking a block with Set place doesn't count)
       c.ticksAt = c.ticksAt || {};
       if (on) c.ticksAt[vid] = now(); else delete c.ticksAt[vid];
@@ -352,7 +359,7 @@ var Courses = (function () {
       var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
       var before = Object.assign({}, c.ticks);
       var on = [];
-      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) { stampTick(c, arr[j].id, true); on.push(arr[j].id); } c.ticks[arr[j].id] = 1; }
+      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) { stampTick(c, arr[j].id, true); setAuto(id, arr[j].id, false); on.push(arr[j].id); } c.ticks[arr[j].id] = 1; }
       touch(c); save();
       lastUp = { before: before, on: on };
       return before;
@@ -364,7 +371,7 @@ var Courses = (function () {
       var on = lastUp && lastUp.before === ticks ? lastUp.on : Object.keys(c.ticks).filter(function (v) { return ticks[v] !== 1; });
       on.forEach(function (v) {
         if (c.ticks[v] !== 1) return;
-        stampTick(c, v, false);
+        stampTick(c, v, false); setAuto(id, v, false);
         if (v in ticks) c.ticks[v] = ticks[v]; else delete c.ticks[v];
       });
       save();
@@ -456,18 +463,19 @@ var Courses = (function () {
       var s = c.seed; if (!s) return;
       var ch = cache[c.id], arr = items(c.id);
       if (!ch || ch.partial || !arr.length) return;
-      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times, so a later untick anywhere beats them
+      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times and the course no new touched,
+      // so a later untick or removal anywhere beats them
       delete c.seed;
-      if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
+      function on(vid) { if (c.ticks[vid] !== 1) { c.ticks[vid] = 1; setAuto(c.id, vid, true); } }
+      if (s.all) arr.forEach(function (x) { on(x.id); });
       if (s.upTo) {
         var hitsN = findNumber(c.id, s.upTo), at = hitsN[0];
-        if (at != null) { for (var j = 0; j <= at; j++) c.ticks[arr[j].id] = 1; c.note = hitsN.length > 1 ? s.upTo + ' appears ' + hitsN.length + ' times in this playlist, so it is ticked up to the first one. Check where you are.' : ''; }
+        if (at != null) { for (var j = 0; j <= at; j++) on(arr[j].id); c.note = hitsN.length > 1 ? s.upTo + ' appears ' + hitsN.length + ' times in this playlist, so it is ticked up to the first one. Check where you are.' : ''; }
         else if (s.pct) {
           var k = Math.round(arr.length * s.pct / 100);
-          for (var q = 0; q < k; q++) c.ticks[arr[q].id] = 1;
+          for (var q = 0; q < k; q++) on(arr[q].id);
           c.note = "Couldn't find episode " + s.upTo + ' in this playlist, so the first ' + s.pct + '% are ticked. Check where you are.';
         }
-        touch(c);
       }
       if (s.pin) { var p = findNumber(c.id, s.pin)[0]; if (p != null) c.pins[arr[p].id] = 1; }
     }
@@ -539,7 +547,8 @@ var Courses = (function () {
         var misses = [];
         todo.forEach(function (s) {
           var p = pick(all, s.match);
-          if (!p || get(p.id)) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
+          // A course Mo removed (here, or on another device before a sync) stays removed; he can add it back by hand
+          if (!p || get(p.id) || (state.removed && state.removed[p.id])) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
           var c = addCourse(p.id, { name: s.name, title: p.title, channel: 'Mehlman Medical', section: SEED.section, seed: { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin } });
           c.seedName = s.name;
         });
@@ -558,9 +567,9 @@ var Courses = (function () {
     function exportState() { return JSON.parse(JSON.stringify(state)); }
     // A copy merged with another device's takes the state's place, with no new times. A course already here is
     // emptied and refilled rather than replaced, so code holding it keeps working. The episode lists (cache) stay
-    // as they are; misses and saved stay this device's.
+    // as they are; misses, saved and auto stay this device's.
     function adopt(merged) {
-      var m = JSON.parse(JSON.stringify(merged || {})), mine = { misses: 1, saved: 1 }, have = state.courses;
+      var m = JSON.parse(JSON.stringify(merged || {})), mine = { misses: 1, saved: 1, auto: 1 }, have = state.courses;
       var mc = m.courses && typeof m.courses === 'object' ? m.courses : {};
       Object.keys(have).forEach(function (id) { if (!mc[id]) delete have[id]; });
       Object.keys(mc).forEach(function (id) {
