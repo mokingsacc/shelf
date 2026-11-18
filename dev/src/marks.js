@@ -45,10 +45,11 @@ var Marks = (function () {
       state.items.push(m); save();
       return m;
     }
-    function setNote(id, note) { var m = get(id); if (!m) return null; m.note = flat(note); save(); return m; }
-    function setCard(id, card) { var m = get(id); if (!m) return null; if (card) m.card = card; else delete m.card; save(); return m; }
-    function remove(id) { var m = get(id); if (!m) return null; state.items = state.items.filter(function (x) { return x !== m; }); save(); return m; }
-    function restore(m) { if (m && !get(m.id)) { state.items.push(m); save(); } }
+    // m: when a mark last changed; gone: when one was removed (for merging with another device's copy, sync.js)
+    function setNote(id, note) { var m = get(id); if (!m) return null; m.note = flat(note); m.m = now(); save(); return m; }
+    function setCard(id, card) { var m = get(id); if (!m) return null; if (card) m.card = card; else delete m.card; m.m = now(); save(); return m; }
+    function remove(id) { var m = get(id); if (!m) return null; state.items = state.items.filter(function (x) { return x !== m; }); state.gone = state.gone || {}; state.gone[m.id] = now(); save(); return m; }
+    function restore(m) { if (m && !get(m.id)) { state.items.push(m); if (state.gone) delete state.gone[m.id]; save(); } }
     return { list: list, get: get, add: add, setNote: setNote, setCard: setCard, remove: remove, restore: restore, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
   }
   return { create: create, KEY: KEY, anki: anki, cardLine: cardLine, fmt: fmt, link: link };

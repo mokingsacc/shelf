@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="3cd8fc8f266e">
+<meta name="build" content="720f93fac2b4">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -1578,6 +1578,15 @@ var Library = (function () {
     // rev counts saves, so the phone's copy and the web view's copy can tell which is newer; born marks a
     // list started from scratch, so a fresh list made while the phone couldn't be read never beats the real one
     function save() { state.rev = (state.rev || 0) + 1; io.save(KEY, JSON.stringify(state)); }
+    // When each channel, section and the order last changed, and what was removed when, so another device's copy
+    // can be merged (sync.js). Old lists have none of this; it is written from the first change on.
+    function stamp(kind, id) {
+      var a = state.at = state.at || { src: {}, sec: {} };
+      if (kind === 'order') { a.order = now(); return; }
+      a[kind] = a[kind] || {}; a[kind][id] = now();
+      if (state.gone && state.gone[kind]) delete state.gone[kind][id]; // a change means it is here again
+    }
+    function bury(kind, id) { var g = state.gone = state.gone || { src: {}, sec: {} }; g[kind] = g[kind] || {}; g[kind][id] = now(); }
 
     // ----- Sections -----
     function sections() { return state.sections.slice(); }
@@ -1589,26 +1598,26 @@ var Library = (function () {
       var id = slug(name), n = 2;
       while (section(id)) id = slug(name) + '-' + n++;
       var s = { id: id, name: name, kind: kind === 'audio' ? 'audio' : 'video' };
-      state.sections.push(s); save(); return s;
+      state.sections.push(s); stamp('sec', id); stamp('order'); save(); return s;
     }
     function renameSection(id, name) {
       var s = section(id); name = String(name || '').trim();
       if (!s || !name) return false;
-      s.name = name; save(); return true;
+      s.name = name; stamp('sec', id); save(); return true;
     }
-    function setKind(id, kind) { var s = section(id); if (!s) return false; s.kind = kind === 'audio' ? 'audio' : 'video'; save(); return true; }
+    function setKind(id, kind) { var s = section(id); if (!s) return false; s.kind = kind === 'audio' ? 'audio' : 'video'; stamp('sec', id); save(); return true; }
     // Channels in a removed section move to the first remaining one, so nothing is lost by accident
     function removeSection(id) {
       if (state.sections.length < 2) throw new Error("Shelf needs at least one section.");
       state.sections = state.sections.filter(function (s) { return s.id !== id; });
       var to = state.sections[0].id;
-      Object.keys(state.sources).forEach(function (k) { if (state.sources[k].section === id) state.sources[k].section = to; });
-      save(); return to;
+      Object.keys(state.sources).forEach(function (k) { if (state.sources[k].section === id) { state.sources[k].section = to; stamp('src', k); } });
+      bury('sec', id); stamp('order'); save(); return to;
     }
     function moveSection(id, delta) {
       var i = state.sections.findIndex(function (s) { return s.id === id; }), j = i + delta;
       if (i < 0 || j < 0 || j >= state.sections.length) return false;
-      var t = state.sections[i]; state.sections[i] = state.sections[j]; state.sections[j] = t; save(); return true;
+      var t = state.sections[i]; state.sections[i] = state.sections[j]; state.sections[j] = t; stamp('order'); save(); return true;
     }
 
     // ----- Sources (YouTube channels and podcasts) -----
@@ -1618,10 +1627,10 @@ var Library = (function () {
         .sort(function (a, b) { return a.added - b.added; });
     }
     function source(id) { return state.sources[id] || null; }
-    function setSection(id, sectionId) { var s = source(id); if (!s || !section(sectionId)) return false; s.section = sectionId; save(); return true; }
+    function setSection(id, sectionId) { var s = source(id); if (!s || !section(sectionId)) return false; s.section = sectionId; stamp('src', id); save(); return true; }
     // Shorts and clips under 90 s stay off the sheet unless this is turned off for the channel
-    function setHideShorts(id, on) { var s = source(id); if (!s) return false; s.hideShorts = !!on; save(); return true; }
-    function remove(id) { if (!state.sources[id]) return false; delete state.sources[id]; delete cache[id]; save(); return true; }
+    function setHideShorts(id, on) { var s = source(id); if (!s) return false; s.hideShorts = !!on; stamp('src', id); save(); return true; }
+    function remove(id) { if (!state.sources[id]) return false; delete state.sources[id]; delete cache[id]; bury('src', id); save(); return true; }
     // A private feed (Patreon) is never put in Send links or shown in full
     function isPrivate(url) { return /patreon|[?&](auth|token|key)=/i.test(url); }
 
@@ -1717,7 +1726,8 @@ var Library = (function () {
     function twinEpisode(who, video) { return twinLookup(who, video).then(function (r) { return r.ep || null; }).catch(function () { return null; }); }
 
     // Add whatever Mo pasted: a channel link, @handle, video link, podcast feed, or a name.
-    // Resolves to the stored source. opts: { audio: true } makes a bare name search podcasts.
+    // Resolves to the stored source. opts: { audio: true } makes a bare name search podcasts; { seed: true } (the seed
+    // list) writes no time, since Shelf adding its defaults is not Mo's change and must not beat what he did elsewhere.
     function add(input, sectionId, opts) {
       opts = opts || {};
       var sec = section(sectionId) || state.sections[0];
@@ -1734,7 +1744,7 @@ var Library = (function () {
               private: isPrivate(url), added: (state.sources[id] && state.sources[id].added) || now(), seenUpTo: newest(f.items)
             });
             cache[id] = { fetched: now(), ok: true, items: f.items };
-            save(); return s;
+            if (!opts.seed) stamp('src', id); save(); return s;
           });
         });
       }
@@ -1748,7 +1758,7 @@ var Library = (function () {
             seenUpTo: prior ? prior.seenUpTo : newest(f.items)
           });
           cache[c.id] = { fetched: now(), ok: true, items: f.items };
-          save(); return s;
+          if (!opts.seed) stamp('src', c.id); save(); return s;
         });
       });
     }
@@ -1773,7 +1783,7 @@ var Library = (function () {
       var out = [];
       return todo.reduce(function (p, s) {
         return p.then(function () {
-          return add(s.input, s.section, { audio: s.audio, keepSection: true }).then(function () { out.push({ input: s.input, ok: true }); },
+          return add(s.input, s.section, { audio: s.audio, keepSection: true, seed: true }).then(function () { out.push({ input: s.input, ok: true }); },
             function (e) { out.push({ input: s.input, section: s.section, ok: false, error: e.message }); });
         });
       }, Promise.resolve()).then(function () {
@@ -2561,9 +2571,16 @@ var Courses = (function () {
       return out;
     }
     function touch(c) { c.touched = now(); }
+    // When each tick was turned on (onAt) or off (offAt), for merging with another device's copy (sync.js).
+    // An untick in the same millisecond as its tick still counts as the later of the two.
+    function stampTick(c, vid, on) {
+      var k = on ? 'onAt' : 'offAt', o = c[on ? 'offAt' : 'onAt'], before = (o && o[vid]) || 0;
+      c[k] = c[k] || {};
+      c[k][vid] = Math.max(now(), on ? before : before + 1);
+    }
     function tick(id, vid, on) {
       var c = get(id); if (!c) return;
-      c.ticks[vid] = on ? 1 : 0; touch(c);
+      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on);
       // When each one was ticked, for the day's tally and the pace (ticking a block with Set place doesn't count)
       c.ticksAt = c.ticksAt || {};
       if (on) c.ticksAt[vid] = now(); else delete c.ticksAt[vid];
@@ -2573,12 +2590,16 @@ var Courses = (function () {
     function tickUpTo(id, i) {
       var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
       var before = Object.assign({}, c.ticks);
-      for (var j = 0; j <= i; j++) c.ticks[arr[j].id] = 1;
+      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) stampTick(c, arr[j].id, true); c.ticks[arr[j].id] = 1; }
       touch(c); save();
       return before;
     }
-    function restore(id, ticks) { var c = get(id); if (!c || !ticks) return; c.ticks = ticks; save(); }
-    function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; save(); }
+    function restore(id, ticks) {
+      var c = get(id); if (!c || !ticks) return;
+      Object.keys(Object.assign({}, c.ticks, ticks)).forEach(function (v) { var was = c.ticks[v] === 1, will = ticks[v] === 1; if (was !== will) stampTick(c, v, will); });
+      c.ticks = ticks; save();
+    }
+    function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; c.pinAt = c.pinAt || {}; c.pinAt[vid] = now(); save(); }
     // Episode number from the titles -> positions (first match first)
     function findNumber(id, n) {
       var arr = items(id), hits = [];
@@ -2586,8 +2607,13 @@ var Courses = (function () {
       return hits;
     }
     function touchCourse(id) { var c = get(id); if (c) { touch(c); save(); } }
-    function move(id, sectionId) { var c = get(id); if (!c) return false; c.section = sectionId; save(); return true; }
-    function remove(id) { if (!state.courses[id]) return false; state.removed = state.removed || {}; state.removed[id] = state.courses[id].ticks; delete state.courses[id]; save(); return true; }
+    // m: when the course's name, section or seed note last changed; removedAt: when a course was removed (sync.js)
+    function move(id, sectionId) { var c = get(id); if (!c) return false; c.section = sectionId; c.m = now(); save(); return true; }
+    function remove(id) {
+      if (!state.courses[id]) return false;
+      state.removed = state.removed || {}; state.removed[id] = state.courses[id].ticks; delete state.courses[id];
+      state.removedAt = state.removedAt || {}; state.removedAt[id] = now(); save(); return true;
+    }
 
     // ----- Loading a playlist -----
     function fromPage(pid) {
@@ -2660,6 +2686,7 @@ var Courses = (function () {
       var s = c.seed; if (!s) return;
       var ch = cache[c.id], arr = items(c.id);
       if (!ch || ch.partial || !arr.length) return;
+      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times, so a later untick anywhere beats them
       delete c.seed;
       if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
       if (s.upTo) {
@@ -2677,13 +2704,15 @@ var Courses = (function () {
 
     // ----- Adding -----
     function addCourse(pid, info) {
-      var prior = state.removed && state.removed[pid];
+      var prior = state.removed && state.removed[pid], fresh = !state.courses[pid];
       var c = state.courses[pid] = state.courses[pid] || {
         id: pid, name: info.name || 'Course', title: info.title || '', channel: info.channel || '', section: info.section || 'med',
         added: now(), touched: 0, ticks: prior || {}, pins: {}
       };
       if (info.seed) c.seed = info.seed;
+      if (fresh && !info.seed) c.m = now(); // a course Mo adds himself (the seed list's are not his changes)
       if (prior) delete state.removed[pid];
+      if (state.removedAt) delete state.removedAt[pid];
       save(); return c;
     }
     // A pasted link -> a loaded course. Resolves to the course; rejects with a plain-words reason.
@@ -2754,7 +2783,7 @@ var Courses = (function () {
     // A miss fixed by hand (pasted link) clears it
     // A "not found" line Mo doesn't want: gone for good
     function dropMiss(name) { state.dropped = state.dropped || {}; state.dropped[name] = 1; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); save(); }
-    function fixMiss(name, c) { c.seedName = name; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
+    function fixMiss(name, c) { c.seedName = name; c.m = now(); state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
     function loadAll(force, onEach) {
       var ids = list().map(function (c) { return c.id; }), i = 0;
       function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }
@@ -2854,10 +2883,11 @@ var Marks = (function () {
       state.items.push(m); save();
       return m;
     }
-    function setNote(id, note) { var m = get(id); if (!m) return null; m.note = flat(note); save(); return m; }
-    function setCard(id, card) { var m = get(id); if (!m) return null; if (card) m.card = card; else delete m.card; save(); return m; }
-    function remove(id) { var m = get(id); if (!m) return null; state.items = state.items.filter(function (x) { return x !== m; }); save(); return m; }
-    function restore(m) { if (m && !get(m.id)) { state.items.push(m); save(); } }
+    // m: when a mark last changed; gone: when one was removed (for merging with another device's copy, sync.js)
+    function setNote(id, note) { var m = get(id); if (!m) return null; m.note = flat(note); m.m = now(); save(); return m; }
+    function setCard(id, card) { var m = get(id); if (!m) return null; if (card) m.card = card; else delete m.card; m.m = now(); save(); return m; }
+    function remove(id) { var m = get(id); if (!m) return null; state.items = state.items.filter(function (x) { return x !== m; }); state.gone = state.gone || {}; state.gone[m.id] = now(); save(); return m; }
+    function restore(m) { if (m && !get(m.id)) { state.items.push(m); if (state.gone) delete state.gone[m.id]; save(); } }
     return { list: list, get: get, add: add, setNote: setNote, setCard: setCard, remove: remove, restore: restore, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
   }
   return { create: create, KEY: KEY, anki: anki, cardLine: cardLine, fmt: fmt, link: link };
@@ -3234,6 +3264,256 @@ var AI = (function () {
 })();
 if (typeof module !== 'undefined') module.exports = AI;
 </script>
+<script>// Sync: merges two copies of each store (this device's and the server's) so both devices end with the same thing.
+// Pure: no storage, no clock (now is passed in), and the arguments are never changed. Nothing calls it yet.
+// Rules for every store: nothing on either side is lost unless the other side removed it later than its newest
+// change; ties and copies with no times go to remote (the server's copy), so every device ends the same;
+// removal records older than 180 days are dropped. Tested in test/sync.test.cjs.
+var Sync = (function () {
+  var KEEP = 180 * 864e5;
+  var PREF_FIELDS = ['rate', 'arate', 'autoNext', 'goal']; // shared prefs, plus each entry of prefs.rates
+  var AUDIO_FILL = ['url', 'title', 'podcast', 'image', 'source'];
+  // Fields that stay on their device: left as local's, and not compared by same()
+  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved'], marks: ['saved'] };
+
+  function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
+  function obj(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
+  function has(o, k) { return !!o && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k); }
+  function num(x) { x = +x; return isFinite(x) ? x : 0; }
+  // The keys of several maps, once each, sorted
+  function keys() {
+    var seen = {};
+    for (var i = 0; i < arguments.length; i++) Object.keys(obj(arguments[i])).forEach(function (k) { seen[k] = 1; });
+    return Object.keys(seen).sort();
+  }
+  // Only entries shaped like records
+  function recs(o) { var out = {}; o = obj(o); Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object' && !Array.isArray(o[k])) out[k] = o[k]; }); return out; }
+  // Two maps of times: the larger per key
+  function maxMap(a, b) {
+    var out = {};
+    [obj(a), obj(b)].forEach(function (m) { Object.keys(m).forEach(function (k) { var v = num(m[k]); if (!has(out, k) || v > out[k]) out[k] = v; }); });
+    return out;
+  }
+  // Removal times: the larger per key, minus those older than 180 days (dropped before they are used)
+  function tombs(a, b, now) {
+    var m = maxMap(a, b), cut = num(now) - KEEP;
+    if (now != null) Object.keys(m).forEach(function (k) { if (m[k] < cut) delete m[k]; });
+    return m;
+  }
+  function minOf(x, y) { var a = x == null ? null : num(x), b = y == null ? null : num(y); return a == null ? b : b == null ? a : Math.min(a, b); }
+  function maxOf(x, y) { var a = x == null ? null : num(x), b = y == null ? null : num(y); return a == null ? b : b == null ? a : Math.max(a, b); }
+  // Set a field when either side had it (so merging a copy with itself changes nothing), else leave it out
+  function put(out, k, v, x, y) { if (has(x, k) || has(y, k)) out[k] = v; else delete out[k]; }
+
+  // ----- Videos: { items: {id: record}, gone: { v: {id: ms} } } -----
+  function goneOf(g) { g = obj(g); return g.v && typeof g.v === 'object' ? obj(g.v) : g; }
+  function mergeVideos(local, remote, now) {
+    var a = obj(clone(local)), b = obj(clone(remote));
+    var ia = recs(a.items), ib = recs(b.items), gone = tombs(goneOf(a.gone), goneOf(b.gone), now), items = {};
+    keys(ia, ib).forEach(function (id) {
+      var x = ia[id], y = ib[id], w = !x ? y : !y ? x : num(x.updated) > num(y.updated) ? x : y, l = w === x ? y : x;
+      if (l) { if (!w.title && l.title) w.title = l.title; if (!w.author && l.author) w.author = l.author; }
+      if (has(gone, id) && gone[id] > num(w.updated)) return;
+      items[id] = w;
+    });
+    return { items: items, gone: { v: gone } };
+  }
+
+  // ----- Podcast places: {guid: record} -----
+  function mergeAudio(local, remote) {
+    var a = recs(clone(local)), b = recs(clone(remote)), out = {};
+    keys(a, b).forEach(function (g) {
+      var x = a[g], y = b[g], w = !x ? y : !y ? x : num(x.updated) > num(y.updated) ? x : y, l = w === x ? y : x;
+      if (l) AUDIO_FILL.forEach(function (f) { if (!w[f] && l[f]) w[f] = l[f]; });
+      out[g] = w;
+    });
+    return out;
+  }
+
+  // ----- Library: sections and channels -----
+  function mergeLibrary(local, remote, now) {
+    var a = obj(clone(local)), b = obj(clone(remote));
+    var la = Array.isArray(a.sections) ? a.sections.filter(isSec) : [], lb = Array.isArray(b.sections) ? b.sections.filter(isSec) : [];
+    var atA = obj(a.at), atB = obj(b.at), gA = obj(a.gone), gB = obj(b.gone);
+    var goneSrc = tombs(gA.src, gB.src, now), goneSec = tombs(gA.sec, gB.sec, now);
+    var at = { src: maxMap(atA.src, atB.src), sec: maxMap(atA.sec, atB.sec) };
+    var order = maxOf(atA.order, atB.order);
+    if (order != null) at.order = order;
+
+    // Sections by id: the later change wins whole (no time counts as 0)
+    var sa = {}, sb = {}, win = {}, live = {};
+    la.forEach(function (s) { if (!sa[s.id]) sa[s.id] = s; });
+    lb.forEach(function (s) { if (!sb[s.id]) sb[s.id] = s; });
+    keys(sa, sb).forEach(function (id) {
+      var x = sa[id], y = sb[id], tx = x ? num(obj(atA.sec)[id]) : -1, ty = y ? num(obj(atB.sec)[id]) : -1;
+      var w = !x ? y : !y ? x : tx > ty ? x : y;
+      win[id] = w;
+      if (!(has(goneSec, id) && goneSec[id] > Math.max(tx, ty))) live[id] = 1;
+    });
+    // Order: the side that moved sections last, then any it lacks in the other side's order
+    var first = num(atA.order) > num(atB.order) ? la : lb, second = first === la ? lb : la, list = [], inList = {};
+    first.concat(second).forEach(function (s) { if (live[s.id] && !inList[s.id]) { inList[s.id] = 1; list.push(win[s.id]); } });
+    // Never no sections: remote's first stays
+    if (!list.length && (lb[0] || la[0])) { var keep = win[(lb[0] || la[0]).id]; list.push(keep); inList[keep.id] = 1; }
+
+    // Channels and podcasts by id: the later change wins whole (no time counts as 0: added by old code or the seed list)
+    var ca = recs(a.sources), cb = recs(b.sources), sources = {};
+    keys(ca, cb).forEach(function (id) {
+      var x = ca[id], y = cb[id], tx = x ? num(obj(atA.src)[id]) : -1, ty = y ? num(obj(atB.src)[id]) : -1;
+      var w = !x ? y : !y ? x : tx > ty ? x : y, t = Math.max(tx, ty);
+      if (x && y) {
+        if (x.seenUpTo != null || y.seenUpTo != null) w.seenUpTo = maxOf(x.seenUpTo, y.seenUpTo);
+        if (x.added != null || y.added != null) w.added = minOf(x.added, y.added);
+      }
+      if (has(goneSrc, id) && goneSrc[id] > t) return;
+      sources[id] = w;
+    });
+    // A channel whose section went moves to the first one
+    if (list.length) Object.keys(sources).forEach(function (id) { if (!inList[sources[id].section]) sources[id].section = list[0].id; });
+
+    var out = a;
+    out.sections = list; out.sources = sources;
+    put(out, 'seeded', !!(a.seeded || b.seeded), a, b);
+    put(out, 'seedV', maxOf(a.seedV, b.seedV), a, b);
+    put(out, 'born', minOf(a.born, b.born), a, b);
+    out.at = at;
+    out.gone = { src: goneSrc, sec: goneSec };
+    return out;
+  }
+  function isSec(s) { return !!s && typeof s === 'object' && typeof s.id === 'string'; }
+
+  // ----- Courses: playlists ticked episode by episode -----
+  // The newest time anything in a course changed
+  function newest(c) {
+    var t = Math.max(num(c.touched), num(c.m));
+    ['onAt', 'offAt', 'pinAt'].forEach(function (k) { var m = obj(c[k]); Object.keys(m).forEach(function (v) { t = Math.max(t, num(m[v])); }); });
+    return t;
+  }
+  // Ticks kept from a removed course: ticked on either side stays ticked (1 beats 0)
+  function addTicks(into, ticks) { ticks = obj(ticks); Object.keys(ticks).forEach(function (v) { if (ticks[v] === 1) into[v] = 1; else if (ticks[v] === 0 && into[v] !== 1) into[v] = 0; }); return into; }
+  function mergeCourse(x, y) {
+    var mx = num(x.m), my = num(y.m), w = mx > my ? x : y, c = clone(w);
+    var onAt = maxMap(x.onAt, y.onAt), offAt = maxMap(x.offAt, y.offAt), pinAt = maxMap(x.pinAt, y.pinAt);
+    var tx = obj(x.ticks), ty = obj(y.ticks), ticks = {};
+    keys(tx, ty, onAt, offAt).forEach(function (v) {
+      var on = num(onAt[v]), off = num(offAt[v]);
+      var ticked = on || off ? !(off > on) : tx[v] === 1 || ty[v] === 1;
+      if (ticked) ticks[v] = 1; else if (tx[v] === 0 || ty[v] === 0) ticks[v] = 0;
+    });
+    var ticksAt = maxMap(x.ticksAt, y.ticksAt);
+    Object.keys(ticksAt).forEach(function (v) { if (ticks[v] !== 1) delete ticksAt[v]; });
+    var px = obj(x.pins), py = obj(y.pins), pax = obj(x.pinAt), pay = obj(y.pinAt), pins = {};
+    keys(px, py, pinAt).forEach(function (v) {
+      var sx = num(pax[v]), sy = num(pay[v]);
+      var on = !sx && !sy ? !!px[v] || !!py[v] : sx > sy ? !!px[v] : !!py[v];
+      if (on) pins[v] = 1;
+    });
+    put(c, 'ticks', ticks, x, y); put(c, 'ticksAt', ticksAt, x, y);
+    put(c, 'onAt', onAt, x, y); put(c, 'offAt', offAt, x, y);
+    put(c, 'pins', pins, x, y); put(c, 'pinAt', pinAt, x, y);
+    put(c, 'added', minOf(x.added, y.added), x, y);
+    put(c, 'touched', maxOf(x.touched, y.touched), x, y);
+    put(c, 'm', maxOf(x.m, y.m), x, y);
+    // The seed note stays only while both copies still hold it (a copy without it has used it up, or never had one)
+    if (!(x.seed && y.seed)) delete c.seed;
+    return c;
+  }
+  // Ticks kept from a removal elsewhere go back into a course that stayed, where its own times don't say otherwise
+  function foldTicks(c, kept) {
+    var on = obj(c.onAt), off = obj(c.offAt);
+    c.ticks = c.ticks && typeof c.ticks === 'object' ? c.ticks : {};
+    Object.keys(kept).forEach(function (v) {
+      if (has(on, v) || has(off, v)) return;
+      if (kept[v] === 1) c.ticks[v] = 1; else if (kept[v] === 0 && c.ticks[v] !== 1) c.ticks[v] = 0;
+    });
+  }
+  function mergeCourses(local, remote, now) {
+    var a = obj(clone(local)), b = obj(clone(remote));
+    var ca = recs(a.courses), cb = recs(b.courses), courses = {};
+    var removedAt = tombs(a.removedAt, b.removedAt, now), removed = {};
+    var ra = recs(a.removed), rb = recs(b.removed);
+    keys(ra, rb).forEach(function (pid) { removed[pid] = addTicks(addTicks({}, ra[pid]), rb[pid]); });
+    keys(ca, cb).forEach(function (pid) {
+      // A course on one side only goes through the same rules on its own, so a seed tick made after an untick on that
+      // device (no time, so the untick wins) comes out the same as it would against any other copy
+      var c = ca[pid] && cb[pid] ? mergeCourse(ca[pid], cb[pid]) : mergeCourse(ca[pid] || cb[pid], ca[pid] || cb[pid]);
+      // Removed on a device after its last change there: it goes, and its ticks are kept for a re-add
+      if (has(removedAt, pid) && removedAt[pid] > newest(c)) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
+      courses[pid] = c;
+    });
+    Object.keys(courses).forEach(function (pid) {
+      if (removed[pid]) { foldTicks(courses[pid], removed[pid]); delete removed[pid]; }
+      delete removedAt[pid];
+    });
+    var out = a;
+    out.courses = courses;
+    put(out, 'removed', removed, a, b); if (Object.keys(removed).length) out.removed = removed;
+    put(out, 'removedAt', removedAt, a, b); if (Object.keys(removedAt).length) out.removedAt = removedAt;
+    put(out, 'found', !!(a.found || b.found), a, b);
+    var dropped = {};
+    [obj(a.dropped), obj(b.dropped)].forEach(function (d) { Object.keys(d).forEach(function (k) { if (d[k]) dropped[k] = 1; }); });
+    put(out, 'dropped', dropped, a, b);
+    return out;
+  }
+
+  // ----- Marks: saved moments -----
+  function markTime(m) { return m.m != null ? num(m.m) : num(m.at); }
+  function mergeMarks(local, remote, now) {
+    var a = obj(clone(local)), b = obj(clone(remote)), ia = {}, ib = {};
+    (Array.isArray(a.items) ? a.items : []).forEach(function (m) { if (m && typeof m === 'object' && m.id && !ia[m.id]) ia[m.id] = m; });
+    (Array.isArray(b.items) ? b.items : []).forEach(function (m) { if (m && typeof m === 'object' && m.id && !ib[m.id]) ib[m.id] = m; });
+    var gone = tombs(a.gone, b.gone, now), items = [];
+    keys(ia, ib).forEach(function (id) {
+      var x = ia[id], y = ib[id], tx = x ? markTime(x) : -1, ty = y ? markTime(y) : -1, w = !x ? y : !y ? x : tx > ty ? x : y;
+      if (has(gone, id) && gone[id] > Math.max(tx, ty)) return;
+      items.push(w);
+    });
+    // One order on every device: oldest first
+    items.sort(function (p, q) { return num(p.at) - num(q.at) || (p.id < q.id ? -1 : p.id > q.id ? 1 : 0); });
+    var out = a;
+    out.items = items;
+    put(out, 'gone', gone, a, b); if (Object.keys(gone).length) out.gone = gone;
+    return out;
+  }
+
+  // ----- Prefs: only the shared fields; everything else stays local's -----
+  function mergePrefs(local, remote) {
+    var a = obj(clone(local)), b = obj(clone(remote)), out = a, sa = obj(a.at), sb = obj(b.at);
+    // The later change wins; with no times (or the same), remote's value if it has one
+    function pick(f, hx, vx, hy, vy, set, drop) {
+      var tx = num(sa[f]), ty = num(sb[f]), useY = ty > tx || (ty === tx && hy);
+      if (useY ? hy : hx) set(useY ? vy : vx); else drop();
+    }
+    PREF_FIELDS.forEach(function (f) {
+      pick(f, has(a, f), a[f], has(b, f), b[f], function (v) { out[f] = v; }, function () { delete out[f]; });
+    });
+    var ra = obj(a.rates), rb = obj(b.rates), rates = {};
+    keys(ra, rb).forEach(function (k) { pick('rates.' + k, has(ra, k), ra[k], has(rb, k), rb[k], function (v) { rates[k] = v; }, function () {}); });
+    put(out, 'rates', rates, a, b);
+    put(out, 'at', maxMap(sa, sb), a, b);
+    return out;
+  }
+
+  // ----- Comparing two copies (deep, keys sorted, device-only fields left out) -----
+  function canon(x) {
+    if (Array.isArray(x)) return x.map(canon);
+    if (x && typeof x === 'object') { var o = {}; Object.keys(x).sort().forEach(function (k) { if (x[k] !== undefined) o[k] = canon(x[k]); }); return o; }
+    return x;
+  }
+  function shared(x, kind) {
+    x = obj(x);
+    var o = {};
+    if (kind === 'prefs') { PREF_FIELDS.concat(['rates', 'at']).forEach(function (k) { if (has(x, k)) o[k] = x[k]; }); return o; }
+    Object.keys(x).forEach(function (k) { if ((DEVICE[kind] || []).indexOf(k) < 0) o[k] = x[k]; });
+    return o;
+  }
+  function same(x, y, kind) { return JSON.stringify(canon(shared(x, kind))) === JSON.stringify(canon(shared(y, kind))); }
+
+  return { mergeVideos: mergeVideos, mergeAudio: mergeAudio, mergeLibrary: mergeLibrary, mergeCourses: mergeCourses, mergeMarks: mergeMarks, mergePrefs: mergePrefs,
+    same: same, KEEP: KEEP, PREF_FIELDS: PREF_FIELDS };
+})();
+if (typeof module !== 'undefined') module.exports = Sync;
+</script>
 <script>// Shelf v3 (Day Sheet): Home bands, section/channel/courses/search/marks pages, YouTube player, night player, self-check.
 (function () {
   var KEY = 'resume.shelf.v1', PREF = 'resume.prefs.v1', AKEY = 'shelf.v2.audio';
@@ -3275,7 +3555,29 @@ if (typeof module !== 'undefined') module.exports = AI;
     saveAudio();
   }
   function saveAudio() { if (store(AKEY, arec)) lastSavedAt = Date.now(); }
-  function savePrefs() { store(PREF, prefs); }
+  // The prefs shared between devices get a time when they change (prefs.at), for merging with another device's copy
+  // (sync.js): each save compares them with how they were at load and at the last save
+  var prefSnap = null;
+  function prefShared(p) {
+    var o = {}, r = (p && p.rates) || {};
+    Sync.PREF_FIELDS.forEach(function (k) { o[k] = JSON.stringify(p[k]); });
+    Object.keys(r).forEach(function (k) { o['rates.' + k] = JSON.stringify(r[k]); });
+    return o;
+  }
+  function savePrefs() {
+    var cur = prefShared(prefs), t = Date.now();
+    if (prefSnap) Object.keys(Object.assign({}, prefSnap, cur)).forEach(function (k) { if (prefSnap[k] !== cur[k]) { prefs.at = prefs.at || {}; prefs.at[k] = t; } });
+    prefSnap = cur;
+    store(PREF, prefs);
+  }
+  // Videos taken off the shelf, and when, so another device's copy can't bring them back (sync.js). Kept in the web view only.
+  var GKEY = 'shelf.sync.gone';
+  function markGone(id, on) {
+    var g = load(GKEY, {});
+    g.v = g.v && typeof g.v === 'object' ? g.v : {};
+    if (on) g.v[id] = Date.now(); else if (g.v[id] != null) delete g.v[id]; else return;
+    rawSet(GKEY, JSON.stringify(g), false);
+  }
 
   // ---------- network ----------
   function withTimeout(p, ms, msg) {
@@ -4415,7 +4717,7 @@ if (typeof module !== 'undefined') module.exports = AI;
   function unlinkPodVideo(guid, old, keep) {
     var ov = old && old !== keep && videos[old];
     if (!ov || ov.ep !== guid) return;
-    if (ov.guessed) delete videos[old]; else delete ov.ep;
+    if (ov.guessed) { delete videos[old]; markGone(old, true); } else delete ov.ep;
     saveVideos();
   }
   function startPodVideo(ep, id, guess) {
@@ -6075,9 +6377,9 @@ if (typeof module !== 'undefined') module.exports = AI;
         if (confirmRemove !== id) { confirmRemove = id; renderPage(); break; }
         var dn = lib.source(id); if (dn) { lib.remove(id); lib.saveCache(); toast('Removed the broken copy of ' + dn.name + '.'); } confirmRemove = null; renderAll(); break;
       case 'remove-video':
-        var gone = videos[id]; delete videos[id]; saveVideos(); renderAll();
+        var gone = videos[id]; delete videos[id]; markGone(id, true); saveVideos(); renderAll();
         if (!Object.keys(videos).some(function (k) { return !entryFromVideo(videos[k]).section; }) && stack.length && stack[stack.length - 1].name === 'pasted') back();
-        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; saveVideos(); renderAll(); } });
+        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; markGone(id, false); saveVideos(); renderAll(); } });
         break;
       case 'close-video': closeVideo(); break;
       case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
@@ -6613,6 +6915,7 @@ if (typeof module !== 'undefined') module.exports = AI;
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    prefSnap = prefShared(prefs);
     // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one
     if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; savePrefs(); }
     applyGoal(); applyLook();
