@@ -184,4 +184,32 @@ final class ShelfWatchKitTests: XCTestCase {
         var p = n; p.playing = false
         XCTAssertEqual(p.position(at: Date(timeIntervalSince1970: 1010)), 100)
     }
+
+    func testPatienceOutlastsTheIPhonesPlayer() {
+        XCTAssertGreaterThan(Command.patience("play"), Command.pocketStart + 4, "the watch never gives up before the iPhone does")
+        XCTAssertEqual(Command.patience("resume"), Command.patience("play"))
+        XCTAssertEqual(Command.patience("pause"), 8)
+    }
+
+    func testReachGraceUnderEveryPatience() {
+        let names = ["play", "resume", "twin", "channel", "section", "course", "next", "pause", "toggle", "notes", "seek", "seekTo", "rate",
+                     "timer", "mark", "stop", "tick", "snap"]
+        XCTAssertLessThan(Command.reachGrace, names.map(Command.patience).min() ?? 0, "a tap waiting for the link still has time for its answer")
+    }
+
+    func testStartedAnyway() {
+        let playing = NowState(kind: "audio", key: "ep1", title: "Ep", playing: true, at: 10_000)
+        let loading = NowState(kind: "audio", key: "ep1", title: "Ep", buffering: true, at: 10_000)
+        let paused = NowState(kind: "audio", key: "ep1", title: "Ep", at: 10_000)
+        let other = NowState(kind: "audio", key: "ep2", title: "Other", playing: true, at: 10_000)
+        let blank = NowState(kind: "audio", key: "", title: "Ep", playing: true, at: 10_000)
+        XCTAssertTrue(Command.startedAnyway(key: "ep1", now: playing, since: 9_000))
+        XCTAssertTrue(Command.startedAnyway(key: "ep1", now: loading, since: 9_000))
+        XCTAssertTrue(Command.startedAnyway(key: "ep1", now: playing, since: 11_500), "the clocks may differ by a moment")
+        XCTAssertFalse(Command.startedAnyway(key: "ep1", now: playing, since: 60_000), "something older the watch still shows")
+        XCTAssertFalse(Command.startedAnyway(key: "ep1", now: other, since: 9_000))
+        XCTAssertFalse(Command.startedAnyway(key: "ep1", now: nil, since: 9_000))
+        XCTAssertFalse(Command.startedAnyway(key: "", now: blank, since: 9_000))
+        XCTAssertFalse(Command.startedAnyway(key: "ep1", now: paused, since: 9_000))
+    }
 }

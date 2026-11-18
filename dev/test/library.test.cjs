@@ -150,9 +150,10 @@ const page = fx('channel.html');
   // Seed version 2: a library seeded with the Ezra Klein podcast gets the video channel once, and keeps the podcast
   const old = { 'shelf.v2.library': JSON.stringify({ sections: [{ id: 'med', name: 'Medicine', kind: 'video' }, { id: 'ent', name: 'Entertainment', kind: 'video' }],
     sources: { pez: { id: 'pez', type: 'podcast', url: 'https://example.com/ezra.xml', name: 'The Ezra Klein Show', section: 'ent' } }, seeded: true, seedMisses: [] }) };
-  r = setup([[/results\?/, '..."channelRenderer":{"channelId":"UCezraezraezraezraezraez","title"...'], [/@AJsMnemonics/, '<meta itemprop="name" content="AJmonics">"externalId":"UCajajajajajajajajajajaj"'], [/UULF/, ytFeed]], old);
+  r = setup([[/results\?/, '..."channelRenderer":{"channelId":"UCezraezraezraezraezraez","title"...'], [/@AJsMnemonics/, '<meta itemprop="name" content="AJmonics">"externalId":"UCajajajajajajajajajajaj"'], [/UULF/, ytFeed], [/libsyn/, pod]], old);
   const up = await r.lib.seed();
-  assert.deepStrictEqual(up.map((x) => [x.input, x.ok]), [['@AJsMnemonics', true], ['The Ezra Klein Show', true]]);
+  assert.deepStrictEqual(up.map((x) => [x.input, x.ok]), [['@AJsMnemonics', true], ['The Ezra Klein Show', true],
+    ['https://rss.libsyn.com/shows/58274/destinations/220957.xml', true], ['https://rss.libsyn.com/shows/270773/destinations/2065688.xml', true]]);
   assert.strictEqual(r.lib.source('UCajajajajajajajajajajaj').section, 'med', 'seed version 3 adds AJmonics to Medicine once');
   assert.strictEqual(r.lib.source('UCezraezraezraezraezraez').type, 'youtube');
   assert.strictEqual(r.lib.source('UCezraezraezraezraezraez').section, 'ent');
@@ -163,6 +164,36 @@ const page = fx('channel.html');
     sources: { UCx: { id: 'UCx', type: 'youtube', name: 'The Ezra Klein Show', section: 'ent' } }, seeded: true }) });
   assert.ok((await r.lib.seed()).every((x) => x.input !== 'The Ezra Klein Show'));
   assert.ok(r.calls.every((c) => !/results\?/.test(c.url)), 'Ezra is not searched for again');
+
+  // Seed version 4: a library at version 3 gets the two night podcasts in Sleep once, and nothing else
+  const BR = 'https://rss.libsyn.com/shows/58274/destinations/220957.xml', CC = 'https://rss.libsyn.com/shows/270773/destinations/2065688.xml';
+  const v3 = (sources) => ({ 'shelf.v2.library': JSON.stringify({ sections: [{ id: 'med', name: 'Medicine', kind: 'video' }, { id: 'sleep', name: 'Sleep', kind: 'audio' }],
+    sources: sources, seeded: true, seedV: 3, seedMisses: [] }) });
+  r = setup([[/libsyn/, pod]], v3({}));
+  const up4 = await r.lib.seed();
+  assert.deepStrictEqual(up4.map((x) => [x.input, x.ok]), [[BR, true], [CC, true]], 'exactly the two podcasts');
+  assert.deepStrictEqual(r.calls.map((c) => c.url), [BR, CC], 'nothing else is looked up');
+  assert.deepStrictEqual(r.lib.sources().map((s) => [s.url, s.section]), [[BR, 'sleep'], [CC, 'sleep']]);
+  assert.strictEqual(JSON.parse(r.store['shelf.v2.library']).seedV, 4);
+  assert.deepStrictEqual(await r.lib.seed(), [], 'only once');
+  assert.strictEqual(r.calls.length, 2);
+  // ...and one already holding a feed (moved to Medicine by hand) is not given it twice, nor moved
+  r = setup([[/libsyn/, pod]], v3({ pbr: { id: 'pbr', type: 'podcast', url: BR, name: 'Bedside Rounds', section: 'med', added: 1 } }));
+  assert.deepStrictEqual((await r.lib.seed()).map((x) => x.input), [CC], 'only the missing one');
+  assert.strictEqual(r.lib.sources().filter((s) => s.url === BR).length, 1);
+  assert.strictEqual(r.lib.source('pbr').section, 'med');
+  // ...holding both: nothing is fetched, and the version moves on so it isn't checked again
+  r = setup([], v3({ pbr: { id: 'pbr', type: 'podcast', url: BR, name: 'Bedside Rounds', section: 'sleep', added: 1 },
+    pcc: { id: 'pcc', type: 'podcast', url: CC, name: 'The Curious Clinicians', section: 'sleep', added: 2 } }));
+  assert.deepStrictEqual(await r.lib.seed(), []);
+  assert.strictEqual(r.calls.length, 0);
+  assert.strictEqual(JSON.parse(r.store['shelf.v2.library']).seedV, 4);
+  assert.strictEqual(r.lib.sources().length, 2);
+  // ...with no Sleep section left: they land in the first section, and only once
+  r = setup([[/libsyn/, pod]], { 'shelf.v2.library': JSON.stringify({ sections: [{ id: 'med', name: 'Medicine', kind: 'video' }], sources: {}, seeded: true, seedV: 3 }) });
+  assert.ok((await r.lib.seed()).every((x) => x.ok));
+  assert.deepStrictEqual(r.lib.sources().map((s) => [s.type, s.section]), [['podcast', 'med'], ['podcast', 'med']]);
+  assert.deepStrictEqual(await r.lib.seed(), []);
 
   // Podcast twin: looked up by the channel's name once a week, episode matched by title
   const twinFeedXml = '<rss><channel><title>The Ezra Klein Show</title><item><title>Why the Housing Market Is Stuck</title><guid>ez1</guid><enclosure url="https://a.example/ez1.mp3" type="audio/mpeg"/><pubDate>Sun, 04 Oct 2026 11:00:00 GMT</pubDate></item></channel></rss>';

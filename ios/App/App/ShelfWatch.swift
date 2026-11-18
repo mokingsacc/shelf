@@ -24,6 +24,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     private var waiting: [String: DispatchWorkItem] = [:]
     private var tasks: [String: UIBackgroundTaskIdentifier] = [:]   // main thread only: time to answer while in the background
     private var watching = false
+    private let seen = SeenTaps()
     private var session: WCSession? { WCSession.isSupported() ? WCSession.default : nil }
 
     /// Started at launch (a background launch too, so a tap from the watch is never lost)
@@ -139,6 +140,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     }
 
     private func answer(_ id: String, _ data: Data) {
+        seen.answered(id, data)   // kept even if this one can't go, so the watch's second ask gets it
         guard let s = session, s.activationState == .activated, s.isReachable else { return }
         s.sendMessage([LinkKey.result: data, LinkKey.id: id], replyHandler: nil, errorHandler: nil)
     }
@@ -159,6 +161,12 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     static func waits(_ name: String) -> Bool { name == "play" || name == "next" }
 
     private func receive(id: String, json raw: Data) {
+        // The watch asks twice when its first message seemed lost (it may have arrived): acted on once, its answer sent again if known
+        let (new, known) = seen.mark(id)
+        guard new else {
+            if let d = known { queue.async { self.answer(id, d) } }
+            return
+        }
         DispatchQueue.main.async {
             // A podcast while Shelf isn't on screen, and the remote while one plays: the iPhone plays it itself
             let app = UIApplication.shared
@@ -254,7 +262,7 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
                 self.queue.async {
                     let work = DispatchWorkItem { [weak self] in self?.noAnswer(id: id, name: name) }
                     self.waiting[id] = work
-                    self.queue.asyncAfter(deadline: .now() + (page == nil ? 0 : max(2.5, Command.patience(name) - 1.5)), execute: work)
+                    self.queue.asyncAfter(deadline: .now() + (page == nil ? 0 : max(2.5, min(Command.patience(name), 8) - 1.5)), execute: work)
                 }
             }
         }
@@ -424,6 +432,35 @@ final class WatchLink: NSObject, WCSessionDelegate, UNUserNotificationCenterDele
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
         guard let id = userInfo[LinkKey.id] as? String, let cmd = userInfo[LinkKey.command] as? Data else { return }
         receive(id: id, json: cmd)
+    }
+}
+
+/// The watch's last 60 tap ids and the answer sent for each. Locked: taps come in on main, answers go from other queues
+final class SeenTaps {
+    private let lock = NSLock()
+    private var ids: [String] = []
+    private var answers: [String: Data] = [:]
+    private var times: [String: Date] = [:]
+
+    /// The first time an id comes, new (and it's kept); after that not new, with the answer sent for it if there was one
+    func mark(_ id: String) -> (new: Bool, answer: Data?) {
+        lock.lock(); defer { lock.unlock() }
+        // An answer is only worth sending again for a minute: a copy that comes much later (a queued tick) needs none
+        if ids.contains(id) { return (false, times[id].map { Date().timeIntervalSince($0) < 60 } == true ? answers[id] : nil) }
+        keep(id)
+        return (true, nil)
+    }
+
+    func answered(_ id: String, _ data: Data) {
+        lock.lock(); defer { lock.unlock() }
+        if !ids.contains(id) { keep(id) }
+        answers[id] = data
+    }
+
+    private func keep(_ id: String) {
+        ids.append(id)
+        times[id] = Date()
+        while ids.count > 60 { let old = ids.removeFirst(); answers.removeValue(forKey: old); times.removeValue(forKey: old) }
     }
 }
 
@@ -603,7 +640,15 @@ final class PocketPlayer: NSObject {
 
     // MARK: Playing
 
-    private func play(_ e: [String: Any], from: Double?, done: @escaping (Bool) -> Void) {
+    private func play(_ e: [String: Any], from: Double?, done answer: @escaping (Bool) -> Void) {
+        // One clock for the whole start and one answer, whichever comes first: it plays, it fails, or its time is up
+        let began = DispatchTime.now()
+        var answered = false
+        let done: (Bool) -> Void = { ok in
+            guard !answered else { return }
+            answered = true
+            answer(ok)
+        }
         let key = e["key"] as? String ?? ""
         // Where it starts: the watch's own choice, else where this player is in it, else the newest place waiting for Shelf, else Shelf's
         let start = from ?? (active && guid == key ? t : nil) ?? WatchLink.shared.newestSpot(key) ?? ((e["done"] as? Bool) == true ? 0 : Self.num(e["t"]) ?? 0)
@@ -613,14 +658,20 @@ final class PocketPlayer: NSObject {
         url = e["url"] as? String ?? ""; image = e["image"] as? String ?? ""; dur = Self.num(e["dur"]) ?? 0
         rate = Self.num(e["rate"]).flatMap { $0 > 0 ? $0 : nil } ?? 1
         guard let u = URL(string: url) else { done(false); return }
-        // In the background the iPhone only lets an app start sound that mixes with others (so the lock screen may not show it;
-        // the watch is the remote). On screen it never gets here: the page plays it.
+        // The lock screen and Control Centre only show a player that doesn't mix. In the background iOS allows that only at times
+        // (Shelf was the last thing playing); when it refuses, mixing still plays and the watch is the remote
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .spokenAudio, options: UIApplication.shared.applicationState == .active ? [] : [.mixWithOthers])
+            try session.setCategory(.playback, mode: .spokenAudio, options: [])
             try session.setActive(true)
         } catch {
-            done(false); return
+            guard UIApplication.shared.applicationState != .active else { done(false); return }
+            do {
+                try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+                try session.setActive(true)
+            } catch {
+                done(false); return
+            }
         }
         let item = AVPlayerItem(url: u)
         let p = AVPlayer(playerItem: item)
@@ -639,8 +690,13 @@ final class PocketPlayer: NSObject {
                 self.nowPlaying(); self.sendNow()
             }
         }
-        // Seek once the episode has loaded, then play. The watch waits 8 s, so loading gets 5 s and starting 2 s
-        var tries = 0
+        // Out of time (the watch waits a little longer): it stops here and never starts later
+        DispatchQueue.main.asyncAfter(deadline: began + Command.pocketStart) { [weak self] in
+            guard !answered else { return }
+            if self?.player === p { self?.finish(keepPlace: false) }
+            done(false)
+        }
+        // Seek once the episode has loaded, then play. Loading, seeking and starting all share the time above
         func wait() {
             guard player === p else { done(false); return }
             if item.status == .readyToPlay {
@@ -648,15 +704,14 @@ final class PocketPlayer: NSObject {
                     guard self.player === p else { done(false); return }
                     p.playImmediately(atRate: Float(self.rate))
                     self.confirm(p) { ok in
-                        if ok { self.armed = true; self.started() } else { self.finish(keepPlace: false) }
+                        if ok { self.armed = true; self.started() } else if self.player === p { self.finish(keepPlace: false) }
                         done(ok)
                     }
                 }
                 if start > 1 { p.seek(to: CMTime(seconds: start, preferredTimescale: 600)) { _ in DispatchQueue.main.async(execute: go) } } else { go() }
-            } else if item.status == .failed || tries >= 20 {
+            } else if item.status == .failed {
                 finish(keepPlace: false); done(false)
             } else {
-                tries += 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: wait)
             }
         }

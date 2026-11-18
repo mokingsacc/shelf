@@ -784,6 +784,8 @@
   // ---------- Video player ----------
   var player = null, playerReady = false, ytLoaded = false, ytFailed = false, current = null, pending = null, tick = null, lastErr = '';
   var capsOff = null, wantRate = 1, loadAt = 0, nextTimer = null, scrubbing = null, startOnce = null, keepSpot = null;
+  // unsettledAt: the last time the player said anything but playing or paused (unstarted, buffering, cued, ended)
+  var unsettledAt = 0;
   var armed = false, sawPlaying = false, loadStart = 0, startTimer = null, lastCaptureAt = 0, vTimer = null, vTimerMsg = '', wake = null, uiTick = null;
   window.onYouTubeIframeAPIReady = function () {
     ytLoaded = true; updateDot();
@@ -795,9 +797,11 @@
         onReady: function () { playerReady = true; if (pending) { var p = pending; pending = null; loadVideo(p); } },
         onStateChange: onState,
         onPlaybackRateChange: function (e) {
-          // A change made in YouTube's own menu sticks to the channel too. Resets don't: YouTube's own while loading,
-          // an ad's (its length isn't the video's), and any drop back to 1× (pick 1× with Shelf's buttons instead)
-          if (!current || !sawPlaying || Date.now() - loadAt < 2500 || e.data === wantRate || !(e.data > 1)) return;
+          // A speed picked in YouTube's own menu sticks to the channel too, 1× included. Ignored: changes in the first
+          // 2.5 s after a load (YouTube's own reset), during an ad (its length isn't the video's), and a drop to 1× or
+          // below within 3 s of the player loading, buffering, cueing or ending (YouTube resets to 1× then, Mo doesn't)
+          if (!current || !sawPlaying || Date.now() - loadAt < 2500 || e.data === wantRate) return;
+          if (!(e.data > 1) && Date.now() - unsettledAt <= 3000) return;
           var vv = videos[current], pd = 0; try { pd = player.getDuration(); } catch (er) {}
           if (vv && vv.dur && pd && Math.abs(pd - vv.dur) > 2) return;
           setRateFor(current, e.data);
@@ -913,6 +917,7 @@
     var S = YT.PlayerState;
     watchNowSoon();
     var playing = e.data === S.PLAYING;
+    if (!playing && e.data !== S.PAUSED) unsettledAt = Date.now();
     $('#vPlay').innerHTML = playing ? I.pause : I.play;
     $('#vPlay').setAttribute('aria-label', playing ? 'Pause' : 'Play');
     $('#vPlay').classList.toggle('on', playing);

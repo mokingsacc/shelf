@@ -16,9 +16,11 @@ var Library = (function () {
     { input: '@BreakingPoints', section: 'ent' },
     { input: 'The Ezra Klein Show', section: 'ent', since: 2 }, // the video show (was its podcast before seed version 2)
     { input: 'https://feeds.megaphone.fm/finvshistory', section: 'sleep' },
-    { input: 'Fall of Civilizations', section: 'sleep', audio: true }
+    { input: 'Fall of Civilizations', section: 'sleep', audio: true },
+    { input: 'https://rss.libsyn.com/shows/58274/destinations/220957.xml', section: 'sleep', since: 4 }, // Bedside Rounds
+    { input: 'https://rss.libsyn.com/shows/270773/destinations/2065688.xml', section: 'sleep', since: 4 } // The Curious Clinicians
   ];
-  var SEED_V = 3; // seeds marked since: n are added once to libraries seeded before version n
+  var SEED_V = 4; // seeds marked since: n are added once to libraries seeded before version n
   var CONSENT = { Cookie: 'SOCS=CAI; CONSENT=YES+1' };
 
   function hash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return 'p' + (h >>> 0).toString(36); }
