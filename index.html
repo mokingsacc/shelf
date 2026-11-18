@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Shelf">
-<meta name="build" content="720f93fac2b4">
+<meta name="build" content="dabe8b7c45a9">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0A0A0E" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="icon.png">
@@ -850,6 +850,12 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
     <button type="button" class="ghost" data-act="ai-key-remove">Remove the key</button>
     <p class="small">The key stays on this phone. Shelf only sends Google the video's link, its own instructions and your short mark note. Google may use free-tier requests to improve its models.</p>
   </form>
+</dialog>
+
+<dialog id="syncDlg" aria-labelledby="syncH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="syncH">Sync devices</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db" id="syncBody"></div>
 </dialog>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1835,6 +1841,26 @@ var Library = (function () {
       return out.sort(function (a, b) { return b.published - a.published; });
     }
 
+    // ----- Sync (synclink.js) -----
+    function exportState() { return JSON.parse(JSON.stringify(state)); }
+    // A copy merged with another device's takes the state's place, with no new times. A section or channel already
+    // here is emptied and refilled rather than replaced, so code holding it keeps working. seedMisses and rev stay this device's.
+    function adopt(merged) {
+      var m = JSON.parse(JSON.stringify(merged || {})), mine = { seedMisses: 1, rev: 1 };
+      if (!Array.isArray(m.sections) || !m.sections.length) return false; // never no sections
+      var secs = {}, srcs = state.sources || {};
+      state.sections.forEach(function (s) { secs[s.id] = s; });
+      state.sections = m.sections.map(function (s) { return secs[s.id] ? refill(secs[s.id], s) : s; });
+      var ms = m.sources && typeof m.sources === 'object' ? m.sources : {};
+      Object.keys(srcs).forEach(function (id) { if (!ms[id]) { delete srcs[id]; delete cache[id]; } });
+      Object.keys(ms).forEach(function (id) { srcs[id] = srcs[id] ? refill(srcs[id], ms[id]) : ms[id]; });
+      state.sources = srcs;
+      Object.keys(state).forEach(function (k) { if (!mine[k] && k !== 'sections' && k !== 'sources' && !(k in m)) delete state[k]; });
+      Object.keys(m).forEach(function (k) { if (!mine[k] && k !== 'sections' && k !== 'sources') state[k] = m[k]; });
+      save(); return true;
+    }
+    function refill(o, from) { Object.keys(o).forEach(function (k) { delete o[k]; }); return Object.assign(o, from); }
+
     // Cache survives a relaunch so the shelf isn't empty while feeds load
     function saveCache() {
       var slim = {};
@@ -1850,7 +1876,7 @@ var Library = (function () {
       sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
       sources: sources, source: source, have: have, setSection: setSection, setHideShorts: setHideShorts, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
-      markSeen: markSeen, fresh: fresh, saveCache: saveCache, twinEpisode: twinEpisode, twinLookup: twinLookup, get seedMisses() { return state.seedMisses || []; }
+      markSeen: markSeen, fresh: fresh, saveCache: saveCache, exportState: exportState, adopt: adopt, twinEpisode: twinEpisode, twinLookup: twinLookup, get seedMisses() { return state.seedMisses || []; }
     };
   }
   return { create: create, KEY: KEY, SEED_SOURCES: SEED_SOURCES };
@@ -2571,6 +2597,14 @@ var Courses = (function () {
       return out;
     }
     function touch(c) { c.touched = now(); }
+    // auto: { pid: { vid: 1 } }, the ticks the seed list turned on here (this device only, never synced). A tick
+    // Mo makes or takes off himself stops being one of them.
+    function setAuto(pid, vid, on) {
+      var a = state.auto = state.auto || {};
+      if (on) { a[pid] = a[pid] || {}; a[pid][vid] = 1; return; }
+      if (a[pid] && a[pid][vid]) { delete a[pid][vid]; if (!Object.keys(a[pid]).length) delete a[pid]; }
+    }
+    var lastUp = null; // what the last "tick up to here" turned on, for its Undo
     // When each tick was turned on (onAt) or off (offAt), for merging with another device's copy (sync.js).
     // An untick in the same millisecond as its tick still counts as the later of the two.
     function stampTick(c, vid, on) {
@@ -2580,7 +2614,7 @@ var Courses = (function () {
     }
     function tick(id, vid, on) {
       var c = get(id); if (!c) return;
-      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on);
+      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on); setAuto(id, vid, false);
       // When each one was ticked, for the day's tally and the pace (ticking a block with Set place doesn't count)
       c.ticksAt = c.ticksAt || {};
       if (on) c.ticksAt[vid] = now(); else delete c.ticksAt[vid];
@@ -2590,14 +2624,23 @@ var Courses = (function () {
     function tickUpTo(id, i) {
       var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
       var before = Object.assign({}, c.ticks);
-      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) stampTick(c, arr[j].id, true); c.ticks[arr[j].id] = 1; }
+      var on = [];
+      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) { stampTick(c, arr[j].id, true); setAuto(id, arr[j].id, false); on.push(arr[j].id); } c.ticks[arr[j].id] = 1; }
       touch(c); save();
+      lastUp = { before: before, on: on };
       return before;
     }
+    // Undo of "tick up to here": only the ones that tick turned on go off again. Anything ticked since, here or
+    // on another device (sync), stays ticked.
     function restore(id, ticks) {
       var c = get(id); if (!c || !ticks) return;
-      Object.keys(Object.assign({}, c.ticks, ticks)).forEach(function (v) { var was = c.ticks[v] === 1, will = ticks[v] === 1; if (was !== will) stampTick(c, v, will); });
-      c.ticks = ticks; save();
+      var on = lastUp && lastUp.before === ticks ? lastUp.on : Object.keys(c.ticks).filter(function (v) { return ticks[v] !== 1; });
+      on.forEach(function (v) {
+        if (c.ticks[v] !== 1) return;
+        stampTick(c, v, false); setAuto(id, v, false);
+        if (v in ticks) c.ticks[v] = ticks[v]; else delete c.ticks[v];
+      });
+      save();
     }
     function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; c.pinAt = c.pinAt || {}; c.pinAt[vid] = now(); save(); }
     // Episode number from the titles -> positions (first match first)
@@ -2686,18 +2729,19 @@ var Courses = (function () {
       var s = c.seed; if (!s) return;
       var ch = cache[c.id], arr = items(c.id);
       if (!ch || ch.partial || !arr.length) return;
-      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times, so a later untick anywhere beats them
+      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times and the course no new touched,
+      // so a later untick or removal anywhere beats them
       delete c.seed;
-      if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
+      function on(vid) { if (c.ticks[vid] !== 1) { c.ticks[vid] = 1; setAuto(c.id, vid, true); } }
+      if (s.all) arr.forEach(function (x) { on(x.id); });
       if (s.upTo) {
         var hitsN = findNumber(c.id, s.upTo), at = hitsN[0];
-        if (at != null) { for (var j = 0; j <= at; j++) c.ticks[arr[j].id] = 1; c.note = hitsN.length > 1 ? s.upTo + ' appears ' + hitsN.length + ' times in this playlist, so it is ticked up to the first one. Check where you are.' : ''; }
+        if (at != null) { for (var j = 0; j <= at; j++) on(arr[j].id); c.note = hitsN.length > 1 ? s.upTo + ' appears ' + hitsN.length + ' times in this playlist, so it is ticked up to the first one. Check where you are.' : ''; }
         else if (s.pct) {
           var k = Math.round(arr.length * s.pct / 100);
-          for (var q = 0; q < k; q++) c.ticks[arr[q].id] = 1;
+          for (var q = 0; q < k; q++) on(arr[q].id);
           c.note = "Couldn't find episode " + s.upTo + ' in this playlist, so the first ' + s.pct + '% are ticked. Check where you are.';
         }
-        touch(c);
       }
       if (s.pin) { var p = findNumber(c.id, s.pin)[0]; if (p != null) c.pins[arr[p].id] = 1; }
     }
@@ -2769,7 +2813,8 @@ var Courses = (function () {
         var misses = [];
         todo.forEach(function (s) {
           var p = pick(all, s.match);
-          if (!p || get(p.id)) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
+          // A course Mo removed (here, or on another device before a sync) stays removed; he can add it back by hand
+          if (!p || get(p.id) || (state.removed && state.removed[p.id])) { if (!p) misses.push({ name: s.name, error: 'not on the channel\'s Playlists page' }); return; }
           var c = addCourse(p.id, { name: s.name, title: p.title, channel: 'Mehlman Medical', section: SEED.section, seed: { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin } });
           c.seedName = s.name;
         });
@@ -2784,6 +2829,23 @@ var Courses = (function () {
     // A "not found" line Mo doesn't want: gone for good
     function dropMiss(name) { state.dropped = state.dropped || {}; state.dropped[name] = 1; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); save(); }
     function fixMiss(name, c) { c.seedName = name; c.m = now(); state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
+    // ----- Sync (synclink.js) -----
+    function exportState() { return JSON.parse(JSON.stringify(state)); }
+    // A copy merged with another device's takes the state's place, with no new times. A course already here is
+    // emptied and refilled rather than replaced, so code holding it keeps working. The episode lists (cache) stay
+    // as they are; misses, saved and auto stay this device's.
+    function adopt(merged) {
+      var m = JSON.parse(JSON.stringify(merged || {})), mine = { misses: 1, saved: 1, auto: 1 }, have = state.courses;
+      var mc = m.courses && typeof m.courses === 'object' ? m.courses : {};
+      Object.keys(have).forEach(function (id) { if (!mc[id]) delete have[id]; });
+      Object.keys(mc).forEach(function (id) {
+        var c = mc[id]; c.ticks = c.ticks && typeof c.ticks === 'object' ? c.ticks : {}; c.pins = c.pins && typeof c.pins === 'object' ? c.pins : {};
+        if (have[id]) { var o = have[id]; Object.keys(o).forEach(function (k) { delete o[k]; }); Object.assign(o, c); } else have[id] = c;
+      });
+      Object.keys(state).forEach(function (k) { if (!mine[k] && k !== 'courses' && !(k in m)) delete state[k]; });
+      Object.keys(m).forEach(function (k) { if (!mine[k] && k !== 'courses') state[k] = m[k]; });
+      save(); return true;
+    }
     function loadAll(force, onEach) {
       var ids = list().map(function (c) { return c.id; }), i = 0;
       function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }
@@ -2828,6 +2890,7 @@ var Courses = (function () {
       list: list, get: get, items: items, status: status, progress: progress, where: where, isDone: function (id, vid) { var c = get(id); return !!c && isDone(c, vid); },
       tick: tick, touch: touchCourse, tickUpTo: tickUpTo, restore: restore, pin: pin, findNumber: findNumber, move: move, remove: remove, dropMiss: dropMiss,
       load: load, loadAll: loadAll, add: add, seed: seed, fixMiss: fixMiss, channelPlaylists: channelPlaylists, peek: fetchList,
+      exportState: exportState, adopt: adopt,
       get misses() { return state.misses || []; }, get busy() { return Object.keys(busy).length > 0; }, raw: function () { return state; }
     };
   }
@@ -2887,8 +2950,24 @@ var Marks = (function () {
     function setNote(id, note) { var m = get(id); if (!m) return null; m.note = flat(note); m.m = now(); save(); return m; }
     function setCard(id, card) { var m = get(id); if (!m) return null; if (card) m.card = card; else delete m.card; m.m = now(); save(); return m; }
     function remove(id) { var m = get(id); if (!m) return null; state.items = state.items.filter(function (x) { return x !== m; }); state.gone = state.gone || {}; state.gone[m.id] = now(); save(); return m; }
-    function restore(m) { if (m && !get(m.id)) { state.items.push(m); if (state.gone) delete state.gone[m.id]; save(); } }
-    return { list: list, get: get, add: add, setNote: setNote, setCard: setCard, remove: remove, restore: restore, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
+    // An Undo is a change of its own: it must beat its removal once that has reached another device
+    function restore(m) { if (m && !get(m.id)) { m.m = now(); state.items.push(m); if (state.gone) delete state.gone[m.id]; save(); } }
+    // Sync (synclink.js): a copy of the state, and a merged copy put in its place with no new times. A mark already
+    // here is emptied and refilled rather than replaced, so code holding it keeps working. saved stays this device's.
+    function exportState() { return JSON.parse(JSON.stringify(state)); }
+    function adopt(merged) {
+      var m = JSON.parse(JSON.stringify(merged || {})), have = {};
+      state.items.forEach(function (x) { have[x.id] = x; });
+      var items = (Array.isArray(m.items) ? m.items : []).filter(function (x) { return x && typeof x === 'object' && x.id && x.vid; }).map(function (x) {
+        var o = have[x.id]; if (!o) return x;
+        Object.keys(o).forEach(function (k) { delete o[k]; }); return Object.assign(o, x);
+      });
+      state.items.length = 0; Array.prototype.push.apply(state.items, items);
+      Object.keys(state).forEach(function (k) { if (k !== 'saved' && k !== 'items' && !(k in m)) delete state[k]; });
+      Object.keys(m).forEach(function (k) { if (k !== 'saved' && k !== 'items') state[k] = m[k]; });
+      save(); return true;
+    }
+    return { list: list, get: get, add: add, setNote: setNote, setCard: setCard, remove: remove, restore: restore, exportState: exportState, adopt: adopt, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
   }
   return { create: create, KEY: KEY, anki: anki, cardLine: cardLine, fmt: fmt, link: link };
 })();
@@ -3265,7 +3344,7 @@ var AI = (function () {
 if (typeof module !== 'undefined') module.exports = AI;
 </script>
 <script>// Sync: merges two copies of each store (this device's and the server's) so both devices end with the same thing.
-// Pure: no storage, no clock (now is passed in), and the arguments are never changed. Nothing calls it yet.
+// Pure: no storage, no clock (now is passed in), and the arguments are never changed. The sync engine (synclink.js) calls it.
 // Rules for every store: nothing on either side is lost unless the other side removed it later than its newest
 // change; ties and copies with no times go to remote (the server's copy), so every device ends the same;
 // removal records older than 180 days are dropped. Tested in test/sync.test.cjs.
@@ -3274,7 +3353,7 @@ var Sync = (function () {
   var PREF_FIELDS = ['rate', 'arate', 'autoNext', 'goal']; // shared prefs, plus each entry of prefs.rates
   var AUDIO_FILL = ['url', 'title', 'podcast', 'image', 'source'];
   // Fields that stay on their device: left as local's, and not compared by same()
-  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved'], marks: ['saved'] };
+  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved', 'auto'], marks: ['saved'] };
 
   function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
   function obj(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
@@ -3438,7 +3517,10 @@ var Sync = (function () {
       // device (no time, so the untick wins) comes out the same as it would against any other copy
       var c = ca[pid] && cb[pid] ? mergeCourse(ca[pid], cb[pid]) : mergeCourse(ca[pid] || cb[pid], ca[pid] || cb[pid]);
       // Removed on a device after its last change there: it goes, and its ticks are kept for a re-add
-      if (has(removedAt, pid) && removedAt[pid] > newest(c)) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
+      // A course with no change time at all (the seed list's, untouched) goes too when a copy holds it as removed,
+      // even by a removal with no time: Mo removed it, and nobody has done anything with it since
+      var t = newest(c);
+      if ((has(removedAt, pid) && removedAt[pid] > t) || (!t && has(removed, pid))) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
       courses[pid] = c;
     });
     Object.keys(courses).forEach(function (pid) {
@@ -3507,12 +3589,307 @@ var Sync = (function () {
     Object.keys(x).forEach(function (k) { if ((DEVICE[kind] || []).indexOf(k) < 0) o[k] = x[k]; });
     return o;
   }
-  function same(x, y, kind) { return JSON.stringify(canon(shared(x, kind))) === JSON.stringify(canon(shared(y, kind))); }
+  function canonText(x, kind) { return JSON.stringify(canon(shared(x, kind))); }
+  function same(x, y, kind) { return canonText(x, kind) === canonText(y, kind); }
+
+  // An empty copy of a store, for "Replace" (this device ends as the shelf is). With from, the device-only fields
+  // of that copy stay (for prefs: everything that isn't shared).
+  function empty(kind, from) {
+    var o = kind === 'videos' ? { items: {}, gone: { v: {} } } : kind === 'library' ? { sections: [], sources: {} }
+      : kind === 'courses' ? { courses: {} } : kind === 'marks' ? { items: [] } : {};
+    from = obj(clone(from));
+    if (kind === 'prefs') { var sh = PREF_FIELDS.concat(['rates', 'at']); Object.keys(from).forEach(function (k) { if (sh.indexOf(k) < 0) o[k] = from[k]; }); }
+    else (DEVICE[kind] || []).forEach(function (k) { if (has(from, k)) o[k] = from[k]; });
+    return o;
+  }
 
   return { mergeVideos: mergeVideos, mergeAudio: mergeAudio, mergeLibrary: mergeLibrary, mergeCourses: mergeCourses, mergeMarks: mergeMarks, mergePrefs: mergePrefs,
-    same: same, KEEP: KEEP, PREF_FIELDS: PREF_FIELDS };
+    same: same, canon: canonText, empty: empty, KEEP: KEEP, PREF_FIELDS: PREF_FIELDS, DEVICE: DEVICE };
 })();
 if (typeof module !== 'undefined') module.exports = Sync;
+</script>
+<script>// Device sync: keeps this device's six stores the same as the shelf kept on the sync store (sync-server/), using the
+// merges in sync.js. Everything is scrambled on the device before it leaves (AES-GCM, with a key only the devices
+// hold; the store gets an id and a token made from it, never the key). The engine touches the outside only through
+// io, so node tests can run several of them against the real store (test/synclink.test.cjs). It never throws into
+// the app: every failure ends as lastErr, and a failed check changes nothing on the device.
+var SyncLink = (function () {
+  var LINK = 'shelf.sync.link';
+  var DOCS = ['videos', 'audio', 'library', 'courses', 'marks', 'prefs'];
+  var MERGE = { videos: 'mergeVideos', audio: 'mergeAudio', library: 'mergeLibrary', courses: 'mergeCourses', marks: 'mergeMarks', prefs: 'mergePrefs' };
+  var WORDS = { videos: 'spots', audio: 'podcast places', library: 'channels', courses: 'course ticks', marks: 'marks', prefs: 'speeds' };
+  var SLOW = { videos: 90000, audio: 90000 }; // spots change all the time while something plays
+  var QUIET = 8000; // other stores go 8 s after their last change
+  var TRIES = 3; // puts that meet another device's newer copy, in one check
+  var HEX64 = /^[0-9a-f]{64}$/;
+
+  function Stop(msg) { this.msg = msg; } // ends a check: with msg it is recorded, without it the check just ends
+
+  // ----- Small helpers -----
+  function hex(b) { var s = ''; for (var i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16); return s; }
+  function utf8(s) { return new TextEncoder().encode(s); }
+  function b64(b) { var s = ''; for (var i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); }
+  function unb64(s) { var t = atob(s), b = new Uint8Array(t.length); for (var i = 0; i < t.length; i++) b[i] = t.charCodeAt(i); return b; }
+  // A short checksum of a text (two 32-bit hashes)
+  function sum(s) {
+    var h1 = 0xdeadbeef ^ s.length, h2 = 0x41c6ce57 ^ s.length;
+    for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16) + '.' + (h1 >>> 0).toString(16);
+  }
+  function errFor(status) {
+    if (!status) return "Couldn't reach the sync store. Check your internet.";
+    if (status === 403) return "The sync store doesn't know this device's link any more. Turn sync off, then join again.";
+    if (status === 507) return 'The sync store is full.';
+    return 'The sync store had a problem (' + status + ').';
+  }
+
+  // io: see the top of this file and test/synclink.test.cjs
+  function create(io) {
+    var CS = 'CompressionStream' in io ? io.CompressionStream : typeof CompressionStream !== 'undefined' ? CompressionStream : null;
+    var DS = 'DecompressionStream' in io ? io.DecompressionStream : typeof DecompressionStream !== 'undefined' ? DecompressionStream : null;
+    var rec = readRec(), keys = null, gen = 0, busy = false, running = null, again = false, force = false;
+    var touchedAt = {}, pushedAt = {};
+
+    function changed() { try { if (io.changed) io.changed(); } catch (e) {} }
+    // The one record: { key, joined, docs: { name: { ver, sum } }, lastOk, lastErr, errSince }
+    function readRec() {
+      var r = null;
+      try { r = JSON.parse(io.get(LINK) || 'null'); } catch (e) { r = null; }
+      if (!r || typeof r !== 'object' || !HEX64.test(r.key || '')) return null;
+      r.docs = r.docs && typeof r.docs === 'object' ? r.docs : {};
+      return r;
+    }
+    function saveRec(r) { if (r === rec) { try { io.set(LINK, JSON.stringify(r)); } catch (e) {} } }
+    function cannot() {
+      if (!io.subtle || !io.random || !CS || !DS) return "This device can't sync: its browser is too old for it. Update it, then try again.";
+      return '';
+    }
+
+    // ----- Scrambling -----
+    function sha(text) { return io.subtle.digest('SHA-256', utf8(text)).then(function (b) { return new Uint8Array(b); }); }
+    // The shelf id and token (what the store sees) and the AES key (what it never sees), all from the shelf key
+    function derive(key) {
+      return Promise.all([sha('shelf sync id:' + key), sha('shelf sync token:' + key), sha('shelf sync aes:' + key)]).then(function (h) {
+        return io.subtle.importKey('raw', h[2], { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']).then(function (aes) { return { key: key, id: hex(h[0]), token: hex(h[1]), aes: aes }; });
+      });
+    }
+    function keysFor(key) {
+      if (!keys || keys.key !== key) {
+        var p = derive(key), mine = keys = { key: key, p: p };
+        p.then(null, function () { if (keys === mine) keys = null; });
+      }
+      return keys.p;
+    }
+    function pipe(bytes, stream) { return new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer().then(function (b) { return new Uint8Array(b); }); }
+    // 'z1:' + base64(iv + AES-GCM(gzip(text))); the doc's name is bound in, so one doc can't stand in for another
+    function seal(k, doc, text) {
+      var iv = io.random(12);
+      return pipe(utf8(text), new CS('gzip')).then(function (z) { return io.subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: utf8(doc) }, k.aes, z); }).then(function (c) {
+        var b = new Uint8Array(12 + c.byteLength); b.set(iv, 0); b.set(new Uint8Array(c), 12);
+        return 'z1:' + b64(b);
+      });
+    }
+    function open(k, doc, body) {
+      return Promise.resolve().then(function () {
+        if (typeof body !== 'string' || body.slice(0, 3) !== 'z1:') throw new Error('not ours');
+        var b = unb64(body.slice(3));
+        if (b.length < 29) throw new Error('short');
+        return io.subtle.decrypt({ name: 'AES-GCM', iv: b.subarray(0, 12), additionalData: utf8(doc) }, k.aes, b.subarray(12));
+      }).then(function (z) { return pipe(new Uint8Array(z), new DS('gzip')); }).then(function (t) { return JSON.parse(new TextDecoder().decode(t)); });
+    }
+
+    // ----- Talking to the store -----
+    // Resolves { status, json }; status 0 when the store couldn't be reached. Nothing goes out once sync is off.
+    function call(g, k, msg) {
+      if (g !== gen) return Promise.reject(new Stop());
+      msg.v = 1; msg.shelf = k.id; msg.token = k.token;
+      return Promise.resolve().then(function () { return io.post(io.url, JSON.stringify(msg)); }).then(function (r) {
+        var j = null; try { j = JSON.parse(r && r.text); } catch (e) { j = null; }
+        return { status: (r && +r.status) || 0, json: j && typeof j === 'object' ? j : null };
+      }, function () { return { status: 0, json: null }; }).then(function (r) { if (g !== gen) throw new Stop(); return r; });
+    }
+
+    // ----- One merge, in one synchronous stretch: nothing Mo does can land between the read and the adopt -----
+    function take(r, d, remote, ver, mode) {
+      var now = io.now(), doc = io.docs[d], local = doc.read(), base = local;
+      if (mode === 'replace') base = Sync.empty(d, local);
+      else if (mode === 'add' && d === 'courses') base = tickedNow(local, now);
+      var merged = Sync[MERGE[d]](base, remote, now);
+      if (!Sync.same(merged, local, d)) doc.adopt(merged);
+      r.docs[d] = { ver: ver, sum: sum(Sync.canon(remote, d)) };
+      return !Sync.same(merged, remote, d);
+    }
+    // Joining with Add counts as ticking now every tick this device has with no time, so an older untick elsewhere can't
+    // take it away. Not the ones the seed list made here (auto): they stay untimed, so an untick made elsewhere wins.
+    function tickedNow(local, now) {
+      var c = JSON.parse(JSON.stringify(local || {})), all = c.courses && typeof c.courses === 'object' ? c.courses : {};
+      var auto = c.auto && typeof c.auto === 'object' ? c.auto : {};
+      Object.keys(all).forEach(function (pid) {
+        var x = all[pid], au = auto[pid] && typeof auto[pid] === 'object' ? auto[pid] : {};
+        if (!x || typeof x !== 'object' || !x.ticks || typeof x.ticks !== 'object') return;
+        Object.keys(x.ticks).forEach(function (v) {
+          if (x.ticks[v] !== 1 || (x.onAt && x.onAt[v] != null) || au[v]) return;
+          x.onAt = x.onAt && typeof x.onAt === 'object' ? x.onAt : {}; x.onAt[v] = now;
+        });
+      });
+      return c;
+    }
+    function due(d, now) { return SLOW[d] ? !(pushedAt[d] > now - SLOW[d]) : !(touchedAt[d] > now - QUIET); }
+
+    // One check: get what changed, merge it in, put back what differs. pre: a get already made (join), mode: join's first merge.
+    function once(pre, mode) {
+      var r = rec, g = gen, f = force, k;
+      if (!r) return Promise.resolve();
+      force = false; busy = true; changed();
+      var differs = {}, big = [];
+      return keysFor(r.key).then(function (kk) {
+        k = kk;
+        if (pre) return pre;
+        var known = {};
+        DOCS.forEach(function (d) { var x = r.docs[d]; if (x && x.ver) known[d] = x.ver; });
+        return call(g, k, { op: 'get', docs: known }).then(function (res) {
+          // No shelf there (made only by a first put): everything goes up again
+          if (res.status === 404) { r.docs = {}; return { names: [], plain: [], got: {} }; }
+          if (res.status !== 200 || !res.json || !res.json.docs || typeof res.json.docs !== 'object') throw new Stop(errFor(res.status));
+          return unpack(k, res.json.docs);
+        });
+      }).then(function (got) {
+        if (g !== gen) throw new Stop();
+        got.names.forEach(function (d, i) { differs[d] = take(r, d, got.plain[i], got.got[d].ver, mode); });
+        saveRec(r);
+        var now = io.now();
+        var todo = DOCS.filter(function (d) {
+          var x = r.docs[d];
+          var need = !x || !x.ver || differs[d] || sum(Sync.canon(io.docs[d].read(), d)) !== x.sum;
+          return need && (f || due(d, now));
+        });
+        return todo.reduce(function (p, d) { return p.then(function () { return put(r, g, k, d, 0, big); }); }, Promise.resolve());
+      }).then(function () {
+        if (g !== gen) return;
+        if (big.length) throw new Stop('Too much to sync (' + big.map(function (d) { return WORDS[d]; }).join(', ') + ')');
+        r.lastOk = io.now(); r.lastErr = ''; r.errSince = 0; saveRec(r);
+      }).catch(function (e) {
+        if (g !== gen) return;
+        if (f) force = true; // a first check that failed still pushes everything next time
+        r.lastErr = e instanceof Stop ? e.msg || '' : "Sync stopped on something unexpected. It tries again by itself.";
+        if (!r.lastErr) return;
+        r.errSince = r.errSince || io.now(); saveRec(r);
+      }).then(function () { if (g === gen) { busy = false; changed(); } });
+    }
+    // Decrypt every doc the store sent; one that won't open stops the check before anything changes
+    function unpack(k, docs) {
+      var names = DOCS.filter(function (d) { return docs[d] && typeof docs[d] === 'object' && typeof docs[d].ver === 'number'; });
+      return Promise.all(names.map(function (d) { return open(k, d, docs[d].body); })).then(function (plain) {
+        return { names: names, plain: plain, got: docs };
+      }, function () { throw new Stop("Couldn't read what the sync store sent. Nothing was changed here."); });
+    }
+    function put(r, g, k, d, tries, big) {
+      var text = Sync.canon(io.docs[d].read(), d), x = r.docs[d] || {};
+      return seal(k, d, text).then(function (body) {
+        return call(g, k, { op: 'put', doc: d, base: x.ver || 0, body: body });
+      }).then(function (res) {
+        if (res.status === 200 && res.json && typeof res.json.ver === 'number') {
+          r.docs[d] = { ver: res.json.ver, sum: sum(text) }; pushedAt[d] = io.now(); saveRec(r); return;
+        }
+        if (res.status === 413) { big.push(d); return; }
+        if (res.status === 409 && res.json && typeof res.json.ver === 'number') {
+          // Another device got there first: merge its copy in, then put again on top of it (at most 3 times a check)
+          var p = res.json.body == null ? Promise.resolve(null) : open(k, d, res.json.body).catch(function () { throw new Stop("Couldn't read what the sync store sent. Nothing was changed here."); });
+          return p.then(function (remote) {
+            if (g !== gen) throw new Stop();
+            if (remote == null) r.docs[d] = { ver: 0, sum: '' };
+            else take(r, d, remote, res.json.ver, null);
+            saveRec(r);
+            if (tries >= TRIES) throw new Stop('Another device kept saving at the same moment. Trying again soon.');
+            return put(r, g, k, d, tries + 1, big);
+          });
+        }
+        throw new Stop(errFor(res.status));
+      });
+    }
+
+    // Runs fn when no check is running; a check asked for meanwhile runs once after it
+    function serial(fn) {
+      var p = (running || Promise.resolve()).then(function () { return fn(); }).then(null, function () { return { ok: false, reason: 'Something went wrong. Try again.' }; });
+      var q = p.then(function (v) {
+        if (running === q) running = null;
+        if (again && rec && !running) { again = false; return check().then(function () { return v; }); }
+        return v;
+      });
+      running = q;
+      return q;
+    }
+    function check() {
+      if (!rec) return Promise.resolve(state());
+      if (running) { again = true; return running.then(state); }
+      return serial(function () { return once(null, null); }).then(state);
+    }
+    // Leaving the page: everything that differs goes now
+    function flush() { if (!rec) return Promise.resolve(state()); force = true; return check(); }
+    function touched(doc) { touchedAt[doc] = io.now(); }
+
+    function result() { return rec && !rec.lastErr ? { ok: true } : { ok: false, reason: rec ? rec.lastErr : 'Sync is off.' }; }
+    function start() {
+      if (rec) return Promise.resolve({ ok: false, reason: 'Sync is already on here.' });
+      var why = cannot();
+      if (why) return Promise.resolve({ ok: false, reason: why });
+      return serial(function () {
+        if (rec) return { ok: false, reason: 'Sync is already on here.' };
+        var key = hex(io.random(32));
+        return Promise.resolve(io.backup()).then(function (ok) {
+          if (!ok) return { ok: false, reason: "Couldn't keep a copy of this device first, so sync didn't start." };
+          gen++; rec = { key: key, joined: io.now(), docs: {} }; saveRec(rec); force = true; changed();
+          return once(null, null).then(result);
+        });
+      });
+    }
+    function join(key, mode) {
+      key = String(key || '').trim().toLowerCase();
+      if (!HEX64.test(key)) return Promise.resolve({ ok: false, reason: "That link isn't complete. Copy it again on the other device." });
+      if (rec && rec.key === key) return check().then(function () { return { ok: true, same: true }; });
+      var why = cannot();
+      if (why) return Promise.resolve({ ok: false, reason: why });
+      mode = mode === 'replace' ? 'replace' : 'add';
+      return serial(function () {
+        var g0 = gen, k;
+        return derive(key).then(function (kk) {
+          k = kk;
+          return call(g0, k, { op: 'get', docs: {} });
+        }).then(function (res) {
+          if (res.status === 404) return { ok: false, reason: "That link doesn't match a shelf." };
+          if (res.status !== 200 || !res.json || !res.json.docs || typeof res.json.docs !== 'object') return { ok: false, reason: errFor(res.status) };
+          return unpack(k, res.json.docs).then(function (got) {
+            return Promise.resolve(io.backup()).then(function (ok) {
+              if (!ok) return { ok: false, reason: "Couldn't keep a copy of this device first, so it didn't join." };
+              if (g0 !== gen) return { ok: false, reason: 'Sync changed meanwhile. Try again.' };
+              gen++; keys = { key: key, p: Promise.resolve(k) };
+              rec = { key: key, joined: io.now(), docs: {} }; saveRec(rec); force = true; changed();
+              return once(got, mode).then(result);
+            });
+          });
+        }).then(null, function (e) {
+          return { ok: false, reason: e instanceof Stop ? e.msg || 'Sync changed meanwhile. Try again.' : "Couldn't join on this device. Try again." };
+        });
+      });
+    }
+    // Forgets the link; everything on the device stays. No request goes out after this.
+    function off() {
+      gen++; rec = null; keys = null; again = false; force = false; busy = false;
+      try { io.del(LINK); } catch (e) {}
+      changed();
+    }
+    function state() {
+      return { on: !!rec, busy: busy, lastOk: (rec && rec.lastOk) || 0, lastErr: (rec && rec.lastErr) || '', errSince: (rec && rec.errSince) || 0,
+        joined: (rec && rec.joined) || 0, link: rec ? (io.linkBase || '') + '#sync=' + rec.key : '' };
+    }
+
+    return { start: start, join: join, check: check, flush: flush, touched: touched, off: off, state: state };
+  }
+  return { create: create, LINK: LINK, DOCS: DOCS };
+})();
+if (typeof module !== 'undefined') module.exports = SyncLink;
 </script>
 <script>// Shelf v3 (Day Sheet): Home bands, section/channel/courses/search/marks pages, YouTube player, night player, self-check.
 (function () {
@@ -3533,12 +3910,23 @@ if (typeof module !== 'undefined') module.exports = Sync;
   var lastSaveError = '';
   // Nothing is written to the phone until the phone's own copy was read and merged, so a slow or failed
   // start can't replace good spots, ticks or channels with the web view's (possibly stale) copy
-  var guarded = function (k) { return Native.inApp && !restored && PHONE_KEYS().indexOf(k) >= 0; };
+  var guarded = function (k) { return Native.inApp && !restored && (PHONE_KEYS().indexOf(k) >= 0 || k === LINK_KEY); };
   var PHONE_KEYS = function () { return [KEY, PREF, AKEY, Library.KEY, Courses.KEY, Marks.KEY, AI.KEY]; };
   function rawSet(k, s, mirror) {
+    if (holdWrites) return true; // putting the device back from its backup: nothing else is written before the reload
+    var sd = syncDoc(k); if (sd && syncEng && !syncAdopting) syncTouched(sd);
     if (mirror !== false && !guarded(k)) Native.prefSet(k, s);
     if (!canSave) { mem[k] = s; return Native.inApp; }
     try { localStorage.setItem(k, s); lastSaveError = ''; return true; } catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
+  }
+  // Forgets a key here and on the phone (the phone keeps the word null, which a restore ignores). The sync link goes
+  // from the phone even before its copy was read: a link left there would turn sync back on at the next start.
+  var linkGone = false;
+  function rawDel(k) {
+    if (holdWrites) return;
+    delete mem[k]; try { localStorage.removeItem(k); } catch (e) {}
+    if (k === LINK_KEY) linkGone = true;
+    if (!guarded(k) || k === LINK_KEY) Native.prefSet(k, 'null');
   }
   function load(k, d) { try { var v = JSON.parse(rawGet(k) || 'null'); return v && typeof v === 'object' ? v : d; } catch (e) { return d; } }
   function store(k, v) { return rawSet(k, JSON.stringify(v)); }
@@ -3572,6 +3960,9 @@ if (typeof module !== 'undefined') module.exports = Sync;
   }
   // Videos taken off the shelf, and when, so another device's copy can't bring them back (sync.js). Kept in the web view only.
   var GKEY = 'shelf.sync.gone';
+  // Device sync: the store each key belongs to (synclink.js syncs six), the link record and the backup made before the first sync
+  var LINK_KEY = 'shelf.sync.link', BACKUP_KEY = 'shelf.sync.backup';
+  function syncDoc(k) { return k === KEY || k === GKEY ? 'videos' : k === AKEY ? 'audio' : k === Library.KEY ? 'library' : k === Courses.KEY ? 'courses' : k === Marks.KEY ? 'marks' : k === PREF ? 'prefs' : ''; }
   function markGone(id, on) {
     var g = load(GKEY, {});
     g.v = g.v && typeof g.v === 'object' ? g.v : {};
@@ -4129,7 +4520,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
   // A pasted link in Search plays (or adds) instead of searching
   function isLinkish(q) {
     if (!q) return false;
-    if (/#shelf=/.test(q) || Courses.playlistId(q)) return true;
+    if (/#shelf=|#sync=/.test(q) || Courses.playlistId(q)) return true;
     // "hypokalemia" is 11 letters like a video id: only a real link counts
     if (/youtu\.?be|youtube\.com|^https?:\/\//i.test(q) && Core.findLinks(q).length) return true;
     var c = Feeds.parseChannelInput(q);
@@ -4717,7 +5108,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
   function unlinkPodVideo(guid, old, keep) {
     var ov = old && old !== keep && videos[old];
     if (!ov || ov.ep !== guid) return;
-    if (ov.guessed) { delete videos[old]; markGone(old, true); } else delete ov.ep;
+    if (ov.guessed) { delete videos[old]; markGone(old, true); } else { delete ov.ep; ov.updated = Date.now(); }
     saveVideos();
   }
   function startPodVideo(ep, id, guess) {
@@ -5452,6 +5843,8 @@ if (typeof module !== 'undefined') module.exports = Sync;
     text = String(text || '').trim();
     var shelf = text.match(/#shelf=([A-Za-z0-9_-]+)/);
     if (shelf) { importShelf(shelf[1]); renderAll(); return true; }
+    var sl = text.match(/#sync=([0-9a-f]{64})/);
+    if (sl) { openSyncJoin(sl[1]); return true; }
     var found = Core.findLinks(text), pl = Courses.playlistId(text);
     if (pl && !found.length) { openCourseAdd(text); return true; }
     if (found.length === 1) {
@@ -5472,6 +5865,9 @@ if (typeof module !== 'undefined') module.exports = Sync;
   // A YouTube link that YouTube sent here (the Chrome extension puts it after #open=): a video plays, a playlist opens its
   // page, anything else is ignored quietly. The address is cleared so a reload doesn't open it again.
   function openIncoming() {
+    // A sync link (Copy link for another device): asks whether to join, then the address is cleared
+    var sm = location.hash.match(/^#sync=([0-9a-f]{64})/);
+    if (sm) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} openSyncJoin(sm[1]); return; }
     var m = location.hash.match(/^#open=(.+)$/); if (!m) return;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     var url = m[1];
@@ -5766,7 +6162,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
     cs.tick(cid, vid, on);
     var v = videos[vid];
     if (v && on && !v.done) { v.done = true; v.updated = Date.now(); saveVideos(); }
-    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; saveVideos(); } // keeps a half-watched spot
+    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; v.updated = Date.now(); saveVideos(); } // keeps a half-watched spot
     renderAll();
   }
   function playEp(cid, vid) {
@@ -6379,7 +6775,8 @@ if (typeof module !== 'undefined') module.exports = Sync;
       case 'remove-video':
         var gone = videos[id]; delete videos[id]; markGone(id, true); saveVideos(); renderAll();
         if (!Object.keys(videos).some(function (k) { return !entryFromVideo(videos[k]).section; }) && stack.length && stack[stack.length - 1].name === 'pasted') back();
-        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; markGone(id, false); saveVideos(); renderAll(); } });
+        // An Undo is a change of its own: it must beat the removal once that has reached the other devices
+        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; gone.updated = Date.now(); markGone(id, false); saveVideos(); renderAll(); } });
         break;
       case 'close-video': closeVideo(); break;
       case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
@@ -6462,6 +6859,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
       case 'look-set': prefs.look = id; savePrefs(); applyLook(); fillLook(); break;
       case 'look-here': lookHere(); break;
       case 'dismiss': var d = b.closest('dialog'); if (d) d.close(); break;
+      case 'sync-open': case 'sync-close': case 'sync-start': case 'sync-join': case 'sync-copy': case 'sync-off': case 'sync-back': syncAct(act, b); break;
       case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
       case 'key-remove': delete prefs.apiKey; savePrefs(); $('#keyInput').value = ''; $('#keyMsg').textContent = 'Removed. Search reads YouTube\'s results page.'; $('#keyMsg').className = 'msgline ok'; break;
       case 'send': copyShelf(b); break;
@@ -6794,6 +7192,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
       if (ytOut) out.push({ ok: 0, text: "YouTube isn't signed in in this browser, so Shelf can't see your watch history, subscriptions or playlists. Sign in again to fix it.", fix: 'yt-again' });
       else if (lastYT) out.push({ ok: 1, text: 'Last in YouTube: ' + (lastYT.title || lastYT.id) });
     }
+    var sy = syncLine(); if (sy) out.push(sy);
     var n = Object.keys(videos).length + Object.keys(arec).length, ch = lib.sources().length;
     out.push({ ok: 1, text: ch + ' channel' + (ch === 1 ? '' : 's') + ' in ' + lib.sections().length + ' sections, ' + n + ' saved spot' + (n === 1 ? '' : 's') + ', kept ' + (Native.inApp ? 'on this phone' : 'in this browser') });
     return out;
@@ -6835,6 +7234,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
     var ya = Native.ytAccount.state, signIn = Native.inApp && ya !== 'old', acts = '';
     if (Native.inApp) acts += '<button type="button" class="ghost" id="toneBtn" data-act="tone">' + (Native.tonePlaying ? 'Stop the sound test' : 'Sound test') + '</button>';
     acts += '<button type="button" class="ghost" id="sendBtn" data-act="send">Copy shelf link</button>';
+    acts += '<button type="button" class="ghost" id="syncBtn" data-act="sync-open">Sync devices</button>';
     if (Native.yt) acts += '<button type="button" class="ghost" data-act="yt-report">Copy YouTube report for Claude</button>';
     if (signIn && ya === 'in') acts += '<button type="button" class="ghost" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : 'Sign out of YouTube') + '</button>';
     $('#checkActs').innerHTML = acts;
@@ -6876,6 +7276,182 @@ if (typeof module !== 'undefined') module.exports = Sync;
     } catch (e) { toast('That shelf link looks broken. Make a new one with Copy shelf link.', 'warn'); }
   }
 
+  // ---------- Device sync (synclink.js holds the engine, sync.js the merges) ----------
+  // Off until Mo starts it. Then the six stores go to the sync store, scrambled on the device, and come back merged
+  // with his other devices' copies. With sync off nothing is ever sent.
+  var SYNC_URL = 'https://shelf-sync.pages.dev/api/sync';
+  var syncEng = null, syncAdopting = false, syncTimer = null, syncView = null, syncMsg = '', syncSure = false, holdWrites = false;
+  function hhmm(t) { var d = new Date(t); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  function dayTime(t) { var d = new Date(t); return d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3) + ', ' + hhmm(t); }
+  // Refills a map in place: records already there stay the same objects
+  function inPlace(into, from) {
+    from = from && typeof from === 'object' ? from : {};
+    Object.keys(into).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(from, k)) delete into[k]; });
+    Object.keys(from).forEach(function (k) {
+      var o = into[k];
+      if (o && typeof o === 'object' && from[k] && typeof from[k] === 'object') { Object.keys(o).forEach(function (x) { delete o[x]; }); Object.assign(o, from[k]); } else into[k] = from[k];
+    });
+  }
+  // A merged copy goes in with no new times (the stores' own adopt), then Home draws again the soft way
+  function adopting(doc, fn) {
+    return function (m) {
+      syncAdopting = true;
+      try { fn(m); } finally { syncAdopting = false; }
+      syncAfter(doc);
+    };
+  }
+  function syncAfter(doc) {
+    if (doc === 'library' && feedsOn) lib.sources().forEach(function (s) { if (!lib.status(s.id)) lib.refresh(s.id).then(function () { lib.saveCache(); renderSoon(); }); });
+    if (doc === 'courses' && (feedsOn || prefs.apiKey)) cs.list().forEach(function (c) { if (!cs.items(c.id).length && !cs.status(c.id).loading) cs.load(c.id).then(function () { renderSoon(); }); });
+    renderSoon();
+  }
+  function adoptPrefs(m) {
+    m = m || {};
+    Sync.PREF_FIELDS.concat(['rates', 'at']).forEach(function (k) { if (Object.prototype.hasOwnProperty.call(m, k)) prefs[k] = m[k]; else delete prefs[k]; });
+    store(PREF, prefs); prefSnap = prefShared(prefs); // taken again, so the next save stamps nothing it didn't change
+    applyGoal();
+    if (current && videos[current]) { wantRate = rateFor(videos[current]); renderRateUI(); }
+    var ast = engine && engine.state(); if (ast && ast.episode) engine.setRate(podRate(ast.episode.guid));
+  }
+  function syncDocs() {
+    return {
+      videos: { read: function () { return { items: videos, gone: load(GKEY, {}) }; },
+        adopt: adopting('videos', function (m) { inPlace(videos, m.items); rawSet(GKEY, JSON.stringify(m.gone || { v: {} }), false); saveVideos(); }) },
+      audio: { read: function () { return arec; }, adopt: adopting('audio', function (m) { inPlace(arec, m); saveAudio(); }) },
+      library: { read: function () { return lib.exportState(); }, adopt: adopting('library', function (m) { lib.adopt(m); }) },
+      courses: { read: function () { return cs.exportState(); }, adopt: adopting('courses', function (m) { cs.adopt(m); }) },
+      marks: { read: function () { return marks.exportState(); }, adopt: adopting('marks', function (m) { marks.adopt(m); }) },
+      prefs: { read: function () { return prefs; }, adopt: adopting('prefs', adoptPrefs) }
+    };
+  }
+  // In the iPhone app a plain fetch to another site never comes back to the page (the app routes it through its own
+  // address), so it goes the native way, as JSON (the store takes either). Everywhere else: a plain fetch.
+  function syncPost(url, text) {
+    var p = Native.inApp ? Native.httpPost(url, JSON.parse(text), { 'Content-Type': 'application/json' })
+      : fetch(url, { method: 'POST', body: text, headers: { 'Content-Type': 'text/plain' } }).then(function (r) { return r.text().then(function (t) { return { status: r.status, text: t }; }); });
+    return withTimeout(p, 30000, 'slow').then(function (r) { return { status: r.status, text: r.text }; });
+  }
+  // Before a device's first sync: one copy of everything it holds, here and on the phone. True if either took it.
+  function syncBackup() {
+    var keys = {}; PHONE_KEYS().concat([GKEY]).forEach(function (k) { keys[k] = rawGet(k); });
+    var s = JSON.stringify({ at: Date.now(), keys: keys }), web = false;
+    if (canSave) { try { localStorage.setItem(BACKUP_KEY, s); web = localStorage.getItem(BACKUP_KEY) === s; } catch (e) { web = false; } }
+    if (!Native.inApp) return web;
+    return Native.call('Preferences', 'set', { key: BACKUP_KEY, value: s }).then(function () { return true; }, function () { return web; });
+  }
+  function backupOf(s) { var b = parseOr(s, null); return b && b.at > 0 && b.keys && typeof b.keys === 'object' ? b : null; }
+  var phoneBackup = null;
+  function readBackup() {
+    var b = backupOf(rawGet(BACKUP_KEY));
+    if (b || !Native.inApp) return Promise.resolve(b);
+    return Native.prefGet(BACKUP_KEY).then(backupOf, function () { return null; });
+  }
+  // Put this device back: sync off, every backed-up key written back (here and on the phone), then a fresh start
+  function putBack() {
+    readBackup().then(function (b) {
+      if (!b) { toast("Couldn't find the copy of this device.", 'warn'); return; }
+      syncEng.off();
+      capture(true);
+      var keys = PHONE_KEYS().concat([GKEY]).filter(function (k) { return Object.prototype.hasOwnProperty.call(b.keys, k); });
+      holdWrites = true;
+      var writeWeb = function () { keys.forEach(function (k) { var v = b.keys[k]; try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} if (v == null) delete mem[k]; else mem[k] = v; }); };
+      writeWeb();
+      // The phone's copies too, after any save still on its way there, so the restore at start finds the same
+      var phone = !Native.inApp ? Promise.resolve() : new Promise(function (res) { setTimeout(res, 450); }).then(function () {
+        return Promise.all(keys.filter(function (k) { return k !== GKEY; }).map(function (k) {
+          var v = b.keys[k];
+          return (v == null ? Native.call('Preferences', 'remove', { key: k }) : Native.call('Preferences', 'set', { key: k, value: v })).catch(function () {});
+        }).concat([Native.call('Preferences', 'set', { key: LINK_KEY, value: 'null' }).catch(function () {})]));
+      });
+      toast('Putting this device back as it was…');
+      phone.then(function () { writeWeb(); setTimeout(function () { location.reload(); }, 300); });
+    });
+  }
+  function syncChanged() { if ($('#syncDlg').open) fillSync(); if ($('#checkDlg').open) fillCheck(); }
+  function syncTouched(doc) {
+    syncEng.touched(doc);
+    if (!syncEng.state().on) return;
+    clearTimeout(syncTimer); syncTimer = setTimeout(syncCheck, 8100); // the engine pushes a store 8 s after its last change
+  }
+  function syncCheck() { return syncEng && syncEng.state().on ? syncEng.check().then(updateDot) : Promise.resolve(); }
+  // The self-check's line, only while sync is on
+  function syncLine() {
+    var st = syncEng && syncEng.state(); if (!st || !st.on) return null;
+    var offline = navigator.onLine === false;
+    if (st.lastErr && Date.now() - st.errSince >= 5 * 60000 && !offline) return { ok: 0, text: 'Sync has not worked since ' + hhmm(st.lastOk || st.errSince) + ': ' + st.lastErr.replace(/\.$/, '') + '. Your changes are safe on this device.' };
+    if (st.lastErr || !st.lastOk) return { ok: 2, text: 'Sync: checking…' };
+    return { ok: 1, text: 'Sync: up to date, checked ' + hhmm(st.lastOk) };
+  }
+  function syncCounts() {
+    var ticked = 0;
+    cs.list().forEach(function (c) { Object.keys(c.ticks || {}).forEach(function (v) { if (c.ticks[v] === 1) ticked++; }); });
+    return { ch: lib.sources().length, ticked: ticked };
+  }
+  function fillSync() {
+    var st = syncEng.state(), h = '', msg = syncMsg ? '<div class="msgline err" role="status">' + esc(syncMsg) + '</div>' : '';
+    if (syncView === 'busy') h = '<p class="syncst" role="status"><b>Checking…</b></p>';
+    else if (syncView && syncView.join) {
+      var n = syncCounts();
+      h = '<p>Join your shelf on this device? It has ' + n.ch + ' channel' + (n.ch === 1 ? '' : 's') + ' and ' + n.ticked + ' ticked episode' + (n.ticked === 1 ? '' : 's') + ' of its own.</p>' + msg +
+        '<button type="button" class="primary" data-act="sync-join" data-id="add">Add them to my shelf</button>' +
+        '<p class="small">For a device you already use Shelf on.</p>' +
+        '<button type="button" class="ghost" data-act="sync-join" data-id="replace">Replace them with my shelf</button>' +
+        '<p class="small">For a new device, or one with nothing worth keeping. A copy is kept first.</p>' +
+        '<button type="button" class="ghost" data-act="sync-close">Not now</button>';
+    } else if (!st.on) {
+      h = '<p>Keep this device the same as your others: channels, sections, spots, course ticks, marks and speeds.</p>' + msg +
+        '<button type="button" class="primary" data-act="sync-start">Start sync here</button>' +
+        '<p class="small">Already started on another device? Open its link on this one.</p>';
+    } else {
+      var line = st.lastErr ? st.lastErr : st.lastOk ? 'In sync · checked ' + hhmm(st.lastOk) : 'Checking…';
+      h = '<p class="syncst" role="status"><b>' + esc(line) + '</b></p>' + msg +
+        '<button type="button" class="primary" data-act="sync-copy">Copy link for another device</button>' +
+        '<button type="button" class="ghost" data-act="sync-off">Turn sync off</button>';
+      var b = backupOf(rawGet(BACKUP_KEY)) || phoneBackup;
+      if (b) h += '<button type="button" class="ghost" data-act="sync-back">' + (syncSure ? 'Tap again to put this device back as it was on ' : 'Put this device back as it was on ') + esc(dayTime(b.at)) + '</button>';
+    }
+    setHTML($('#syncBody'), h);
+  }
+  function openSync() {
+    syncView = null; syncMsg = ''; syncSure = false; fillSync(); openDlg($('#syncDlg'));
+    if (!backupOf(rawGet(BACKUP_KEY)) && Native.inApp) readBackup().then(function (b) { phoneBackup = b; if ($('#syncDlg').open) fillSync(); });
+  }
+  function openSyncJoin(key) {
+    if (!syncEng) return;
+    var st = syncEng.state();
+    if (st.on && st.link.slice(-64) === key) { toast('This device is already in sync with that shelf.'); syncCheck(); return; }
+    syncView = { join: key }; syncMsg = ''; syncSure = false; fillSync(); openDlg($('#syncDlg'));
+  }
+  function syncDone(r) { syncView = null; syncMsg = r && !r.ok && !syncEng.state().on ? r.reason : ''; fillSync(); updateDot(); }
+  function syncAct(act, b) {
+    if (act === 'sync-open') { $('#checkDlg').close(); openSync(); }
+    else if (act === 'sync-close') { syncView = null; $('#syncDlg').close(); }
+    else if (act === 'sync-start') { syncView = 'busy'; syncMsg = ''; fillSync(); syncEng.start().then(syncDone); }
+    else if (act === 'sync-join') {
+      var jk = syncView && syncView.join; if (!jk) return;
+      syncView = 'busy'; syncMsg = ''; fillSync();
+      syncEng.join(jk, b.getAttribute('data-id')).then(function (r) { syncDone(r); if (r && !r.ok && syncEng.state().on) { syncMsg = r.reason; fillSync(); } });
+    }
+    else if (act === 'sync-copy') copyText(syncEng.state().link, function () { toast('Copied. Open it on the other device. In the Shelf app, paste it into Search. Anyone with this link can read your shelf, so send it only to yourself.', '', null, 10000); });
+    else if (act === 'sync-off') { syncEng.off(); syncMsg = ''; syncSure = false; fillSync(); updateDot(); toast('Sync is off on this device. Everything here stays.'); }
+    else if (act === 'sync-back') { if (!syncSure) { syncSure = true; fillSync(); return; } syncSure = false; putBack(); }
+  }
+  function syncBoot() {
+    syncEng = SyncLink.create({
+      get: rawGet, set: function (k, s) { rawSet(k, s); }, del: rawDel, post: syncPost, now: function () { return Date.now(); },
+      subtle: window.crypto && window.crypto.subtle, random: function (n) { return window.crypto.getRandomValues(new Uint8Array(n)); },
+      CompressionStream: window.CompressionStream, DecompressionStream: window.DecompressionStream,
+      url: SYNC_URL, linkBase: location.origin + location.pathname, docs: syncDocs(), backup: syncBackup, changed: syncChanged
+    });
+    $('#syncDlg').addEventListener('close', function () { syncView = null; syncSure = false; });
+    // When checks run: now (the restore at start is done), coming back to the page, back online, every 20 s while
+    // visible, and 8 s after a change (syncTouched). Leaving the page: everything that differs goes at once.
+    syncCheck();
+    setInterval(function () { if (document.visibilityState === 'visible') syncCheck(); }, 20000);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') syncCheck(); else if (syncEng.state().on) syncEng.flush(); });
+    window.addEventListener('online', syncCheck);
+  }
+
   // ---------- Start ----------
   var restored = false, restoreFailed = false;
   function parseOr(s, bad) { try { var v = JSON.parse(s); return v && typeof v === 'object' ? v : bad; } catch (e) { return bad; } }
@@ -6890,7 +7466,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
   }
   function restoreFromPhone(wait) {
     if (!Native.inApp) return Promise.resolve();
-    var keys = PHONE_KEYS();
+    var keys = PHONE_KEYS().concat([LINK_KEY]);
     wait = wait || 2000;
     return withTimeout(Promise.all(keys.map(Native.prefGet)), wait, 'slow').then(function (r) {
       // Read and check everything first; a damaged phone record is ignored (the web copy then replaces it).
@@ -6906,6 +7482,9 @@ if (typeof module !== 'undefined') module.exports = Sync;
         if (ph[4]) { var lc = load(Courses.KEY, null); if (!lc || (ph[4].saved || 0) > (lc.saved || 0)) writes.push([Courses.KEY, r[4]]); }
         if (ph[5]) { var lm = load(Marks.KEY, null); if (!lm || (ph[5].saved || 0) > (lm.saved || 0)) writes.push([Marks.KEY, r[5]]); }
         if (ph[6]) { var lg = load(AI.KEY, null); if (!lg || (ph[6].saved || 0) > (lg.saved || 0)) writes.push([AI.KEY, r[6]]); }
+        // The sync link, when the web view lost it. Its versions are dropped, so the first check takes every store
+        // from the sync store and merges it before anything is put back (the data here came from the phone too)
+        if (ph[7] && /^[0-9a-f]{64}$/.test(ph[7].key || '') && !rawGet(LINK_KEY) && !linkGone) { var lk = ph[7]; lk.docs = {}; writes.push([LINK_KEY, JSON.stringify(lk)]); }
         writes.forEach(function (w) { rawSet(w[0], w[1], false); });
         restored = true; restoreFailed = false;
       } catch (e) { restoreFailed = true; }
@@ -6915,9 +7494,10 @@ if (typeof module !== 'undefined') module.exports = Sync;
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one.
+    // Shelf's own fix, not Mo's change, so it gets no time (made before the snapshot, saved with no stamp)
+    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; store(PREF, prefs); }
     prefSnap = prefShared(prefs);
-    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one
-    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; savePrefs(); }
     applyGoal(); applyLook();
     lib = Library.create({
       load: rawGet,
@@ -6933,7 +7513,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
     });
     // Keep the phone's copy complete even before anything changes
     // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
-    if (Native.inApp && restored) PHONE_KEYS().forEach(function (k) { var v = rawGet(k); if (v) Native.prefSet(k, v); });
+    if (Native.inApp && restored) PHONE_KEYS().concat([LINK_KEY]).forEach(function (k) { var v = rawGet(k); if (v) Native.prefSet(k, v); });
     marks = Marks.create({ load: rawGet, save: function (k, v) { rawSet(k, v); } });
     ai = AI.create({ load: rawGet, save: function (k, v) { rawSet(k, v); }, now: function () { return Date.now(); }, key: function () { return aiKey; }, post: aiPost, onChange: renderAiSoon });
     if (Native.inApp) Native.prefGet(AI.KEY_PREF).then(function (k) { aiKey = k || ''; testAi(); updateDot(); if (lastRefresh) autoSummaries(); }, function () {});
@@ -6943,6 +7523,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
     var m = location.hash.match(/^#shelf=([A-Za-z0-9_-]+)/);
     if (m) { importShelf(m[1]); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
     renderHome(); renderAudio(); renderTabs();
+    syncBoot();
     openIncoming();
     loadYT();
     updateDot();
@@ -6956,7 +7537,7 @@ if (typeof module !== 'undefined') module.exports = Sync;
     refreshLastYT(true);
     watchBoot();
     // Test hook
-    window.__shelf = { renderAll: renderAll, get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
+    window.__shelf = { renderAll: renderAll, get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, get sync() { return syncEng; }, syncNow: function () { return syncEng.check(); }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
       get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, get podYt() { return podYt; }, syncTwin: syncTwin, renderHome: renderHome, push: push, get ytHist() { return ytHist; }, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did

@@ -4,7 +4,29 @@ import { chromium } from 'playwright';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import { installFakes, CAP, EXT, CHANNELS } from './fakenet.mjs';
+import { createRequire } from 'module';
+import { installFakes as fakeNet, CAP, EXT, CHANNELS } from './fakenet.mjs';
+import { onRequest as syncServer } from '../../sync-server/functions/api/sync.js';
+import { FakeD1 } from '../../sync-server/test/fake-d1.mjs';
+
+// The sync store: every context gets a route for its address, answered by the real server code over one SQLite
+// stand-in for D1, so two contexts are two devices on one store. hits counts every request (none may come while
+// sync was never started); down: every request fails as if offline.
+const SYNC_URL = 'https://shelf-sync.pages.dev/api/sync';
+const syncNet = { db: new FakeD1(), hits: 0, down: false };
+async function syncRoute(route, ctx) {
+  syncNet.hits++; ctx.syncHits = (ctx.syncHits || 0) + 1;
+  if (syncNet.down) return route.abort();
+  const rq = route.request(), method = rq.method();
+  const request = new Request(rq.url(), { method, body: method === 'POST' ? rq.postDataBuffer() : undefined, headers: { 'content-type': rq.headers()['content-type'] || 'text/plain' } });
+  const res = await syncServer({ request, env: { DB: syncNet.db } });
+  const headers = {}; res.headers.forEach((v, k) => { headers[k] = v; });
+  await route.fulfill({ status: res.status, headers, body: Buffer.from(await res.arrayBuffer()) });
+}
+async function installFakes(ctx, opts) {
+  await fakeNet(ctx, opts);
+  await ctx.route('https://shelf-sync.pages.dev/**', (r) => syncRoute(r, ctx));
+}
 
 const root = new URL('../../', import.meta.url).pathname;
 const server = http.createServer((req, res) => {
@@ -687,9 +709,10 @@ ok(/^Dark until \d{1,2}:\d\d am tomorrow, then light\.$/.test(await p.locator('#
 await p.keyboard.press('Escape');
 ok((await shelf(p, () => window.__shelf.checks().map((c) => c.text).join('|'))).includes('Look: dark by the sun, using Leeds\'s sun times'), 'D the self-check names the look and the town');
 // A goal saved with the old 30 Nov date moves to 22 Dec
-await p.evaluate(() => { const k = 'resume.prefs.v1', v = JSON.parse(localStorage.getItem(k) || '{}'); v.goal = { name: 'Step 2 CK', date: '2026-11-30' }; localStorage.setItem(k, JSON.stringify(v)); });
+await p.evaluate(() => { const k = 'resume.prefs.v1', v = JSON.parse(localStorage.getItem(k) || '{}'); v.goal = { name: 'Step 2 CK', date: '2026-11-30' }; if (v.at) delete v.at.goal; localStorage.setItem(k, JSON.stringify(v)); });
 await p.reload(); await settle(p);
 ok(await shelf(p, () => window.__shelf.prefs.goal.date) === '2026-12-22' && await shelf(p, () => window.__shelf.courses.daysLeft()) === Math.round((new Date(2026, 11, 22) - new Date(new Date().toDateString())) / 864e5), 'D an old Step 2 CK goal on 30 Nov becomes 22 Dec');
+ok(await shelf(p, () => { const v = JSON.parse(localStorage.getItem('resume.prefs.v1')); return v.goal.date === '2026-12-22' && !(v.at && v.at.goal); }), 'D ...saved, with no change time (it is Shelf\'s fix, not Mo\'s)');
 await ctx.close();
 
 console.log('\n== N Phone helpers (shells from 6 Oct 2026)');
@@ -1741,6 +1764,240 @@ await p.locator('#vRate [data-r="1.75"]').click(); await p.waitForTimeout(200);
 const stamped = await shelf(p, () => ({ live: (window.__shelf.prefs.at || {})['rates.v:UCMehlmanMedicalxxxxxxxx'], saved: (JSON.parse(localStorage.getItem('resume.prefs.v1')).at || {})['rates.v:UCMehlmanMedicalxxxxxxxx'], rate: window.__shelf.prefs.rates['v:UCMehlmanMedicalxxxxxxxx'] }));
 ok(stamped.rate === 1.75 && stamped.live >= rateT && stamped.saved === stamped.live, 'sync: changing a channel speed stamps prefs.at[\'rates.v:…\'] (and saves it): ' + JSON.stringify(stamped));
 await ctx.close();
+
+console.log('\n== Sync devices: two devices on the real sync store');
+ok(syncNet.hits === 0, 'sync never started: no request reached the sync store during the whole run before this (' + syncNet.hits + ')');
+ok(fs.readFileSync(root + 'index.html', 'utf8').includes("var SYNC_URL = '" + SYNC_URL + "';"), 'sync: the page uses the store at ' + SYNC_URL);
+{
+  const SyncM = createRequire(import.meta.url)('../src/sync.js');
+  const SDOCS = ['videos', 'audio', 'library', 'courses', 'marks', 'prefs'];
+  const docsOf = (pg) => pg.evaluate(() => { const s = window.__shelf; return { videos: { items: s.videos, gone: JSON.parse(localStorage.getItem('shelf.sync.gone') || '{}') }, audio: s.audio, library: s.lib.exportState(), courses: s.courses.exportState(), marks: s.marks.exportState(), prefs: s.prefs }; });
+  const differ = async (a, b) => { const x = await docsOf(a), y = await docsOf(b); return SDOCS.filter((d) => !SyncM.same(x[d], y[d], d)); };
+  const sstate = (pg) => pg.evaluate(() => window.__shelf.sync.state());
+  const flush = (pg) => pg.evaluate(() => window.__shelf.sync.flush().then(() => 1));
+  const checkNow = (pg) => pg.evaluate(() => window.__shelf.syncNow().then(() => 1));
+  const settleSync = async (...pgs) => { for (let i = 0; i < 3; i++) for (const pg of pgs) await flush(pg); };
+  const syncLine = (pg) => pg.evaluate(() => window.__shelf.checks().filter((c) => /^Sync/.test(c.text))[0] || null);
+  const ticked = (pg) => pg.evaluate(() => { const o = {}; window.__shelf.courses.list().forEach((c) => Object.keys(c.ticks).forEach((v) => { if (c.ticks[v] === 1) o[c.id + ':' + v] = 1; })); return o; });
+  const body = (pg) => pg.locator('#syncBody').textContent();
+  const status = (pg) => pg.locator('#syncBody .syncst').textContent().catch(() => '');
+  const waitBody = (pg, re, ms) => pg.waitForFunction((src) => new RegExp(src).test(document.querySelector('#syncBody').textContent), re.source, { timeout: ms || 15000 }).then(() => true, () => false);
+  // Self-check › More › Sync devices
+  const openSyncDlg = async (pg) => {
+    await pg.locator('#statusBtn').click(); await pg.waitForTimeout(100);
+    if (!(await pg.locator('#checkMore').evaluate((e) => e.open))) await pg.locator('#checkMore summary').click();
+    await pg.locator('#syncBtn').click(); await pg.waitForTimeout(150);
+  };
+  // Every text the dialog showed, so "Checking…" can be seen even when it is quick
+  const watchBody = (pg) => pg.evaluate(() => { window.__syncSeen = []; new MutationObserver(() => window.__syncSeen.push(document.querySelector('#syncBody').textContent)).observe(document.querySelector('#syncBody'), { childList: true, subtree: true, characterData: true }); });
+  const seen = (pg) => pg.evaluate(() => window.__syncSeen || []);
+  async function macDevice(url) {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 820 }, permissions: ['clipboard-read', 'clipboard-write'] });
+    await installFakes(c); await c.addInitScript('window.__hour = 14.13;');
+    const pg = await c.newPage();
+    pg.on('pageerror', (e) => errors.push('sync mac: ' + e.message));
+    pg.on('console', (mm) => { if (mm.type() === 'error' && !/Failed to load resource|net::ERR/.test(mm.text())) errors.push('sync mac: ' + mm.text()); });
+    await pg.goto(url || URL0); await pg.waitForTimeout(600);
+    return { c, pg };
+  }
+  const paste = async (pg, id, secs) => { await pg.evaluate((u) => window.__shelf.handleText(u), 'https://youtu.be/' + id); await pg.waitForTimeout(400); await pg.evaluate((s) => { window.__fake.advance(s); window.__shelf.capture(true); }, secs); await pg.keyboard.press('Escape'); await pg.waitForTimeout(150); };
+
+  // Device 1: the phone (the app), with Mo's channels and courses from its first run
+  ({ ctx, p } = await appPage({ ctxOpts: { permissions: ['clipboard-read', 'clipboard-write'] } }));
+  await settle(p);
+  const P = p, pctx = ctx;
+  // Device 2: a Mac browser with a pasted video and a mark of its own
+  let { c: mc, pg: M } = await macDevice();
+  await paste(M, 'macvideo01x', 100);
+  await M.evaluate(() => window.__shelf.marks.add({ vid: 'macvideo01x', title: 'Mac mark', t: 100 }));
+  const macBefore = await docsOf(M);
+
+  // Start on the phone, through the self-check
+  await openSyncDlg(P);
+  ok(await P.locator('#syncDlg[open]').count() === 1 && /Keep this device the same as your others: channels, sections, spots, course ticks, marks and speeds\./.test(await body(P)) && /Already started on another device\? Open its link on this one\./.test(await body(P)), 'sync off: Sync devices explains in one line and says how to join');
+  await watchBody(P);
+  await P.locator('#syncBody [data-act="sync-start"]').click();
+  ok(await waitBody(P, /In sync · checked \d\d:\d\d/), 'start: the dialog says ' + await status(P));
+  ok((await seen(P)).some((t) => /Checking…/.test(t)), 'start: it said Checking… first');
+  ok(await P.evaluate((u) => window.__httpCalls.filter((c) => c.url === u && c.method === 'POST').length, SYNC_URL) >= 7, 'start: the phone app talks to the store the native way (one get, six puts)');
+  await P.waitForTimeout(400); // phone writes are gathered for 300 ms
+  ok(await P.evaluate(() => !!window.__prefs['shelf.sync.link'] && !!window.__prefs['shelf.sync.backup']), 'start: the link and a backup are kept on the phone too');
+  await P.locator('#syncBody [data-act="sync-copy"]').click(); await P.waitForTimeout(300);
+  ok((await P.locator('#toast').textContent()).includes('Copied. Open it on the other device. In the Shelf app, paste it into Search. Anyone with this link can read your shelf, so send it only to yourself.'), 'copy link: the toast says where to open it and to keep it private');
+  const link = await P.evaluate(() => navigator.clipboard.readText().catch(() => '')) || await P.evaluate(() => window.__clip);
+  ok(/^http:\/\/localhost:8765\/#sync=[0-9a-f]{64}$/.test(link), 'copy link: the link is this page with #sync= and the key: ' + link.slice(0, 40) + '…');
+  await P.keyboard.press('Escape');
+
+  // The Mac opens the link: the join dialog, then Add
+  await M.close(); M = await mc.newPage(); M.on('pageerror', (e) => errors.push('sync mac: ' + e.message));
+  M.on('console', (mm) => { if (mm.type() === 'error' && !/Failed to load resource|net::ERR/.test(mm.text())) errors.push('sync mac: ' + mm.text()); });
+  await M.goto(link); await M.waitForTimeout(600);
+  ok(await M.locator('#syncDlg[open]').count() === 1 && (await body(M)).startsWith('Join your shelf on this device? It has 0 channels and 0 ticked episodes of its own.'), 'join: opening the link asks: ' + (await body(M)).slice(0, 86));
+  ok(await M.evaluate(() => location.hash) === '', 'join: the link is cleared from the address');
+  ok(await M.locator('#syncBody button', { hasText: 'Add them to my shelf' }).count() === 1 && await M.locator('#syncBody button', { hasText: 'Replace them with my shelf' }).count() === 1 && await M.locator('#syncBody button', { hasText: 'Not now' }).count() === 1, 'join: Add, Replace and Not now');
+  ok(/Add them to my shelfFor a device you already use Shelf on\.Replace them with my shelfFor a new device, or one with nothing worth keeping\. A copy is kept first\.Not now/.test(await body(M)), 'join: a line under Add and under Replace says which to pick');
+  await watchBody(M);
+  await M.locator('#syncBody button', { hasText: 'Add them to my shelf' }).click();
+  ok(await waitBody(M, /In sync · checked \d\d:\d\d/) && (await seen(M)).some((t) => /Checking…/.test(t)), 'join add: Checking…, then ' + await status(M));
+  await M.waitForTimeout(300);
+  const pTicks = await ticked(P);
+  ok(await M.evaluate(() => window.__shelf.lib.sources().length) === await P.evaluate(() => window.__shelf.lib.sources().length) && await M.evaluate(() => window.__shelf.courses.list().length) === 6, 'join add: the Mac has the phone\'s channels and six courses');
+  ok(Object.keys(pTicks).length > 50 && JSON.stringify(Object.keys(await ticked(M)).sort()) === JSON.stringify(Object.keys(pTicks).sort()), 'join add: every tick from the phone is on the Mac (' + Object.keys(pTicks).length + ')');
+  ok(await M.evaluate(() => !!window.__shelf.videos.macvideo01x && window.__shelf.marks.count === 1), 'join add: the Mac kept its own video and mark');
+  await checkNow(P); await P.waitForTimeout(200);
+  ok(await P.evaluate(() => !!window.__shelf.videos.macvideo01x && window.__shelf.videos.macvideo01x.t > 90 && window.__shelf.marks.list().some((m) => m.title === 'Mac mark')), 'join add: after its next check the phone has the Mac\'s spot and mark');
+  await settleSync(P, M);
+  ok((await differ(P, M)).length === 0, 'join add: both devices the same for every store: ' + (await differ(P, M)).join(', '));
+
+  // Changes on the Mac: a tick, a mark and a speed go 8 s after the change by themselves; the spot waits for its 90 s, or leaving the page
+  await M.evaluate(() => { window.__shelf.courses.tick('PLpeds0000000000', 'peds000120q', true); window.__shelf.marks.add({ vid: 'macvideo01x', title: 'Second Mac mark', t: 200 }); });
+  await paste(M, 'macvideo02x', 60);
+  await M.evaluate(() => window.__shelf.handleText('https://youtu.be/macvideo01x')); await M.waitForTimeout(400);
+  await M.locator('#vRate [data-r="1.25"]').click(); await M.waitForTimeout(150); await M.keyboard.press('Escape');
+  const macAt = await M.evaluate(() => window.__shelf.prefs.at);
+  await M.waitForTimeout(10000);
+  await checkNow(P); await P.waitForTimeout(200);
+  ok(await P.evaluate(() => window.__shelf.courses.get('PLpeds0000000000').ticks.peds000120q === 1 && window.__shelf.marks.list().some((m) => m.title === 'Second Mac mark') && window.__shelf.prefs.rates['v:fake channel'] === 1.25), 'Mac to phone: a tick, a mark and a speed arrive with no tap, after the Mac\'s own check 8 s later');
+  ok(await P.evaluate(() => !window.__shelf.videos.macvideo02x), 'Mac to phone: the new spot waits (videos go at most every 90 s)');
+  ok(JSON.stringify(await P.evaluate(() => window.__shelf.prefs.at['rates.v:fake channel'])) === JSON.stringify(macAt['rates.v:fake channel']), 'Mac to phone: the speed keeps the Mac\'s time; adopting stamps nothing');
+  await flush(M); await checkNow(P);
+  ok(await P.evaluate(() => window.__shelf.videos.macvideo02x && window.__shelf.videos.macvideo02x.t > 50), 'Mac to phone: the spot arrives once the Mac leaves the page (flush)');
+
+  // Changes on the phone: a channel, a tick, a mark and a speed from the player, a spot
+  await P.evaluate(() => window.__shelf.lib.add('https://feeds.example.com/ezra?token=abc', 'sleep'));
+  await P.evaluate(() => window.__shelf.courses.tick('PLpeds0000000000', 'peds000121q', true));
+  await playFrom('Medicine', 'Mehlman Medical', 'Renal');
+  await P.locator('#vRate [data-r="1.75"]').click(); await P.waitForTimeout(200);
+  await P.evaluate(() => window.__fake.advance(150)); await P.waitForTimeout(1300);
+  await P.locator('#vMark').click(); await P.waitForTimeout(200);
+  await P.evaluate(() => window.__shelf.capture(true));
+  await P.locator('[data-act="close-video"]').first().click(); await P.waitForTimeout(200);
+  const renal = await P.evaluate(() => Object.keys(window.__shelf.videos).filter((k) => /Renal/.test(window.__shelf.videos[k].title || ''))[0]);
+  await flush(P); await checkNow(M); await M.waitForTimeout(200);
+  ok(await M.evaluate(() => window.__shelf.lib.sources().some((s) => s.name === 'The Ezra Klein Show' && s.type === 'podcast' && s.private)), 'phone to Mac: the channel added on the phone is there');
+  ok(await M.evaluate(() => window.__shelf.courses.get('PLpeds0000000000').ticks.peds000121q === 1 && window.__shelf.courses.get('PLpeds0000000000').ticks.peds000120q === 1), 'phone to Mac: the phone\'s tick is there, and the Mac\'s own is kept');
+  ok(await M.evaluate(() => window.__shelf.prefs.rates['v:UCMehlmanMedicalxxxxxxxx'] === 1.75 && window.__shelf.marks.count === 3), 'phone to Mac: the speed and the mark from the player are there');
+  ok(!!renal && await M.evaluate((id) => window.__shelf.videos[id] && window.__shelf.videos[id].t > 100, renal), 'phone to Mac: the spot in the Renal video is there');
+  await settleSync(P, M);
+  ok((await differ(P, M)).length === 0, 'both ways: the devices are the same for every store again: ' + (await differ(P, M)).join(', '));
+  const all = Object.assign({}, pTicks, { 'PLpeds0000000000:peds000120q': 1, 'PLpeds0000000000:peds000121q': 1 });
+  for (const [nm, pg] of [['phone', P], ['Mac', M]]) { const t = await ticked(pg); ok(Object.keys(all).every((k) => t[k] === 1), 'nothing lost: every tick made on either is ticked on the ' + nm); }
+
+  // A video removed, synced, then Undo: it stays back on both
+  await shelf(P, () => window.__shelf.push({ name: 'pasted' })); await P.waitForTimeout(200);
+  await P.locator('#page [data-act="remove-video"][data-id="macvideo01x"]').click(); await P.waitForTimeout(150);
+  await flush(P); await checkNow(M);
+  ok(await M.evaluate(() => !window.__shelf.videos.macvideo01x), 'remove: the video removed on the phone goes from the Mac');
+  await P.locator('#toast button', { hasText: 'Undo' }).click(); await P.waitForTimeout(150);
+  await flush(P); await checkNow(M); await checkNow(P); await flush(M); await checkNow(P); await checkNow(M);
+  ok(await M.evaluate(() => !!window.__shelf.videos.macvideo01x) && await P.evaluate(() => !!window.__shelf.videos.macvideo01x), 'Undo: the video is back on both after the next checks');
+  await P.locator('#todayBtn').click(); await P.waitForTimeout(200);
+
+  // The self-check's line, and the problem line after 5 minutes of failures
+  let line = await syncLine(M);
+  ok(line && line.ok === 1 && /^Sync: up to date, checked \d\d:\d\d$/.test(line.text), 'self-check: ' + (line && line.text));
+  await M.locator('#statusBtn').click(); await M.waitForTimeout(100);
+  if (!(await M.locator('#checkAll').evaluate((e) => e.open))) await M.locator('#checkAll summary').click();
+  ok(/Sync: up to date, checked \d\d:\d\d/.test(await M.locator('#checkList').textContent()), 'self-check: the line is in the list');
+  await M.keyboard.press('Escape');
+  syncNet.down = true;
+  await checkNow(M);
+  line = await syncLine(M);
+  ok(line && line.ok === 2 && line.text === 'Sync: checking…' && /Couldn't reach the sync store/.test((await sstate(M)).lastErr), 'store down: a fresh failure reads Sync: checking… (' + (await sstate(M)).lastErr + ')');
+  await M.evaluate(() => { window.__realNow = Date.now; Date.now = () => window.__realNow.call(Date) + 6 * 60000; });
+  await checkNow(M);
+  line = await syncLine(M);
+  ok(line && line.ok === 0 && /^Sync has not worked since \d\d:\d\d: Couldn't reach the sync store\. Check your internet\. Your changes are safe on this device\.$/.test(line.text), 'store down for over 5 minutes: ' + (line && line.text));
+  await M.locator('#statusBtn').click(); await M.waitForTimeout(100);
+  ok(/Sync has not worked since/.test(await M.locator('#checkProblems').textContent()) && await M.locator('#statusDot.bad').count() === 1, 'store down: the self-check shows it as a problem');
+  await M.keyboard.press('Escape');
+  await M.evaluate(() => { Date.now = window.__realNow; });
+  syncNet.down = false;
+  await checkNow(M);
+  line = await syncLine(M);
+  ok(line && line.ok === 1, 'store back: the line is good again');
+
+  // A phone that lost its web storage gets the link back from the phone's own copy (a damaged one is ignored)
+  const phonePrefs = await P.evaluate(() => window.__prefs);
+  let t2 = await appPage({ prefs: phonePrefs });
+  await settle(t2.p); await t2.p.waitForFunction(() => window.__shelf.sync.state().lastOk > 0, null, { timeout: 15000 }).catch(() => {});
+  const st2 = await sstate(t2.p);
+  ok(st2.on && st2.link.slice(-64) === link.slice(-64) && st2.lastOk > 0 && !st2.lastErr, 'phone restore: the link comes back from the phone and its first check works');
+  await t2.ctx.close();
+  t2 = await appPage({ prefs: Object.assign({}, phonePrefs, { 'shelf.sync.link': '{"key":"broken' }) });
+  await settle(t2.p);
+  ok(!(await sstate(t2.p)).on, 'phone restore: a damaged link on the phone is ignored');
+  await t2.ctx.close();
+
+  // Put this device back (the Mac): sync off, its own things back, nothing sent after
+  await openSyncDlg(M);
+  const back = M.locator('#syncBody [data-act="sync-back"]');
+  ok(await back.count() === 1 && /^Put this device back as it was on \d{1,2} [A-Z][a-z]{2}, \d\d:\d\d$/.test((await back.textContent()).trim()), 'put back: offered: ' + (await back.textContent()).trim());
+  await back.click(); await M.waitForTimeout(100);
+  ok(/^Tap again to put this device back/.test((await back.textContent()).trim()) && (await sstate(M)).on, 'put back: asks once more first');
+  await back.click();
+  await M.waitForTimeout(1500); await M.waitForFunction(() => window.__shelf && window.__shelf.sync, null, { timeout: 10000 });
+  const macAfter = await docsOf(M);
+  ok(!(await sstate(M)).on && (await M.evaluate(() => window.__shelf.lib.sources().length)) === 0 && (await M.evaluate(() => window.__shelf.courses.list().length)) === 0, 'put back: sync is off, no channels or courses (it had none)');
+  // (its channel list had never been saved, so it starts afresh with a new start time, as it did before)
+  const asWas = (d) => d === 'library' ? JSON.stringify([macAfter.library.sections, macAfter.library.sources]) === JSON.stringify([macBefore.library.sections, macBefore.library.sources]) : SyncM.same(macAfter[d], macBefore[d], d);
+  ok(SDOCS.every(asWas), 'put back: every store is as it was before the join: ' + SDOCS.filter((d) => !asWas(d)).join(', '));
+  let h0 = mc.syncHits;
+  await paste(M, 'macvideo05x', 30); await M.evaluate(() => { window.__shelf.marks.add({ vid: 'macvideo05x', title: 'after', t: 1 }); window.dispatchEvent(new Event('online')); });
+  await M.evaluate(() => window.__shelf.syncNow()); await M.waitForTimeout(9000);
+  ok(mc.syncHits === h0, 'put back: nothing goes to the store after it');
+  await mc.close();
+
+  // Turn sync off (the phone): nothing goes out after it
+  await openSyncDlg(P);
+  await P.locator('#syncBody [data-act="sync-off"]').click(); await P.waitForTimeout(200);
+  ok(!(await sstate(P)).on && /Start sync here/.test(await body(P)) && /Sync is off/.test(await P.locator('#toast').textContent()), 'turn off: the dialog is back to Start sync here');
+  ok(!(await syncLine(P)), 'turn off: no sync line in the self-check');
+  ok(await P.evaluate(() => window.__shelf.lib.sources().length) > 9 && await P.evaluate(() => window.__shelf.marks.count) === 3, 'turn off: everything on the device stays');
+  await P.keyboard.press('Escape');
+  h0 = pctx.syncHits;
+  await P.evaluate(() => { window.__shelf.courses.tick('PLpeds0000000000', 'peds000122q', true); window.dispatchEvent(new Event('online')); return window.__shelf.syncNow(); });
+  await P.waitForTimeout(9000);
+  ok(pctx.syncHits === h0, 'turn off: no request after it, even after a change, a check and coming online');
+
+  // Second run: start again (a new shelf); another Mac pastes the link into Search and joins with Replace
+  await openSyncDlg(P);
+  await P.locator('#syncBody [data-act="sync-start"]').click();
+  ok(await waitBody(P, /In sync · checked/), 'second run: started again');
+  await P.locator('#syncBody [data-act="sync-copy"]').click(); await P.waitForTimeout(200);
+  const link2 = await P.evaluate(() => navigator.clipboard.readText().catch(() => '')) || await P.evaluate(() => window.__clip);
+  ok(link2 !== link && /#sync=[0-9a-f]{64}$/.test(link2), 'second run: a new link');
+  await P.keyboard.press('Escape');
+  ({ c: mc, pg: M } = await macDevice());
+  await paste(M, 'macvideo03x', 80);
+  await M.evaluate(() => window.__shelf.marks.add({ vid: 'macvideo03x', title: 'Mine only', t: 80 }));
+  await M.locator('#searchBtn').click(); await M.fill('#sq', link2); await M.press('#sq', 'Enter'); await M.waitForTimeout(300);
+  ok(await M.locator('#syncDlg[open]').count() === 1 && /^Join your shelf on this device\? It has 0 channels and 0 ticked episodes of its own\./.test(await body(M)), 'Search: pasting the link opens the join dialog');
+  await M.locator('#syncBody button', { hasText: 'Replace them with my shelf' }).click();
+  ok(await waitBody(M, /In sync · checked/), 'join replace: In sync');
+  await M.waitForTimeout(300);
+  ok(await M.evaluate(() => !window.__shelf.videos.macvideo03x && !window.__shelf.marks.list().some((m) => m.title === 'Mine only')), 'join replace: the Mac\'s own video and mark are gone (kept in its backup)');
+  await checkNow(P); await settleSync(P, M);
+  ok((await differ(P, M)).length === 0 && await P.evaluate(() => !window.__shelf.videos.macvideo03x), 'join replace: the Mac ends the same as the phone, and nothing of the Mac\'s reached the phone: ' + (await differ(P, M)).join(', '));
+  ok(await M.locator('#syncBody [data-act="sync-back"]').count() === 1, 'join replace: Put this device back is offered');
+  await mc.close();
+  await ctx.close();
+
+  // A phone whose start failed (its storage could not be read): turning sync off still takes the link off the phone,
+  // so sync doesn't turn itself back on at the next start
+  {
+    const lk = JSON.stringify({ key: 'ab'.repeat(32), joined: 0, docs: {} });
+    const t3 = await appPage({ prefs: { 'shelf.sync.link': lk }, shell: { prefFail: true, web: { 'shelf.sync.link': lk } } });
+    await t3.p.waitForTimeout(1500);
+    ok((await sstate(t3.p)).on && await t3.p.evaluate(() => window.__prefs['shelf.sync.link']) !== 'null', 'failed phone start: sync is on, and the phone holds the link');
+    await t3.p.evaluate(() => window.__shelf.sync.off()); await t3.p.waitForTimeout(500);
+    ok(!(await sstate(t3.p)).on && await t3.p.evaluate(() => window.__prefs['shelf.sync.link']) === 'null', 'failed phone start: Turn sync off clears the link on the phone too');
+    await t3.p.evaluate(() => localStorage.setItem('fake.prefFail', '0'));
+    await t3.p.reload(); await t3.p.waitForTimeout(1500);
+    ok(!(await sstate(t3.p)).on && !(await t3.p.evaluate(() => localStorage.getItem('shelf.sync.link'))), 'failed phone start: after the next start (phone readable again) sync stays off');
+    await t3.ctx.close();
+  }
+}
 
 console.log('\n== X Desktop Chrome with the Shelf extension (faked)');
 async function extPage({ url = URL0, ext = {}, fakes = {}, ctxOpts = {}, bridge = true, init = '' } = {}) {

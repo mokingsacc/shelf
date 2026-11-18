@@ -299,6 +299,26 @@ var Library = (function () {
       return out.sort(function (a, b) { return b.published - a.published; });
     }
 
+    // ----- Sync (synclink.js) -----
+    function exportState() { return JSON.parse(JSON.stringify(state)); }
+    // A copy merged with another device's takes the state's place, with no new times. A section or channel already
+    // here is emptied and refilled rather than replaced, so code holding it keeps working. seedMisses and rev stay this device's.
+    function adopt(merged) {
+      var m = JSON.parse(JSON.stringify(merged || {})), mine = { seedMisses: 1, rev: 1 };
+      if (!Array.isArray(m.sections) || !m.sections.length) return false; // never no sections
+      var secs = {}, srcs = state.sources || {};
+      state.sections.forEach(function (s) { secs[s.id] = s; });
+      state.sections = m.sections.map(function (s) { return secs[s.id] ? refill(secs[s.id], s) : s; });
+      var ms = m.sources && typeof m.sources === 'object' ? m.sources : {};
+      Object.keys(srcs).forEach(function (id) { if (!ms[id]) { delete srcs[id]; delete cache[id]; } });
+      Object.keys(ms).forEach(function (id) { srcs[id] = srcs[id] ? refill(srcs[id], ms[id]) : ms[id]; });
+      state.sources = srcs;
+      Object.keys(state).forEach(function (k) { if (!mine[k] && k !== 'sections' && k !== 'sources' && !(k in m)) delete state[k]; });
+      Object.keys(m).forEach(function (k) { if (!mine[k] && k !== 'sections' && k !== 'sources') state[k] = m[k]; });
+      save(); return true;
+    }
+    function refill(o, from) { Object.keys(o).forEach(function (k) { delete o[k]; }); return Object.assign(o, from); }
+
     // Cache survives a relaunch so the shelf isn't empty while feeds load
     function saveCache() {
       var slim = {};
@@ -314,7 +334,7 @@ var Library = (function () {
       sections: sections, section: section, addSection: addSection, renameSection: renameSection, setKind: setKind, removeSection: removeSection, moveSection: moveSection,
       sources: sources, source: source, have: have, setSection: setSection, setHideShorts: setHideShorts, remove: remove, add: add, seed: seed,
       refresh: refresh, refreshAll: refreshAll, items: items, status: status, newCount: newCount, sectionNewCount: sectionNewCount,
-      markSeen: markSeen, fresh: fresh, saveCache: saveCache, twinEpisode: twinEpisode, twinLookup: twinLookup, get seedMisses() { return state.seedMisses || []; }
+      markSeen: markSeen, fresh: fresh, saveCache: saveCache, exportState: exportState, adopt: adopt, twinEpisode: twinEpisode, twinLookup: twinLookup, get seedMisses() { return state.seedMisses || []; }
     };
   }
   return { create: create, KEY: KEY, SEED_SOURCES: SEED_SOURCES };

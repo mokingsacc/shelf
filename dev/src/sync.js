@@ -1,5 +1,5 @@
 // Sync: merges two copies of each store (this device's and the server's) so both devices end with the same thing.
-// Pure: no storage, no clock (now is passed in), and the arguments are never changed. Nothing calls it yet.
+// Pure: no storage, no clock (now is passed in), and the arguments are never changed. The sync engine (synclink.js) calls it.
 // Rules for every store: nothing on either side is lost unless the other side removed it later than its newest
 // change; ties and copies with no times go to remote (the server's copy), so every device ends the same;
 // removal records older than 180 days are dropped. Tested in test/sync.test.cjs.
@@ -8,7 +8,7 @@ var Sync = (function () {
   var PREF_FIELDS = ['rate', 'arate', 'autoNext', 'goal']; // shared prefs, plus each entry of prefs.rates
   var AUDIO_FILL = ['url', 'title', 'podcast', 'image', 'source'];
   // Fields that stay on their device: left as local's, and not compared by same()
-  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved'], marks: ['saved'] };
+  var DEVICE = { library: ['seedMisses', 'rev'], courses: ['misses', 'saved', 'auto'], marks: ['saved'] };
 
   function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
   function obj(x) { return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; }
@@ -172,7 +172,10 @@ var Sync = (function () {
       // device (no time, so the untick wins) comes out the same as it would against any other copy
       var c = ca[pid] && cb[pid] ? mergeCourse(ca[pid], cb[pid]) : mergeCourse(ca[pid] || cb[pid], ca[pid] || cb[pid]);
       // Removed on a device after its last change there: it goes, and its ticks are kept for a re-add
-      if (has(removedAt, pid) && removedAt[pid] > newest(c)) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
+      // A course with no change time at all (the seed list's, untouched) goes too when a copy holds it as removed,
+      // even by a removal with no time: Mo removed it, and nobody has done anything with it since
+      var t = newest(c);
+      if ((has(removedAt, pid) && removedAt[pid] > t) || (!t && has(removed, pid))) { removed[pid] = addTicks(removed[pid] || {}, c.ticks); return; }
       courses[pid] = c;
     });
     Object.keys(courses).forEach(function (pid) {
@@ -241,9 +244,21 @@ var Sync = (function () {
     Object.keys(x).forEach(function (k) { if ((DEVICE[kind] || []).indexOf(k) < 0) o[k] = x[k]; });
     return o;
   }
-  function same(x, y, kind) { return JSON.stringify(canon(shared(x, kind))) === JSON.stringify(canon(shared(y, kind))); }
+  function canonText(x, kind) { return JSON.stringify(canon(shared(x, kind))); }
+  function same(x, y, kind) { return canonText(x, kind) === canonText(y, kind); }
+
+  // An empty copy of a store, for "Replace" (this device ends as the shelf is). With from, the device-only fields
+  // of that copy stay (for prefs: everything that isn't shared).
+  function empty(kind, from) {
+    var o = kind === 'videos' ? { items: {}, gone: { v: {} } } : kind === 'library' ? { sections: [], sources: {} }
+      : kind === 'courses' ? { courses: {} } : kind === 'marks' ? { items: [] } : {};
+    from = obj(clone(from));
+    if (kind === 'prefs') { var sh = PREF_FIELDS.concat(['rates', 'at']); Object.keys(from).forEach(function (k) { if (sh.indexOf(k) < 0) o[k] = from[k]; }); }
+    else (DEVICE[kind] || []).forEach(function (k) { if (has(from, k)) o[k] = from[k]; });
+    return o;
+  }
 
   return { mergeVideos: mergeVideos, mergeAudio: mergeAudio, mergeLibrary: mergeLibrary, mergeCourses: mergeCourses, mergeMarks: mergeMarks, mergePrefs: mergePrefs,
-    same: same, KEEP: KEEP, PREF_FIELDS: PREF_FIELDS };
+    same: same, canon: canonText, empty: empty, KEEP: KEEP, PREF_FIELDS: PREF_FIELDS, DEVICE: DEVICE };
 })();
 if (typeof module !== 'undefined') module.exports = Sync;

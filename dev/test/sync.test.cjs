@@ -264,9 +264,21 @@ const cstate = (list, extra) => { const o = { courses: {}, found: true, misses: 
   // An unstamped course (old code) removed by the new code: goes
   M = both('courses', A, cstate([course('P1', { ticks: { v5: 1 } })]));
   ok(!M.courses.P1 && M.removed.P1.v5 === 1, 'courses: an old course removed after the update goes, ticks kept');
-  // A removal made before this update (no removedAt) never removes anything
-  M = both('courses', cstate([], { removed: { P1: { v2: 1 } } }), cstate([course('P1', { ticks: { v1: 1 } })]));
-  ok(M.courses.P1 && M.courses.P1.ticks.v1 === 1 && M.courses.P1.ticks.v2 === 1, 'courses: an old removal never removes; its ticks join the course');
+  // A removal made before this update (no removedAt) never removes a course with any change time
+  M = both('courses', cstate([], { removed: { P1: { v2: 1 } } }), cstate([course('P1', { touched: 5, ticks: { v1: 1 } })]));
+  ok(M.courses.P1 && M.courses.P1.ticks.v1 === 1 && M.courses.P1.ticks.v2 === 1, 'courses: an old removal never removes a course with a time; its ticks join the course');
+  M = both('courses', cstate([], { removed: { P1: { v2: 1 } } }), cstate([course('P1', { touched: 0, ticks: {}, onAt: { v3: 7 } })]));
+  ok(M.courses.P1 && !(M.removed && M.removed.P1), 'courses: ...a tick time counts as a time too');
+  // ...but a course with no change time at all (the seed list's, on a new device) goes, its ticks kept for a re-add
+  for (const [x, y] of [[cstate([], { removed: { P1: { v2: 1, v4: 0 } } }), cstate([course('P1', { ticks: { v1: 1, v4: 1 }, seed: { upTo: 3 } })])], [cstate([course('P1', { ticks: { v1: 1, v4: 1 } })]), cstate([], { removed: { P1: { v2: 1, v4: 0 } } })]]) {
+    M = both('courses', x, y);
+    ok(!M.courses.P1, 'courses: a course with no time goes when the other copy removed it, even with no removedAt');
+    eq(M.removed.P1, { v1: 1, v2: 1, v4: 1 }, 'courses: ...its ticks from both kept for a re-add');
+    ok(Sync.same(both('courses', M, M), M, 'courses'), 'courses: ...and merging that again changes nothing');
+  }
+  // ...and the same when it was removed with a time that has since expired
+  M = both('courses', cstate([], { removed: { P1: { v2: 1 } }, removedAt: { P1: NOW - 200 * DAY } }), cstate([course('P1', { ticks: { v1: 1 } })]), NOW);
+  ok(!M.courses.P1 && M.removed.P1.v1 === 1 && !(M.removedAt && M.removedAt.P1), 'courses: an untouched course removed over 180 days ago elsewhere: gone too');
   // A removal older than 180 days is dropped
   M = both('courses', cstate([], { removed: { P1: { v2: 1 } }, removedAt: { P1: NOW - 200 * DAY } }), cstate([course('P1', { touched: NOW - 300 * DAY })]), NOW);
   ok(M.courses.P1 && !(M.removedAt && M.removedAt.P1), 'courses: removals older than 180 days dropped');
@@ -494,7 +506,7 @@ function courseEdit(r, st, dv) {
       const prior = st.removed && st.removed[pid];
       st.courses[pid] = { id: pid, name: pid, title: 'T', channel: 'M', section: 'med', added: dv.t, touched: 0, ticks: prior || {}, pins: {}, seed: { upTo: r.int(0, 7) }, seedName: pid };
       if (prior) delete st.removed[pid]; if (st.removedAt) delete st.removedAt[pid];
-    } else if (op === 10 && c && c.seed) { for (let j = 0; j <= c.seed.upTo; j++) c.ticks[VIDS[j]] = 1; if (r.chance(0.5)) c.pins[v] = 1; delete c.seed; c.touched = dv.t; }
+    } else if (op === 10 && c && c.seed) { for (let j = 0; j <= c.seed.upTo; j++) c.ticks[VIDS[j]] = 1; if (r.chance(0.5)) c.pins[v] = 1; delete c.seed; if (!s) c.touched = dv.t; }
     else if (op === 8) { st.saved = dv.t; st.misses = r.chance(0.5) ? [{ name: 'X' }] : []; if (r.chance(0.3)) { st.dropped = st.dropped || {}; st.dropped[r.pick(['Pharm', 'IM'])] = 1; } }
   }
   return st;
@@ -513,7 +525,8 @@ run('courses', (r) => {
   new Set(Object.keys(A.courses).concat(Object.keys(B.courses))).forEach((pid) => {
     const ca = A.courses[pid], cb = B.courses[pid], t = Math.max(ca ? newest(ca) : 0, cb ? newest(cb) : 0);
     const ticked = (v) => [ca, cb].some((c) => c && c.ticks[v] === 1);
-    if (rem[pid] > t) {
+    // ...or with no change time at all, held as removed by either copy (even with no removedAt)
+    if (rem[pid] > t || (!t && [A, B].some((s) => s.removed && s.removed[pid]))) {
       // Removed later than its last change: gone, and every tick it had on either side is kept for a re-add
       ok(!M.courses[pid], 'courses: removed later: gone');
       VIDS.forEach((v) => { if (ticked(v)) ok(M.removed[pid][v] === 1, 'courses R1: a removed course keeps its ticks'); });

@@ -116,6 +116,13 @@ function setup(store, opts = {}) {
   assert.strictEqual(c.progress(peds).done, 100);
   c.restore(peds, undo);
   assert.strictEqual(c.progress(peds).done, 91, 'undo puts it back');
+  // A tick made after "tick up to here" (here or brought in from another device) is not taken away by its Undo
+  const undo2 = c.tickUpTo(peds, 95);
+  c.tick(peds, arr[110].id, true);
+  c.restore(peds, undo2);
+  assert.strictEqual(c.progress(peds).done, 92, 'undo only takes back its own ticks');
+  c.tick(peds, arr[110].id, false);
+  assert.strictEqual(c.progress(peds).done, 91);
   assert.deepStrictEqual(c.findNumber(peds, 1203), [102]);
   // Exam clock and pace (the fake clock is 4 Oct 2026, 16:30 UTC; the exam 22 Dec)
   {
@@ -232,6 +239,39 @@ function setup(store, opts = {}) {
   const r8 = setup(r7.store);
   assert.deepStrictEqual(await r8.c.seed(), []);
   assert.strictEqual(r8.c.list().length, 6, 'retried and found');
+
+  // The seed list's own ticks: remembered on this device (auto, never synced), with no times and no touched; a tick
+  // Mo makes or takes off himself stops being one of them
+  {
+    const r = setup({}, {}); await r.c.seed(); await r.c.loadAll(true);
+    const st = r.c.raw(), ob = 'PLobgyn000000000', a = r.c.items(peds);
+    assert.strictEqual(Object.keys(st.auto[peds]).length, 91, 'auto: the 91 seed ticks of Paeds');
+    assert.strictEqual(Object.keys(st.auto[ob]).length, 60, 'auto: all 60 of OBGYN');
+    assert.ok(r.c.list().every((x) => !x.touched && !x.m && !x.onAt), 'the seed list touches no course and stamps nothing');
+    r.c.tick(peds, a[3].id, false); r.c.tick(peds, a[4].id, false); r.c.tick(peds, a[4].id, true);
+    assert.ok(!st.auto[peds][a[3].id] && !st.auto[peds][a[4].id] && st.auto[peds][a[5].id], 'auto: Mo\'s untick and tick take it out, the rest stay');
+    const up = r.c.tickUpTo(peds, 3);
+    assert.ok(!st.auto[peds][a[3].id] && st.auto[peds][a[2].id], 'auto: tick up to here takes out only what it turned on');
+    r.c.restore(peds, up);
+    assert.ok(!st.auto[peds][a[3].id] && r.c.progress(peds).done === 90, 'auto: its Undo too');
+    // adopt keeps this device's auto, whatever the merged copy says
+    r.c.adopt(Object.assign(JSON.parse(JSON.stringify(st)), { auto: { x: { y: 1 } } }));
+    assert.strictEqual(Object.keys(r.c.raw().auto[ob]).length, 60, 'adopt keeps auto local');
+    assert.ok(!r.c.raw().auto.x, 'adopt never takes auto from another copy');
+  }
+  // A course Mo removed (here, or elsewhere and brought in by a sync) is not added again by the seed list,
+  // and he can still add it back by hand from a "not found" line (fixMiss)
+  {
+    const removed = { courses: {}, removed: { [peds]: { x: 1 } }, removedAt: { [peds]: 5 }, found: false, misses: [] };
+    const r = setup({ [Courses.KEY]: JSON.stringify(removed) }, {});
+    assert.deepStrictEqual(await r.c.seed(), [], 'a removed course is not a miss');
+    assert.ok(!r.c.get(peds) && r.c.list().length === 5 && r.c.raw().removed[peds], 'the seed list skips the removed course and keeps its removal');
+    r.c.raw().misses = [{ name: 'Paeds', error: 'x' }];
+    const back = await r.c.add('https://www.youtube.com/playlist?list=' + peds, { name: 'Paeds' });
+    r.c.fixMiss('Paeds', back); await r.c.load(peds, true);
+    assert.ok(r.c.get(peds) && !(peds in r.c.raw().removed) && !(peds in (r.c.raw().removedAt || {})) && r.c.misses.length === 0, 'fixMiss: added back by hand, the removal cleared');
+    assert.ok(r.c.progress(peds).done >= 91, 'fixMiss: its note applied, with the ticks kept from the removal');
+  }
 
   // Remove keeps ticks for a re-add
   r8.c.remove(peds); assert.strictEqual(r8.c.get(peds), null);

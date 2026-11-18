@@ -852,6 +852,12 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   </form>
 </dialog>
 
+<dialog id="syncDlg" aria-labelledby="syncH">
+  <div class="grab" aria-hidden="true"></div>
+  <div class="dh"><h2 id="syncH">Sync devices</h2><button type="button" class="x" data-act="dismiss" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button></div>
+  <div class="db" id="syncBody"></div>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>/*@CORE@*/</script>
@@ -865,6 +871,7 @@ body.sheet-on .toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
 <script>/*@MARKS@*/</script>
 <script>/*@AI@*/</script>
 <script>/*@SYNC@*/</script>
+<script>/*@SYNCLINK@*/</script>
 <script>/*@APP@*/</script>
 </body>
 </html>

@@ -17,12 +17,23 @@
   var lastSaveError = '';
   // Nothing is written to the phone until the phone's own copy was read and merged, so a slow or failed
   // start can't replace good spots, ticks or channels with the web view's (possibly stale) copy
-  var guarded = function (k) { return Native.inApp && !restored && PHONE_KEYS().indexOf(k) >= 0; };
+  var guarded = function (k) { return Native.inApp && !restored && (PHONE_KEYS().indexOf(k) >= 0 || k === LINK_KEY); };
   var PHONE_KEYS = function () { return [KEY, PREF, AKEY, Library.KEY, Courses.KEY, Marks.KEY, AI.KEY]; };
   function rawSet(k, s, mirror) {
+    if (holdWrites) return true; // putting the device back from its backup: nothing else is written before the reload
+    var sd = syncDoc(k); if (sd && syncEng && !syncAdopting) syncTouched(sd);
     if (mirror !== false && !guarded(k)) Native.prefSet(k, s);
     if (!canSave) { mem[k] = s; return Native.inApp; }
     try { localStorage.setItem(k, s); lastSaveError = ''; return true; } catch (e) { lastSaveError = (e && e.name) || 'error'; return false; }
+  }
+  // Forgets a key here and on the phone (the phone keeps the word null, which a restore ignores). The sync link goes
+  // from the phone even before its copy was read: a link left there would turn sync back on at the next start.
+  var linkGone = false;
+  function rawDel(k) {
+    if (holdWrites) return;
+    delete mem[k]; try { localStorage.removeItem(k); } catch (e) {}
+    if (k === LINK_KEY) linkGone = true;
+    if (!guarded(k) || k === LINK_KEY) Native.prefSet(k, 'null');
   }
   function load(k, d) { try { var v = JSON.parse(rawGet(k) || 'null'); return v && typeof v === 'object' ? v : d; } catch (e) { return d; } }
   function store(k, v) { return rawSet(k, JSON.stringify(v)); }
@@ -56,6 +67,9 @@
   }
   // Videos taken off the shelf, and when, so another device's copy can't bring them back (sync.js). Kept in the web view only.
   var GKEY = 'shelf.sync.gone';
+  // Device sync: the store each key belongs to (synclink.js syncs six), the link record and the backup made before the first sync
+  var LINK_KEY = 'shelf.sync.link', BACKUP_KEY = 'shelf.sync.backup';
+  function syncDoc(k) { return k === KEY || k === GKEY ? 'videos' : k === AKEY ? 'audio' : k === Library.KEY ? 'library' : k === Courses.KEY ? 'courses' : k === Marks.KEY ? 'marks' : k === PREF ? 'prefs' : ''; }
   function markGone(id, on) {
     var g = load(GKEY, {});
     g.v = g.v && typeof g.v === 'object' ? g.v : {};
@@ -613,7 +627,7 @@
   // A pasted link in Search plays (or adds) instead of searching
   function isLinkish(q) {
     if (!q) return false;
-    if (/#shelf=/.test(q) || Courses.playlistId(q)) return true;
+    if (/#shelf=|#sync=/.test(q) || Courses.playlistId(q)) return true;
     // "hypokalemia" is 11 letters like a video id: only a real link counts
     if (/youtu\.?be|youtube\.com|^https?:\/\//i.test(q) && Core.findLinks(q).length) return true;
     var c = Feeds.parseChannelInput(q);
@@ -1201,7 +1215,7 @@
   function unlinkPodVideo(guid, old, keep) {
     var ov = old && old !== keep && videos[old];
     if (!ov || ov.ep !== guid) return;
-    if (ov.guessed) { delete videos[old]; markGone(old, true); } else delete ov.ep;
+    if (ov.guessed) { delete videos[old]; markGone(old, true); } else { delete ov.ep; ov.updated = Date.now(); }
     saveVideos();
   }
   function startPodVideo(ep, id, guess) {
@@ -1936,6 +1950,8 @@
     text = String(text || '').trim();
     var shelf = text.match(/#shelf=([A-Za-z0-9_-]+)/);
     if (shelf) { importShelf(shelf[1]); renderAll(); return true; }
+    var sl = text.match(/#sync=([0-9a-f]{64})/);
+    if (sl) { openSyncJoin(sl[1]); return true; }
     var found = Core.findLinks(text), pl = Courses.playlistId(text);
     if (pl && !found.length) { openCourseAdd(text); return true; }
     if (found.length === 1) {
@@ -1956,6 +1972,9 @@
   // A YouTube link that YouTube sent here (the Chrome extension puts it after #open=): a video plays, a playlist opens its
   // page, anything else is ignored quietly. The address is cleared so a reload doesn't open it again.
   function openIncoming() {
+    // A sync link (Copy link for another device): asks whether to join, then the address is cleared
+    var sm = location.hash.match(/^#sync=([0-9a-f]{64})/);
+    if (sm) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} openSyncJoin(sm[1]); return; }
     var m = location.hash.match(/^#open=(.+)$/); if (!m) return;
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     var url = m[1];
@@ -2250,7 +2269,7 @@
     cs.tick(cid, vid, on);
     var v = videos[vid];
     if (v && on && !v.done) { v.done = true; v.updated = Date.now(); saveVideos(); }
-    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; saveVideos(); } // keeps a half-watched spot
+    else if (v && !on && v.done) { v.done = false; if (v.dur && v.t >= v.dur - 20) v.t = 0; v.updated = Date.now(); saveVideos(); } // keeps a half-watched spot
     renderAll();
   }
   function playEp(cid, vid) {
@@ -2863,7 +2882,8 @@
       case 'remove-video':
         var gone = videos[id]; delete videos[id]; markGone(id, true); saveVideos(); renderAll();
         if (!Object.keys(videos).some(function (k) { return !entryFromVideo(videos[k]).section; }) && stack.length && stack[stack.length - 1].name === 'pasted') back();
-        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; markGone(id, false); saveVideos(); renderAll(); } });
+        // An Undo is a change of its own: it must beat the removal once that has reached the other devices
+        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; gone.updated = Date.now(); markGone(id, false); saveVideos(); renderAll(); } });
         break;
       case 'close-video': closeVideo(); break;
       case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
@@ -2946,6 +2966,7 @@
       case 'look-set': prefs.look = id; savePrefs(); applyLook(); fillLook(); break;
       case 'look-here': lookHere(); break;
       case 'dismiss': var d = b.closest('dialog'); if (d) d.close(); break;
+      case 'sync-open': case 'sync-close': case 'sync-start': case 'sync-join': case 'sync-copy': case 'sync-off': case 'sync-back': syncAct(act, b); break;
       case 'settings': $('#checkDlg').close(); $('#keyInput').value = prefs.apiKey || ''; $('#keyMsg').textContent = ''; openDlg($('#keyDlg')); break;
       case 'key-remove': delete prefs.apiKey; savePrefs(); $('#keyInput').value = ''; $('#keyMsg').textContent = 'Removed. Search reads YouTube\'s results page.'; $('#keyMsg').className = 'msgline ok'; break;
       case 'send': copyShelf(b); break;
@@ -3278,6 +3299,7 @@
       if (ytOut) out.push({ ok: 0, text: "YouTube isn't signed in in this browser, so Shelf can't see your watch history, subscriptions or playlists. Sign in again to fix it.", fix: 'yt-again' });
       else if (lastYT) out.push({ ok: 1, text: 'Last in YouTube: ' + (lastYT.title || lastYT.id) });
     }
+    var sy = syncLine(); if (sy) out.push(sy);
     var n = Object.keys(videos).length + Object.keys(arec).length, ch = lib.sources().length;
     out.push({ ok: 1, text: ch + ' channel' + (ch === 1 ? '' : 's') + ' in ' + lib.sections().length + ' sections, ' + n + ' saved spot' + (n === 1 ? '' : 's') + ', kept ' + (Native.inApp ? 'on this phone' : 'in this browser') });
     return out;
@@ -3319,6 +3341,7 @@
     var ya = Native.ytAccount.state, signIn = Native.inApp && ya !== 'old', acts = '';
     if (Native.inApp) acts += '<button type="button" class="ghost" id="toneBtn" data-act="tone">' + (Native.tonePlaying ? 'Stop the sound test' : 'Sound test') + '</button>';
     acts += '<button type="button" class="ghost" id="sendBtn" data-act="send">Copy shelf link</button>';
+    acts += '<button type="button" class="ghost" id="syncBtn" data-act="sync-open">Sync devices</button>';
     if (Native.yt) acts += '<button type="button" class="ghost" data-act="yt-report">Copy YouTube report for Claude</button>';
     if (signIn && ya === 'in') acts += '<button type="button" class="ghost" id="ytBtn" data-act="yt-sign">' + (signingIn ? 'Signing in…' : 'Sign out of YouTube') + '</button>';
     $('#checkActs').innerHTML = acts;
@@ -3360,6 +3383,182 @@
     } catch (e) { toast('That shelf link looks broken. Make a new one with Copy shelf link.', 'warn'); }
   }
 
+  // ---------- Device sync (synclink.js holds the engine, sync.js the merges) ----------
+  // Off until Mo starts it. Then the six stores go to the sync store, scrambled on the device, and come back merged
+  // with his other devices' copies. With sync off nothing is ever sent.
+  var SYNC_URL = 'https://shelf-sync.pages.dev/api/sync';
+  var syncEng = null, syncAdopting = false, syncTimer = null, syncView = null, syncMsg = '', syncSure = false, holdWrites = false;
+  function hhmm(t) { var d = new Date(t); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  function dayTime(t) { var d = new Date(t); return d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3) + ', ' + hhmm(t); }
+  // Refills a map in place: records already there stay the same objects
+  function inPlace(into, from) {
+    from = from && typeof from === 'object' ? from : {};
+    Object.keys(into).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(from, k)) delete into[k]; });
+    Object.keys(from).forEach(function (k) {
+      var o = into[k];
+      if (o && typeof o === 'object' && from[k] && typeof from[k] === 'object') { Object.keys(o).forEach(function (x) { delete o[x]; }); Object.assign(o, from[k]); } else into[k] = from[k];
+    });
+  }
+  // A merged copy goes in with no new times (the stores' own adopt), then Home draws again the soft way
+  function adopting(doc, fn) {
+    return function (m) {
+      syncAdopting = true;
+      try { fn(m); } finally { syncAdopting = false; }
+      syncAfter(doc);
+    };
+  }
+  function syncAfter(doc) {
+    if (doc === 'library' && feedsOn) lib.sources().forEach(function (s) { if (!lib.status(s.id)) lib.refresh(s.id).then(function () { lib.saveCache(); renderSoon(); }); });
+    if (doc === 'courses' && (feedsOn || prefs.apiKey)) cs.list().forEach(function (c) { if (!cs.items(c.id).length && !cs.status(c.id).loading) cs.load(c.id).then(function () { renderSoon(); }); });
+    renderSoon();
+  }
+  function adoptPrefs(m) {
+    m = m || {};
+    Sync.PREF_FIELDS.concat(['rates', 'at']).forEach(function (k) { if (Object.prototype.hasOwnProperty.call(m, k)) prefs[k] = m[k]; else delete prefs[k]; });
+    store(PREF, prefs); prefSnap = prefShared(prefs); // taken again, so the next save stamps nothing it didn't change
+    applyGoal();
+    if (current && videos[current]) { wantRate = rateFor(videos[current]); renderRateUI(); }
+    var ast = engine && engine.state(); if (ast && ast.episode) engine.setRate(podRate(ast.episode.guid));
+  }
+  function syncDocs() {
+    return {
+      videos: { read: function () { return { items: videos, gone: load(GKEY, {}) }; },
+        adopt: adopting('videos', function (m) { inPlace(videos, m.items); rawSet(GKEY, JSON.stringify(m.gone || { v: {} }), false); saveVideos(); }) },
+      audio: { read: function () { return arec; }, adopt: adopting('audio', function (m) { inPlace(arec, m); saveAudio(); }) },
+      library: { read: function () { return lib.exportState(); }, adopt: adopting('library', function (m) { lib.adopt(m); }) },
+      courses: { read: function () { return cs.exportState(); }, adopt: adopting('courses', function (m) { cs.adopt(m); }) },
+      marks: { read: function () { return marks.exportState(); }, adopt: adopting('marks', function (m) { marks.adopt(m); }) },
+      prefs: { read: function () { return prefs; }, adopt: adopting('prefs', adoptPrefs) }
+    };
+  }
+  // In the iPhone app a plain fetch to another site never comes back to the page (the app routes it through its own
+  // address), so it goes the native way, as JSON (the store takes either). Everywhere else: a plain fetch.
+  function syncPost(url, text) {
+    var p = Native.inApp ? Native.httpPost(url, JSON.parse(text), { 'Content-Type': 'application/json' })
+      : fetch(url, { method: 'POST', body: text, headers: { 'Content-Type': 'text/plain' } }).then(function (r) { return r.text().then(function (t) { return { status: r.status, text: t }; }); });
+    return withTimeout(p, 30000, 'slow').then(function (r) { return { status: r.status, text: r.text }; });
+  }
+  // Before a device's first sync: one copy of everything it holds, here and on the phone. True if either took it.
+  function syncBackup() {
+    var keys = {}; PHONE_KEYS().concat([GKEY]).forEach(function (k) { keys[k] = rawGet(k); });
+    var s = JSON.stringify({ at: Date.now(), keys: keys }), web = false;
+    if (canSave) { try { localStorage.setItem(BACKUP_KEY, s); web = localStorage.getItem(BACKUP_KEY) === s; } catch (e) { web = false; } }
+    if (!Native.inApp) return web;
+    return Native.call('Preferences', 'set', { key: BACKUP_KEY, value: s }).then(function () { return true; }, function () { return web; });
+  }
+  function backupOf(s) { var b = parseOr(s, null); return b && b.at > 0 && b.keys && typeof b.keys === 'object' ? b : null; }
+  var phoneBackup = null;
+  function readBackup() {
+    var b = backupOf(rawGet(BACKUP_KEY));
+    if (b || !Native.inApp) return Promise.resolve(b);
+    return Native.prefGet(BACKUP_KEY).then(backupOf, function () { return null; });
+  }
+  // Put this device back: sync off, every backed-up key written back (here and on the phone), then a fresh start
+  function putBack() {
+    readBackup().then(function (b) {
+      if (!b) { toast("Couldn't find the copy of this device.", 'warn'); return; }
+      syncEng.off();
+      capture(true);
+      var keys = PHONE_KEYS().concat([GKEY]).filter(function (k) { return Object.prototype.hasOwnProperty.call(b.keys, k); });
+      holdWrites = true;
+      var writeWeb = function () { keys.forEach(function (k) { var v = b.keys[k]; try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} if (v == null) delete mem[k]; else mem[k] = v; }); };
+      writeWeb();
+      // The phone's copies too, after any save still on its way there, so the restore at start finds the same
+      var phone = !Native.inApp ? Promise.resolve() : new Promise(function (res) { setTimeout(res, 450); }).then(function () {
+        return Promise.all(keys.filter(function (k) { return k !== GKEY; }).map(function (k) {
+          var v = b.keys[k];
+          return (v == null ? Native.call('Preferences', 'remove', { key: k }) : Native.call('Preferences', 'set', { key: k, value: v })).catch(function () {});
+        }).concat([Native.call('Preferences', 'set', { key: LINK_KEY, value: 'null' }).catch(function () {})]));
+      });
+      toast('Putting this device back as it was…');
+      phone.then(function () { writeWeb(); setTimeout(function () { location.reload(); }, 300); });
+    });
+  }
+  function syncChanged() { if ($('#syncDlg').open) fillSync(); if ($('#checkDlg').open) fillCheck(); }
+  function syncTouched(doc) {
+    syncEng.touched(doc);
+    if (!syncEng.state().on) return;
+    clearTimeout(syncTimer); syncTimer = setTimeout(syncCheck, 8100); // the engine pushes a store 8 s after its last change
+  }
+  function syncCheck() { return syncEng && syncEng.state().on ? syncEng.check().then(updateDot) : Promise.resolve(); }
+  // The self-check's line, only while sync is on
+  function syncLine() {
+    var st = syncEng && syncEng.state(); if (!st || !st.on) return null;
+    var offline = navigator.onLine === false;
+    if (st.lastErr && Date.now() - st.errSince >= 5 * 60000 && !offline) return { ok: 0, text: 'Sync has not worked since ' + hhmm(st.lastOk || st.errSince) + ': ' + st.lastErr.replace(/\.$/, '') + '. Your changes are safe on this device.' };
+    if (st.lastErr || !st.lastOk) return { ok: 2, text: 'Sync: checking…' };
+    return { ok: 1, text: 'Sync: up to date, checked ' + hhmm(st.lastOk) };
+  }
+  function syncCounts() {
+    var ticked = 0;
+    cs.list().forEach(function (c) { Object.keys(c.ticks || {}).forEach(function (v) { if (c.ticks[v] === 1) ticked++; }); });
+    return { ch: lib.sources().length, ticked: ticked };
+  }
+  function fillSync() {
+    var st = syncEng.state(), h = '', msg = syncMsg ? '<div class="msgline err" role="status">' + esc(syncMsg) + '</div>' : '';
+    if (syncView === 'busy') h = '<p class="syncst" role="status"><b>Checking…</b></p>';
+    else if (syncView && syncView.join) {
+      var n = syncCounts();
+      h = '<p>Join your shelf on this device? It has ' + n.ch + ' channel' + (n.ch === 1 ? '' : 's') + ' and ' + n.ticked + ' ticked episode' + (n.ticked === 1 ? '' : 's') + ' of its own.</p>' + msg +
+        '<button type="button" class="primary" data-act="sync-join" data-id="add">Add them to my shelf</button>' +
+        '<p class="small">For a device you already use Shelf on.</p>' +
+        '<button type="button" class="ghost" data-act="sync-join" data-id="replace">Replace them with my shelf</button>' +
+        '<p class="small">For a new device, or one with nothing worth keeping. A copy is kept first.</p>' +
+        '<button type="button" class="ghost" data-act="sync-close">Not now</button>';
+    } else if (!st.on) {
+      h = '<p>Keep this device the same as your others: channels, sections, spots, course ticks, marks and speeds.</p>' + msg +
+        '<button type="button" class="primary" data-act="sync-start">Start sync here</button>' +
+        '<p class="small">Already started on another device? Open its link on this one.</p>';
+    } else {
+      var line = st.lastErr ? st.lastErr : st.lastOk ? 'In sync · checked ' + hhmm(st.lastOk) : 'Checking…';
+      h = '<p class="syncst" role="status"><b>' + esc(line) + '</b></p>' + msg +
+        '<button type="button" class="primary" data-act="sync-copy">Copy link for another device</button>' +
+        '<button type="button" class="ghost" data-act="sync-off">Turn sync off</button>';
+      var b = backupOf(rawGet(BACKUP_KEY)) || phoneBackup;
+      if (b) h += '<button type="button" class="ghost" data-act="sync-back">' + (syncSure ? 'Tap again to put this device back as it was on ' : 'Put this device back as it was on ') + esc(dayTime(b.at)) + '</button>';
+    }
+    setHTML($('#syncBody'), h);
+  }
+  function openSync() {
+    syncView = null; syncMsg = ''; syncSure = false; fillSync(); openDlg($('#syncDlg'));
+    if (!backupOf(rawGet(BACKUP_KEY)) && Native.inApp) readBackup().then(function (b) { phoneBackup = b; if ($('#syncDlg').open) fillSync(); });
+  }
+  function openSyncJoin(key) {
+    if (!syncEng) return;
+    var st = syncEng.state();
+    if (st.on && st.link.slice(-64) === key) { toast('This device is already in sync with that shelf.'); syncCheck(); return; }
+    syncView = { join: key }; syncMsg = ''; syncSure = false; fillSync(); openDlg($('#syncDlg'));
+  }
+  function syncDone(r) { syncView = null; syncMsg = r && !r.ok && !syncEng.state().on ? r.reason : ''; fillSync(); updateDot(); }
+  function syncAct(act, b) {
+    if (act === 'sync-open') { $('#checkDlg').close(); openSync(); }
+    else if (act === 'sync-close') { syncView = null; $('#syncDlg').close(); }
+    else if (act === 'sync-start') { syncView = 'busy'; syncMsg = ''; fillSync(); syncEng.start().then(syncDone); }
+    else if (act === 'sync-join') {
+      var jk = syncView && syncView.join; if (!jk) return;
+      syncView = 'busy'; syncMsg = ''; fillSync();
+      syncEng.join(jk, b.getAttribute('data-id')).then(function (r) { syncDone(r); if (r && !r.ok && syncEng.state().on) { syncMsg = r.reason; fillSync(); } });
+    }
+    else if (act === 'sync-copy') copyText(syncEng.state().link, function () { toast('Copied. Open it on the other device. In the Shelf app, paste it into Search. Anyone with this link can read your shelf, so send it only to yourself.', '', null, 10000); });
+    else if (act === 'sync-off') { syncEng.off(); syncMsg = ''; syncSure = false; fillSync(); updateDot(); toast('Sync is off on this device. Everything here stays.'); }
+    else if (act === 'sync-back') { if (!syncSure) { syncSure = true; fillSync(); return; } syncSure = false; putBack(); }
+  }
+  function syncBoot() {
+    syncEng = SyncLink.create({
+      get: rawGet, set: function (k, s) { rawSet(k, s); }, del: rawDel, post: syncPost, now: function () { return Date.now(); },
+      subtle: window.crypto && window.crypto.subtle, random: function (n) { return window.crypto.getRandomValues(new Uint8Array(n)); },
+      CompressionStream: window.CompressionStream, DecompressionStream: window.DecompressionStream,
+      url: SYNC_URL, linkBase: location.origin + location.pathname, docs: syncDocs(), backup: syncBackup, changed: syncChanged
+    });
+    $('#syncDlg').addEventListener('close', function () { syncView = null; syncSure = false; });
+    // When checks run: now (the restore at start is done), coming back to the page, back online, every 20 s while
+    // visible, and 8 s after a change (syncTouched). Leaving the page: everything that differs goes at once.
+    syncCheck();
+    setInterval(function () { if (document.visibilityState === 'visible') syncCheck(); }, 20000);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') syncCheck(); else if (syncEng.state().on) syncEng.flush(); });
+    window.addEventListener('online', syncCheck);
+  }
+
   // ---------- Start ----------
   var restored = false, restoreFailed = false;
   function parseOr(s, bad) { try { var v = JSON.parse(s); return v && typeof v === 'object' ? v : bad; } catch (e) { return bad; } }
@@ -3374,7 +3573,7 @@
   }
   function restoreFromPhone(wait) {
     if (!Native.inApp) return Promise.resolve();
-    var keys = PHONE_KEYS();
+    var keys = PHONE_KEYS().concat([LINK_KEY]);
     wait = wait || 2000;
     return withTimeout(Promise.all(keys.map(Native.prefGet)), wait, 'slow').then(function (r) {
       // Read and check everything first; a damaged phone record is ignored (the web copy then replaces it).
@@ -3390,6 +3589,9 @@
         if (ph[4]) { var lc = load(Courses.KEY, null); if (!lc || (ph[4].saved || 0) > (lc.saved || 0)) writes.push([Courses.KEY, r[4]]); }
         if (ph[5]) { var lm = load(Marks.KEY, null); if (!lm || (ph[5].saved || 0) > (lm.saved || 0)) writes.push([Marks.KEY, r[5]]); }
         if (ph[6]) { var lg = load(AI.KEY, null); if (!lg || (ph[6].saved || 0) > (lg.saved || 0)) writes.push([AI.KEY, r[6]]); }
+        // The sync link, when the web view lost it. Its versions are dropped, so the first check takes every store
+        // from the sync store and merges it before anything is put back (the data here came from the phone too)
+        if (ph[7] && /^[0-9a-f]{64}$/.test(ph[7].key || '') && !rawGet(LINK_KEY) && !linkGone) { var lk = ph[7]; lk.docs = {}; writes.push([LINK_KEY, JSON.stringify(lk)]); }
         writes.forEach(function (w) { rawSet(w[0], w[1], false); });
         restored = true; restoreFailed = false;
       } catch (e) { restoreFailed = true; }
@@ -3399,9 +3601,10 @@
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one.
+    // Shelf's own fix, not Mo's change, so it gets no time (made before the snapshot, saved with no stamp)
+    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; store(PREF, prefs); }
     prefSnap = prefShared(prefs);
-    // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one
-    if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; savePrefs(); }
     applyGoal(); applyLook();
     lib = Library.create({
       load: rawGet,
@@ -3417,7 +3620,7 @@
     });
     // Keep the phone's copy complete even before anything changes
     // Only after the phone's copy was read and merged, so a slow or empty start can't overwrite it
-    if (Native.inApp && restored) PHONE_KEYS().forEach(function (k) { var v = rawGet(k); if (v) Native.prefSet(k, v); });
+    if (Native.inApp && restored) PHONE_KEYS().concat([LINK_KEY]).forEach(function (k) { var v = rawGet(k); if (v) Native.prefSet(k, v); });
     marks = Marks.create({ load: rawGet, save: function (k, v) { rawSet(k, v); } });
     ai = AI.create({ load: rawGet, save: function (k, v) { rawSet(k, v); }, now: function () { return Date.now(); }, key: function () { return aiKey; }, post: aiPost, onChange: renderAiSoon });
     if (Native.inApp) Native.prefGet(AI.KEY_PREF).then(function (k) { aiKey = k || ''; testAi(); updateDot(); if (lastRefresh) autoSummaries(); }, function () {});
@@ -3427,6 +3630,7 @@
     var m = location.hash.match(/^#shelf=([A-Za-z0-9_-]+)/);
     if (m) { importShelf(m[1]); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
     renderHome(); renderAudio(); renderTabs();
+    syncBoot();
     openIncoming();
     loadYT();
     updateDot();
@@ -3440,7 +3644,7 @@
     refreshLastYT(true);
     watchBoot();
     // Test hook
-    window.__shelf = { renderAll: renderAll, get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
+    window.__shelf = { renderAll: renderAll, get videos() { return videos; }, get audio() { return arec; }, get lib() { return lib; }, get engine() { return engine; }, get sync() { return syncEng; }, syncNow: function () { return syncEng.check(); }, checks: checks, watchSnap: watchSnap, watchNowState: watchNowState, capture: capture, catchUp: catchUp, refreshLastYT: refreshLastYT, checkBuild: checkBuild, healAgain: function () { healAt = 0; },
       get current() { return current; }, get vTimer() { return vTimer; }, get marks() { return marks; }, get prefs() { return prefs; }, refreshAll: refreshAll, handleText: handleText, get stack() { return stack; }, get courses() { return cs; }, get ai() { return ai; }, get twins() { return twins; }, get podYt() { return podYt; }, syncTwin: syncTwin, renderHome: renderHome, push: push, get ytHist() { return ytHist; }, applyLook: applyLook, lookState: lookState, idle: function () { touchedAt = 0; videoTick(); }, get busy() { return refreshing || cs.busy || !lib.sources().length && feedsOn && !lib.seedMisses.length; } };
   }
   // Home must draw whatever the phone's storage did

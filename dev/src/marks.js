@@ -49,8 +49,24 @@ var Marks = (function () {
     function setNote(id, note) { var m = get(id); if (!m) return null; m.note = flat(note); m.m = now(); save(); return m; }
     function setCard(id, card) { var m = get(id); if (!m) return null; if (card) m.card = card; else delete m.card; m.m = now(); save(); return m; }
     function remove(id) { var m = get(id); if (!m) return null; state.items = state.items.filter(function (x) { return x !== m; }); state.gone = state.gone || {}; state.gone[m.id] = now(); save(); return m; }
-    function restore(m) { if (m && !get(m.id)) { state.items.push(m); if (state.gone) delete state.gone[m.id]; save(); } }
-    return { list: list, get: get, add: add, setNote: setNote, setCard: setCard, remove: remove, restore: restore, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
+    // An Undo is a change of its own: it must beat its removal once that has reached another device
+    function restore(m) { if (m && !get(m.id)) { m.m = now(); state.items.push(m); if (state.gone) delete state.gone[m.id]; save(); } }
+    // Sync (synclink.js): a copy of the state, and a merged copy put in its place with no new times. A mark already
+    // here is emptied and refilled rather than replaced, so code holding it keeps working. saved stays this device's.
+    function exportState() { return JSON.parse(JSON.stringify(state)); }
+    function adopt(merged) {
+      var m = JSON.parse(JSON.stringify(merged || {})), have = {};
+      state.items.forEach(function (x) { have[x.id] = x; });
+      var items = (Array.isArray(m.items) ? m.items : []).filter(function (x) { return x && typeof x === 'object' && x.id && x.vid; }).map(function (x) {
+        var o = have[x.id]; if (!o) return x;
+        Object.keys(o).forEach(function (k) { delete o[k]; }); return Object.assign(o, x);
+      });
+      state.items.length = 0; Array.prototype.push.apply(state.items, items);
+      Object.keys(state).forEach(function (k) { if (k !== 'saved' && k !== 'items' && !(k in m)) delete state[k]; });
+      Object.keys(m).forEach(function (k) { if (k !== 'saved' && k !== 'items') state[k] = m[k]; });
+      save(); return true;
+    }
+    return { list: list, get: get, add: add, setNote: setNote, setCard: setCard, remove: remove, restore: restore, exportState: exportState, adopt: adopt, anki: function () { return anki(list()); }, get count() { return state.items.length; } };
   }
   return { create: create, KEY: KEY, anki: anki, cardLine: cardLine, fmt: fmt, link: link };
 })();
