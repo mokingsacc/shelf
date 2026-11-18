@@ -331,9 +331,16 @@ var Courses = (function () {
       return out;
     }
     function touch(c) { c.touched = now(); }
+    // When each tick was turned on (onAt) or off (offAt), for merging with another device's copy (sync.js).
+    // An untick in the same millisecond as its tick still counts as the later of the two.
+    function stampTick(c, vid, on) {
+      var k = on ? 'onAt' : 'offAt', o = c[on ? 'offAt' : 'onAt'], before = (o && o[vid]) || 0;
+      c[k] = c[k] || {};
+      c[k][vid] = Math.max(now(), on ? before : before + 1);
+    }
     function tick(id, vid, on) {
       var c = get(id); if (!c) return;
-      c.ticks[vid] = on ? 1 : 0; touch(c);
+      c.ticks[vid] = on ? 1 : 0; touch(c); stampTick(c, vid, on);
       // When each one was ticked, for the day's tally and the pace (ticking a block with Set place doesn't count)
       c.ticksAt = c.ticksAt || {};
       if (on) c.ticksAt[vid] = now(); else delete c.ticksAt[vid];
@@ -343,12 +350,16 @@ var Courses = (function () {
     function tickUpTo(id, i) {
       var c = get(id), arr = items(id); if (!c || i < 0 || i >= arr.length) return null;
       var before = Object.assign({}, c.ticks);
-      for (var j = 0; j <= i; j++) c.ticks[arr[j].id] = 1;
+      for (var j = 0; j <= i; j++) { if (c.ticks[arr[j].id] !== 1) stampTick(c, arr[j].id, true); c.ticks[arr[j].id] = 1; }
       touch(c); save();
       return before;
     }
-    function restore(id, ticks) { var c = get(id); if (!c || !ticks) return; c.ticks = ticks; save(); }
-    function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; save(); }
+    function restore(id, ticks) {
+      var c = get(id); if (!c || !ticks) return;
+      Object.keys(Object.assign({}, c.ticks, ticks)).forEach(function (v) { var was = c.ticks[v] === 1, will = ticks[v] === 1; if (was !== will) stampTick(c, v, will); });
+      c.ticks = ticks; save();
+    }
+    function pin(id, vid, on) { var c = get(id); if (!c) return; if (on) c.pins[vid] = 1; else delete c.pins[vid]; c.pinAt = c.pinAt || {}; c.pinAt[vid] = now(); save(); }
     // Episode number from the titles -> positions (first match first)
     function findNumber(id, n) {
       var arr = items(id), hits = [];
@@ -356,8 +367,13 @@ var Courses = (function () {
       return hits;
     }
     function touchCourse(id) { var c = get(id); if (c) { touch(c); save(); } }
-    function move(id, sectionId) { var c = get(id); if (!c) return false; c.section = sectionId; save(); return true; }
-    function remove(id) { if (!state.courses[id]) return false; state.removed = state.removed || {}; state.removed[id] = state.courses[id].ticks; delete state.courses[id]; save(); return true; }
+    // m: when the course's name, section or seed note last changed; removedAt: when a course was removed (sync.js)
+    function move(id, sectionId) { var c = get(id); if (!c) return false; c.section = sectionId; c.m = now(); save(); return true; }
+    function remove(id) {
+      if (!state.courses[id]) return false;
+      state.removed = state.removed || {}; state.removed[id] = state.courses[id].ticks; delete state.courses[id];
+      state.removedAt = state.removedAt || {}; state.removedAt[id] = now(); save(); return true;
+    }
 
     // ----- Loading a playlist -----
     function fromPage(pid) {
@@ -430,6 +446,7 @@ var Courses = (function () {
       var s = c.seed; if (!s) return;
       var ch = cache[c.id], arr = items(c.id);
       if (!ch || ch.partial || !arr.length) return;
+      // Shelf's own seed list is not Mo's change: its ticks and pin carry no times, so a later untick anywhere beats them
       delete c.seed;
       if (s.all) arr.forEach(function (x) { c.ticks[x.id] = 1; });
       if (s.upTo) {
@@ -447,13 +464,15 @@ var Courses = (function () {
 
     // ----- Adding -----
     function addCourse(pid, info) {
-      var prior = state.removed && state.removed[pid];
+      var prior = state.removed && state.removed[pid], fresh = !state.courses[pid];
       var c = state.courses[pid] = state.courses[pid] || {
         id: pid, name: info.name || 'Course', title: info.title || '', channel: info.channel || '', section: info.section || 'med',
         added: now(), touched: 0, ticks: prior || {}, pins: {}
       };
       if (info.seed) c.seed = info.seed;
+      if (fresh && !info.seed) c.m = now(); // a course Mo adds himself (the seed list's are not his changes)
       if (prior) delete state.removed[pid];
+      if (state.removedAt) delete state.removedAt[pid];
       save(); return c;
     }
     // A pasted link -> a loaded course. Resolves to the course; rejects with a plain-words reason.
@@ -524,7 +543,7 @@ var Courses = (function () {
     // A miss fixed by hand (pasted link) clears it
     // A "not found" line Mo doesn't want: gone for good
     function dropMiss(name) { state.dropped = state.dropped || {}; state.dropped[name] = 1; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); save(); }
-    function fixMiss(name, c) { c.seedName = name; state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
+    function fixMiss(name, c) { c.seedName = name; c.m = now(); state.misses = (state.misses || []).filter(function (m) { return m.name !== name; }); var s = SEED.courses.filter(function (x) { return x.name === name; })[0]; if (s) { c.seed = { upTo: s.upTo, pct: s.pct, all: s.all, pin: s.pin }; applySeed(c); } save(); }
     function loadAll(force, onEach) {
       var ids = list().map(function (c) { return c.id; }), i = 0;
       function next() { if (i >= ids.length) return Promise.resolve(); var id = ids[i++]; return load(id, force).then(function () { if (onEach) onEach(id); }).then(next); }

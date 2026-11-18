@@ -39,7 +39,29 @@
     saveAudio();
   }
   function saveAudio() { if (store(AKEY, arec)) lastSavedAt = Date.now(); }
-  function savePrefs() { store(PREF, prefs); }
+  // The prefs shared between devices get a time when they change (prefs.at), for merging with another device's copy
+  // (sync.js): each save compares them with how they were at load and at the last save
+  var prefSnap = null;
+  function prefShared(p) {
+    var o = {}, r = (p && p.rates) || {};
+    Sync.PREF_FIELDS.forEach(function (k) { o[k] = JSON.stringify(p[k]); });
+    Object.keys(r).forEach(function (k) { o['rates.' + k] = JSON.stringify(r[k]); });
+    return o;
+  }
+  function savePrefs() {
+    var cur = prefShared(prefs), t = Date.now();
+    if (prefSnap) Object.keys(Object.assign({}, prefSnap, cur)).forEach(function (k) { if (prefSnap[k] !== cur[k]) { prefs.at = prefs.at || {}; prefs.at[k] = t; } });
+    prefSnap = cur;
+    store(PREF, prefs);
+  }
+  // Videos taken off the shelf, and when, so another device's copy can't bring them back (sync.js). Kept in the web view only.
+  var GKEY = 'shelf.sync.gone';
+  function markGone(id, on) {
+    var g = load(GKEY, {});
+    g.v = g.v && typeof g.v === 'object' ? g.v : {};
+    if (on) g.v[id] = Date.now(); else if (g.v[id] != null) delete g.v[id]; else return;
+    rawSet(GKEY, JSON.stringify(g), false);
+  }
 
   // ---------- network ----------
   function withTimeout(p, ms, msg) {
@@ -1179,7 +1201,7 @@
   function unlinkPodVideo(guid, old, keep) {
     var ov = old && old !== keep && videos[old];
     if (!ov || ov.ep !== guid) return;
-    if (ov.guessed) delete videos[old]; else delete ov.ep;
+    if (ov.guessed) { delete videos[old]; markGone(old, true); } else delete ov.ep;
     saveVideos();
   }
   function startPodVideo(ep, id, guess) {
@@ -2839,9 +2861,9 @@
         if (confirmRemove !== id) { confirmRemove = id; renderPage(); break; }
         var dn = lib.source(id); if (dn) { lib.remove(id); lib.saveCache(); toast('Removed the broken copy of ' + dn.name + '.'); } confirmRemove = null; renderAll(); break;
       case 'remove-video':
-        var gone = videos[id]; delete videos[id]; saveVideos(); renderAll();
+        var gone = videos[id]; delete videos[id]; markGone(id, true); saveVideos(); renderAll();
         if (!Object.keys(videos).some(function (k) { return !entryFromVideo(videos[k]).section; }) && stack.length && stack[stack.length - 1].name === 'pasted') back();
-        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; saveVideos(); renderAll(); } });
+        toast('Removed.', '', { label: 'Undo', fn: function () { videos[id] = gone; markGone(id, false); saveVideos(); renderAll(); } });
         break;
       case 'close-video': closeVideo(); break;
       case 'open-courses': if (b.id === 'coursesBtn') openTab({ name: 'courses', id: id || 'med' }); else openCourses(id); break;
@@ -3377,6 +3399,7 @@
   function records(o) { var out = {}; if (o && typeof o === 'object' && !Array.isArray(o)) Object.keys(o).forEach(function (k) { if (o[k] && typeof o[k] === 'object') out[k] = o[k]; }); return out; }
   function boot() {
     videos = load(KEY, {}); prefs = load(PREF, {}); arec = load(AKEY, {});
+    prefSnap = prefShared(prefs);
     // Step 2 CK is on 22 Dec (an early default said 30 Nov): a goal saved with that old date moves to the real one
     if (prefs.goal && prefs.goal.date === '2026-11-30' && /step\s*2/i.test(prefs.goal.name || '')) { prefs.goal.date = '2026-12-22'; savePrefs(); }
     applyGoal(); applyLook();
