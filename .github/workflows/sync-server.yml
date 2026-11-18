@@ -1,0 +1,96 @@
+# Tests the sync store (sync-server/), deploys it to the Cloudflare Pages project shelf-sync, then probes the live address.
+# Without the CLOUDFLARE_API_TOKEN secret it only runs the tests and ends green with a warning.
+name: Sync server
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sync-server/**'
+      - '.github/workflows/sync-server.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync-server:
+    runs-on: ubuntu-latest
+    env:
+      HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test
+        run: |
+          node sync-server/test/server.test.mjs || { echo "Failed: the sync server tests"; exit 1; }
+
+      - name: No token, no deploy
+        if: env.HAS_CF_TOKEN != 'true'
+        run: |
+          echo "::warning::Not deployed: the CLOUDFLARE_API_TOKEN secret is missing"
+
+      - name: Find the account
+        if: env.HAS_CF_TOKEN == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          id=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s).result;if(r&&r[0]&&r[0].id)console.log(r[0].id)})') || true
+          if [ -z "$id" ]; then echo "Failed: could not read the Cloudflare account id with this token"; exit 1; fi
+          echo "CLOUDFLARE_ACCOUNT_ID=$id" >> "$GITHUB_ENV"
+
+      - name: Make or find the D1 database
+        if: env.HAS_CF_TOKEN == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          find_db() {
+            npx --yes wrangler@4 d1 list --json \
+              | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s.slice(s.search(/^\[/m)));const d=l.find(x=>x.name==="shelf-sync");if(d)console.log(d.uuid)})'
+          }
+          id=$(find_db) || { echo "Failed: could not list the D1 databases"; exit 1; }
+          if [ -z "$id" ]; then
+            npx --yes wrangler@4 d1 create shelf-sync || { echo "Failed: could not make the D1 database shelf-sync"; exit 1; }
+            id=$(find_db) || true
+          fi
+          if [ -z "$id" ]; then echo "Failed: no id for the D1 database shelf-sync"; exit 1; fi
+          sed -i "s/__D1_ID__/$id/" sync-server/wrangler.toml
+          grep -q "database_id = \"$id\"" sync-server/wrangler.toml || { echo "Failed: could not write the database id into wrangler.toml"; exit 1; }
+
+      - name: Make the Pages project if missing
+        if: env.HAS_CF_TOKEN == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/shelf-sync")
+          if [ "$code" = "200" ]; then exit 0; fi
+          if [ "$code" != "404" ]; then echo "Failed: could not look up the Pages project (HTTP $code)"; exit 1; fi
+          npx --yes wrangler@4 pages project create shelf-sync --production-branch main || { echo "Failed: could not make the Pages project shelf-sync"; exit 1; }
+
+      - name: Deploy
+        if: env.HAS_CF_TOKEN == 'true'
+        working-directory: sync-server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npx --yes wrangler@4 pages deploy public --project-name shelf-sync --branch main || { echo "Failed: the Pages deploy"; exit 1; }
+
+      - name: Probe the live address
+        if: env.HAS_CF_TOKEN == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          host=$(curl -sS --fail-with-body -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/shelf-sync" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s).result;if(r&&r.subdomain)console.log(r.subdomain)})') || true
+          if [ -z "$host" ]; then echo "Failed: could not read the Pages project address"; exit 1; fi
+          echo "::notice::Sync server address: https://$host"
+          for try in 1 2 3 4 5; do
+            if node sync-server/test/probe.mjs "https://$host"; then exit 0; fi
+            if [ "$try" -lt 5 ]; then echo "Probe try $try failed, trying again in 10 s"; sleep 10; fi
+          done
+          echo "Failed: the live probe after 5 tries"
+          exit 1
